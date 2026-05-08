@@ -6,3 +6,6 @@
 	path = crawfish-lens
 	url = https://github.com/Neal-Kotval/crawfish-lens.git
 	branch = main
+[submodule "crawfish-opt-codebase"]
+	path = crawfish-opt-codebase
+	url = https://github.com/Neal-Kotval/crawfish-opt-codebase.git

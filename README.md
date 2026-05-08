@@ -6,8 +6,10 @@ This is the umbrella repo. The actual code lives in two submodules:
 
 | Submodule | What it is | Status |
 |---|---|---|
-| **[crawfish-opt](./crawfish-opt)** | Optimizer line — MCP servers that reduce tokens for specific workloads (browser today, codebase / logs next). | v0.2 shipped |
-| **[crawfish-lens](./crawfish-lens)** | Local observability — reads `~/.claude/projects` JSONL transcripts and reports where tokens went. | M0 shipped |
+| **[crawfish-opt](./crawfish-opt)** | Optimizer line — MCP server for the browser/DOM token sink. | v0.2 |
+| **[crawfish-opt-codebase](./crawfish-opt-codebase)** | Optimizer line — MCP server for codebase navigation (replaces blind grep+Read chains; **3.25× token reduction** on the bench). | v0.1 |
+| **[crawfish-lens](./crawfish-lens)** | Local observability — reads `~/.claude/projects` JSONL transcripts, surfaces diagnoses, links to optimizers. Localhost dashboard at `:7878`. | M1 shipped |
+| **crawfish-dash** *(planned, P2)* | Apple-like Tauri dashboard wrapping all of the above; manages Claude Code subagents and OpenClaw skills. | not started |
 
 For the full product story, see [crawfish-lens/PRODUCT.md](./crawfish-lens/PRODUCT.md). For why these are separate repos, see [crawfish-lens/docs/relationship-to-crawfish.md](./crawfish-lens/docs/relationship-to-crawfish.md).
 
@@ -49,18 +51,14 @@ git submodule update --remote crawfish-lens  # just one
 ## Layout
 
 ```
-crawfish/                       # this umbrella repo
-├── .gitmodules                 # submodule pointers
-├── README.md                   # you are here
-├── crawfish-opt/               # → github.com/Neal-Kotval/crawfish (will rename → crawfish-opt)
-└── crawfish-lens/              # → github.com/Neal-Kotval/crawfish-lens (TBD)
+crawfish/                            # this umbrella repo
+├── .gitmodules                      # submodule pointers
+├── README.md                        # you are here
+├── ROADMAP.md                       # multi-phase plan, P0 → P5
+├── crawfish-opt/                    # → github.com/Neal-Kotval/crawfish-opt
+├── crawfish-opt-codebase/           # → github.com/Neal-Kotval/crawfish-opt-codebase
+└── crawfish-lens/                   # → github.com/Neal-Kotval/crawfish-lens
 ```
-
-## TODO before pushing the umbrella publicly
-
-- [ ] Rename the GitHub repo `Neal-Kotval/crawfish` → `Neal-Kotval/crawfish-opt`, then update the URL in `.gitmodules` and run `git submodule sync`.
-- [ ] Create `Neal-Kotval/crawfish-lens` on GitHub, push, then `git submodule sync` again.
-- [ ] Decide whether the umbrella itself wants a public name (e.g., `crawfish-platform`) or stays as `crawfish` — currently the optimizer occupies the `crawfish` name.
 
 ## License
 
