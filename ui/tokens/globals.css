@@ -956,9 +956,13 @@ samp {
   opacity: 0.9;
 }
 
-/* Nodes: outline-only by default, no transform tricks (transforms on SVG <g>
-   collide with the translate() attribute and cause jitter). All hover/select
-   feedback is via opacity, stroke-width, and color — no positional shift. */
+/* Nodes: outline + soft drop-shadow glow. Hover scales the circle ONLY
+   (not the parent <g>) so the SVG translate() attribute is never touched
+   — that's what was causing the shake earlier. transform-box: fill-box
+   makes transform-origin work correctly inside SVG.
+
+   Glow uses CSS drop-shadow rather than an SVG <filter> for two reasons:
+   (a) zero markup churn, (b) it composes cleanly with the stroke. */
 .cf-graph-node {
   cursor: pointer;
 }
@@ -966,20 +970,31 @@ samp {
   fill: var(--cf-bg-elevated);
   stroke: var(--cf-border-strong);
   stroke-width: 1.25;
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.06));
+  transform-box: fill-box;
+  transform-origin: center;
   transition:
-    stroke 160ms cubic-bezier(0.4, 0, 0.2, 1),
-    stroke-width 160ms cubic-bezier(0.4, 0, 0.2, 1),
-    fill 160ms cubic-bezier(0.4, 0, 0.2, 1);
+    stroke 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    stroke-width 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    fill 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 200ms cubic-bezier(0.34, 1.4, 0.5, 1);
 }
 
 .cf-graph-node:hover .cf-graph-node__circle {
   stroke: var(--cf-fg-secondary);
   stroke-width: 1.5;
+  filter: drop-shadow(0 0 14px rgba(0, 122, 255, 0.18))
+    drop-shadow(0 0 4px rgba(0, 0, 0, 0.06));
+  transform: scale(1.08);
 }
 
 .cf-graph-node--selected .cf-graph-node__circle {
   stroke: var(--cf-accent);
   stroke-width: 2;
+  filter: drop-shadow(0 0 18px rgba(0, 122, 255, 0.28))
+    drop-shadow(0 0 4px rgba(0, 0, 0, 0.06));
+  transform: scale(1.06);
 }
 
 .cf-graph-node--parent .cf-graph-node__circle {
@@ -995,6 +1010,21 @@ samp {
 .cf-graph-node--agent.cf-graph-node--unmatched .cf-graph-node__circle {
   stroke-dasharray: 3 3;
   opacity: 0.7;
+}
+
+/* Dark mode: glow tinted slightly cooler. */
+@media (prefers-color-scheme: dark) {
+  .cf-graph-node__circle {
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.04));
+  }
+  .cf-graph-node:hover .cf-graph-node__circle {
+    filter: drop-shadow(0 0 14px rgba(10, 132, 255, 0.32))
+      drop-shadow(0 0 4px rgba(255, 255, 255, 0.04));
+  }
+  .cf-graph-node--selected .cf-graph-node__circle {
+    filter: drop-shadow(0 0 18px rgba(10, 132, 255, 0.42))
+      drop-shadow(0 0 4px rgba(255, 255, 255, 0.04));
+  }
 }
 
 .cf-graph-node__label {
