@@ -63,6 +63,10 @@ html,
 body,
 #root {
   height: 100%;
+  /* Kill the WKWebView/Chromium rubber-band overscroll. Without this you see
+     a white/black gutter past the top or bottom of the scroll container. */
+  overscroll-behavior: none;
+  overflow: hidden;
 }
 
 body {
@@ -76,6 +80,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "ss01", "cv11";
+  overscroll-behavior: none;
 }
 
 ::selection {
@@ -128,6 +133,8 @@ samp {
   grid-template-columns: 240px 1fr;
   height: 100vh;
   overflow: hidden;
+  /* Reinforce: nothing in the app shell rubber-bands. */
+  overscroll-behavior: none;
 }
 
 .cf-sidebar {
@@ -139,6 +146,14 @@ samp {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* Sidebar is locked to the viewport — never scrolls with content. The
+     grid + overflow:hidden on .cf-app already keeps it in place; this is
+     a belt-and-suspenders stop in case a child grows unexpectedly. */
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .cf-sidebar__title {
@@ -191,6 +206,10 @@ samp {
   overflow: auto;
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  /* The actual scroll container — its overscroll is what produces the white
+     gutter. `contain` blocks the rubber-band but still lets pinch-zoom work. */
+  overscroll-behavior: contain;
 }
 
 .cf-toolbar {
