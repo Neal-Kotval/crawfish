@@ -2,6 +2,16 @@
 
 Two-run comparison. Same project (`/Users/nealkotval/crawfish`), same prompts (`bench/prompts.md`), only difference is whether `crawfish-codebase` MCP is installed.
 
+## Automated (recommended)
+
+```bash
+./scripts/run-bench.sh
+```
+
+That runs both sides, captures both session UUIDs, restores your MCP config, and prints the dash Compare URL. Add `--with-policy` to install the PreToolUse hook on the optimized side (force-routes Reads/Bashes through optimizers — usually the version that actually demonstrates savings, since agents otherwise don't reach for the new tools voluntarily).
+
+The rest of this file documents the manual protocol the script automates — useful when you want to inspect each step.
+
 ## Pre-flight
 
 Both lens and dash should be running:
