@@ -67,11 +67,12 @@ Or just open dash → **Sessions** tab; the top card with mtime "just now" is yo
 cd ~/crawfish/crawfish-opt-codebase
 npm run build
 
-# Note the `--` before the command — separates Claude's flags from the
-# stdio-server command + args.
-claude mcp add crawfish-codebase -- node "$(pwd)/dist/index.js"
+# `-s user` puts it in user scope so it's available regardless of cwd.
+# (Default scope is "local" — tied to the directory you run `claude` from.)
+# `--` separates Claude's flags from the stdio-server command + args.
+claude mcp add -s user crawfish-codebase -- node "$(pwd)/dist/index.js"
 
-# Confirm
+# Confirm — should show "✓ Connected"
 claude mcp list | grep crawfish-codebase
 ```
 
@@ -103,8 +104,8 @@ The view renders a headline delta, per-side panels (turns / cache hit / subagent
 # Restore original settings.json
 cp ~/.claude/settings.json.bench-snapshot ~/.claude/settings.json
 
-# Or just remove crawfish-codebase
-claude mcp remove crawfish-codebase
+# Or just remove crawfish-codebase (note: `-s user` matches the install scope)
+claude mcp remove -s user crawfish-codebase
 ```
 
 ## Honest caveats
