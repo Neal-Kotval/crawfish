@@ -36,20 +36,29 @@ WITH_POLICY=0
 SKIP_RESTORE=0
 RUN_VANILLA=1
 RUN_OPTIMIZED=1
+REPEAT=1
 
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --with-policy)  WITH_POLICY=1 ;;
     --skip-restore) SKIP_RESTORE=1 ;;
     --vanilla-only) RUN_OPTIMIZED=0 ;;
     --opt-only)     RUN_VANILLA=0 ;;
+    --repeat)       REPEAT=$2; shift ;;
+    --repeat=*)     REPEAT=${1#--repeat=} ;;
     -h|--help)
       grep -E '^#( |$)' "$0" | sed 's/^# \?//'
       exit 0
       ;;
-    *) echo "unknown arg: $arg" >&2; exit 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
+  shift
 done
+
+if ! [[ "$REPEAT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "error: --repeat must be a positive integer" >&2
+  exit 2
+fi
 
 # ─── sanity checks ────────────────────────────────────────────────────────
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1; }; }
@@ -106,7 +115,8 @@ uninstall_codebase() {
 }
 
 install_codebase() {
-  claude mcp add -s user crawfish-codebase -- node "$OPT_BIN" >/dev/null
+  # Idempotent — if it's already added, that's fine. Tolerate non-zero exit.
+  claude mcp add -s user crawfish-codebase -- node "$OPT_BIN" >/dev/null 2>&1 || true
 }
 
 install_hook() {
@@ -152,15 +162,18 @@ BAK=$(backup_settings)
 echo "MCP config backed up to: $BAK"
 echo
 
-VANILLA_SID=""
-OPTIMIZED_SID=""
+VANILLA_SIDS=()
+OPTIMIZED_SIDS=()
 
 if [ $RUN_VANILLA -eq 1 ]; then
   uninstall_codebase
   uninstall_hook
   echo "(crawfish-codebase removed; policy hook removed)" >&2
-  VANILLA_SID=$(run_side "VANILLA")
-  echo "VANILLA=$VANILLA_SID"
+  for ((i=1; i<=REPEAT; i++)); do
+    SID=$(run_side "VANILLA $i/$REPEAT")
+    VANILLA_SIDS+=("$SID")
+    echo "VANILLA[$i]=$SID"
+  done
 fi
 
 if [ $RUN_OPTIMIZED -eq 1 ]; then
@@ -170,8 +183,11 @@ if [ $RUN_OPTIMIZED -eq 1 ]; then
     install_hook
     echo "(policy hook installed)" >&2
   fi
-  OPTIMIZED_SID=$(run_side "OPTIMIZED")
-  echo "OPTIMIZED=$OPTIMIZED_SID"
+  for ((i=1; i<=REPEAT; i++)); do
+    SID=$(run_side "OPTIMIZED $i/$REPEAT")
+    OPTIMIZED_SIDS+=("$SID")
+    echo "OPTIMIZED[$i]=$SID"
+  done
 fi
 
 # ─── restore ──────────────────────────────────────────────────────────────
@@ -181,10 +197,31 @@ if [ $SKIP_RESTORE -eq 0 ]; then
   cp "$BAK" "$SETTINGS_JSON"
 fi
 
+# ─── manifest ─────────────────────────────────────────────────────────────
+MANIFEST=~/.crawfish/bench-runs.jsonl
+mkdir -p ~/.crawfish
+{
+  echo -n '{"ts":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","repeat":'"$REPEAT"',"withPolicy":'$WITH_POLICY','
+  echo -n '"vanilla":['
+  if [ ${#VANILLA_SIDS[@]} -gt 0 ]; then
+    printf '"%s"' "${VANILLA_SIDS[0]}"
+    for sid in "${VANILLA_SIDS[@]:1}"; do printf ',"%s"' "$sid"; done
+  fi
+  echo -n '],'
+  echo -n '"optimized":['
+  if [ ${#OPTIMIZED_SIDS[@]} -gt 0 ]; then
+    printf '"%s"' "${OPTIMIZED_SIDS[0]}"
+    for sid in "${OPTIMIZED_SIDS[@]:1}"; do printf ',"%s"' "$sid"; done
+  fi
+  echo -n ']}'
+  echo
+} >> "$MANIFEST"
+echo "Appended manifest entry to $MANIFEST"
+
 echo
-echo "Done."
-[ -n "$VANILLA_SID"   ] && echo "  vanilla:   $VANILLA_SID"
-[ -n "$OPTIMIZED_SID" ] && echo "  optimized: $OPTIMIZED_SID"
+echo "Done — $REPEAT repeat$([ $REPEAT -gt 1 ] && echo 's') per side."
+[ ${#VANILLA_SIDS[@]} -gt 0 ]   && echo "  vanilla:   ${VANILLA_SIDS[*]}"
+[ ${#OPTIMIZED_SIDS[@]} -gt 0 ] && echo "  optimized: ${OPTIMIZED_SIDS[*]}"
 echo
-echo "Open: $DASH_URL/compare"
-echo "Paste the IDs above into the two side pickers."
+echo "Run analysis:  ./scripts/analyze-bench.sh"
+echo "Or open dash:  $DASH_URL/compare"

@@ -6,26 +6,40 @@ Multi-agent setups (Claude Code's agent-teams, OpenClaw, custom orchestrators) r
 
 ## Quick start
 
+### Option A — desktop app (recommended)
+
+```bash
+git clone --recurse-submodules https://github.com/Neal-Kotval/crawfish.git
+cd crawfish && npm run build
+cd crawfish-app && cargo tauri build --bundles app
+open src-tauri/target/release/bundle/macos/Crawfish.app
+```
+
+A native macOS window opens. Lens + dash are managed by the app; Quit (⌘Q) shuts everything down cleanly.
+
+### Option B — terminal launcher
+
 ```bash
 git clone --recurse-submodules https://github.com/Neal-Kotval/crawfish.git
 cd crawfish && npm run build
 node bin/crawfish.js
 ```
 
-That boots **lens** (`:7878`) + **dash** (`:7880`) and opens the dashboard in your browser. `Ctrl-C` cleanly stops both. Add `--install-hook` to wire the policy enforcer into Claude Code (writes a backup of your `~/.claude/settings.json`).
+Boots **lens** (`:7878`) + **dash** (`:7880`) and opens the dashboard in your browser. `Ctrl-C` cleanly stops both. Add `--install-hook` to wire the policy enforcer into Claude Code.
 
-Both servers bind to `127.0.0.1` only. **Nothing leaves your machine.**
+Both options bind only to `127.0.0.1`. **Nothing leaves your machine.**
 
-> **Coming soon:** `npx crawfish` once the umbrella publishes to npm.
+> **Coming soon:** `npx crawfish` once the umbrella publishes to npm; signed `.dmg` distribution once notarization is set up.
 
-This is the umbrella repo. The actual code lives in four submodules:
+This is the umbrella repo. The actual code lives in five submodules:
 
 | Submodule | What it is | Status |
 |---|---|---|
 | **[crawfish-opt](./crawfish-opt)** | Optimizer line — MCP server for the browser/DOM token sink. | v0.2 |
 | **[crawfish-opt-codebase](./crawfish-opt-codebase)** | Optimizer line — MCP server for codebase navigation (replaces blind grep+Read chains; **3.25× token reduction** on the bench). | v0.1 |
-| **[crawfish-lens](./crawfish-lens)** | Local observability — reads `~/.claude/projects` JSONL transcripts, surfaces diagnoses, links to optimizers. Localhost dashboard at `:7878`. | M1 shipped |
-| **[crawfish-dash](./crawfish-dash)** | The umbrella UI. Three tabs (Agents / Optimizers / Sessions) over a localhost web server. CRUD for `~/.claude/agents/`, live-proxies lens for sessions, marketplace for one-click-copy install commands. | v0.1 (webapp) |
+| **[crawfish-lens](./crawfish-lens)** | Local observability — reads `~/.claude/projects` JSONL transcripts, surfaces diagnoses, links to optimizers. Localhost server at `:7878`. | M1 shipped |
+| **[crawfish-dash](./crawfish-dash)** | The dashboard UI — Policies, Agents, Optimizers, Benchmarks, Compare, Sessions. Localhost server at `:7880`. | v0.1 |
+| **[crawfish-app](./crawfish-app)** | Tauri 2 desktop shell that wraps lens + dash as a native `.app`. | v0.1 |
 
 For the full product story, see [crawfish-lens/PRODUCT.md](./crawfish-lens/PRODUCT.md). For why these are separate repos, see [crawfish-lens/docs/relationship-to-crawfish.md](./crawfish-lens/docs/relationship-to-crawfish.md).
 

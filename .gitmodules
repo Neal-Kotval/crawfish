@@ -12,3 +12,6 @@
 [submodule "crawfish-dash"]
 	path = crawfish-dash
 	url = https://github.com/Neal-Kotval/crawfish-dash.git
+[submodule "crawfish-app"]
+	path = crawfish-app
+	url = https://github.com/Neal-Kotval/crawfish-app.git
