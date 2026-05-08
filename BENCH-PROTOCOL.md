@@ -66,7 +66,10 @@ Or just open dash → **Sessions** tab; the top card with mtime "just now" is yo
 ```bash
 cd ~/crawfish/crawfish-opt-codebase
 npm run build
-claude mcp add crawfish-codebase --command "node $(pwd)/dist/index.js"
+
+# Note the `--` before the command — separates Claude's flags from the
+# stdio-server command + args.
+claude mcp add crawfish-codebase -- node "$(pwd)/dist/index.js"
 
 # Confirm
 claude mcp list | grep crawfish-codebase
