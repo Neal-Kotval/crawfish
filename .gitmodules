@@ -9,3 +9,6 @@
 [submodule "crawfish-opt-codebase"]
 	path = crawfish-opt-codebase
 	url = https://github.com/Neal-Kotval/crawfish-opt-codebase.git
+[submodule "crawfish-dash"]
+	path = crawfish-dash
+	url = https://github.com/Neal-Kotval/crawfish-dash.git
