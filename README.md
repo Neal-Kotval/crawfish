@@ -1,8 +1,10 @@
 # Crawfish
 
-> **The token observability layer for Claude Code, plus a family of MCP optimizers built around it.**
+> **See where your team's agents burn tokens. Stop the 4-5× compounding.**
 
-This is the umbrella repo. The actual code lives in two submodules:
+Multi-agent setups (Claude Code's agent-teams, OpenClaw, custom orchestrators) routinely cost 4-5× more tokens than the work warrants — most of it spent re-establishing context across parallel subagents. Crawfish is the local platform that makes that fan-out *visible* and *fixable* without sending your transcripts to a third-party service.
+
+This is the umbrella repo. The actual code lives in four submodules:
 
 | Submodule | What it is | Status |
 |---|---|---|
