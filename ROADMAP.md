@@ -39,6 +39,70 @@ The product is local-first, but distribution has two tiers. Tier 1 is the OSS fu
 
 **Privacy is the wedge, not the constraint.** "Transcripts never leave the customer machine" isn't a temporary anti-goal; it's the only thing that makes legal say yes at most companies. Self-hosted aggregator preserves this — customers run their own collector pod, ICs opt in to send anonymized stats to it.
 
+## 0b. Moats — what makes crawfish defensible
+
+The current pitch (*"Claude-Code-native observability + a policy hook + a few MCP optimizers"*) is a **feature combination**, not a moat. A funded competitor could ship the same thing in 3-6 months. To be a fundable *company* (not a tool), at least one of the three edges below has to become load-bearing. **Pick one. Double down. The rest are supporting cast.**
+
+### Edge 1 — Multi-agent topology as a standard
+
+The topology view is the most distinctive primitive in the product. Today it's a viewer. To turn it into a moat: emit OpenTelemetry-compatible **agent fan-out spans** (parent-child relationship, prompt-spawn tokens, child-internal tokens). Define the schema as an open spec (`crawfish-topology-spans@1.0`). Submit to OpenTelemetry's GenAI semantic conventions group.
+
+Outcome: any observability vendor (Datadog, Langfuse, Honeycomb) that wants to talk about subagent costs adopts your schema. You become the *reference for how the industry measures fan-out*. Datadog can't copy that without conceding the format.
+
+### Edge 2 — Policy bundles as a portable format
+
+Define `crawfish-policy@1.0` as an **open spec** — JSON schema, signed bundles, runtime adapters for Claude Code / LangGraph / OpenClaw / Aider / custom orchestrators. crawfish ships the reference implementation; the format is the moat.
+
+Outcome: when a platform engineer at a 500-person org writes a policy bundle for their team, they're investing in *the format*, not crawfish-the-tool. Switching cost ≈ switching cost of the format itself. Multi-runtime portability is the unlock — competitors building only on one runtime cannot offer the same coverage.
+
+### Edge 3 — Closed-loop optimization (the data product)
+
+Right now lens shows costs and dash recommends optimizers; humans connect them. The defensible version: lens watches your team's transcripts, **automatically proposes new policies and optimizer configs** based on observed waste, with confidence scores and predicted savings.
+
+For v1 this is statistical heuristics (e.g., "your team's Read calls average 18KB; installing crawfish-opt-codebase would cap them at ~3KB; predicted savings 40K tok/week"). For v2 it's a small model trained on opt-in aggregate transcripts that predicts which optimizers help which team patterns.
+
+Outcome: an ML / data product that gets smarter with usage. Competitors without your aggregate data can't make the same recommendations.
+
+---
+
+## 0c. Two larger strategic plays (only pursue after one of the three Edges is real)
+
+### Play A — The proxy
+
+Sit on the wire between agents and the Anthropic API. Enforce policies *inescapably* (not just hopefully, via PreToolUse hooks). Charge **per-token-saved, per-month**.
+
+**Pros:** high-margin SaaS, clear ROI ("we saved you N tokens, here's M% as our fee"), works regardless of Claude Code's hook stability, doesn't depend on host-runtime cooperation.
+
+**Cons:** infra to run a proxy reliably; legal / ToS conversation with Anthropic; trust required (we sit on every byte of customer agent traffic — opposite of our local-first wedge).
+
+**When to pursue:** after Edge 2 (policy format) is established, so we have something defensible to enforce *with*.
+
+### Play B — Lighthouse for agents
+
+Reposition crawfish as **the benchmarking standard for MCP optimizers and agent runtimes**. Anyone submits an optimizer; crawfish runs reproducible benchmarks and publishes a leaderboard. Vendors prove themselves on our turf — like `web.dev` / Lighthouse for browser performance.
+
+**Pros:** network effects, content/SEO surface drives the OSS funnel, doesn't depend on a single platform, gives a public artifact every quarterly review needs.
+
+**Cons:** content treadmill (must keep benches fresh); competitive risk if a tier-1 vendor builds their own leaderboard; revenue path is indirect (sponsorships? premium analytics?).
+
+**When to pursue:** after Edge 1 (topology spans) is published, so the leaderboard's metrics carry the format's authority.
+
+---
+
+## 0d. The strategic choice point
+
+The three Edges and two Plays are not orthogonal — they reinforce one another, but you cannot pursue all five at once with one builder. The strategic choice for the next 6 months:
+
+| If we want to be… | …pursue… |
+|---|---|
+| A standards-defining open-source brand | Edge 1 (topology spans) → Play B (Lighthouse) |
+| A defensible commercial enforcement layer | Edge 2 (policy format) → Play A (proxy) |
+| An ML data product with high switching cost | Edge 3 (closed-loop) → either Play |
+
+**Working assumption:** Edge 2 + Play A is the most fundable pairing — clearest enterprise buyer, clearest revenue model, hardest to absorb into incumbents. Edge 1 + Play B is the most likely to win on the OSS-funnel side (Show HN, Hacker News, GitHub stars). Edge 3 is the longest-term moat but requires usage volume we don't have yet.
+
+This document doesn't pick. The phase plan below stays focused on shipping the platform; the moat work begins in earnest at P3 once distribution exists.
+
 ---
 
 ## 1. Phase summary
