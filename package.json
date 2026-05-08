@@ -1,0 +1,33 @@
+{
+  "name": "crawfish",
+  "version": "0.1.0",
+  "description": "Local platform for visualizing and reducing token burn in multi-agent setups (Claude Code today; LangGraph / OpenClaw later). Boots lens + dash with one command.",
+  "type": "module",
+  "bin": {
+    "crawfish": "./bin/crawfish.js"
+  },
+  "scripts": {
+    "build": "cd crawfish-lens && npm run build && cd ../crawfish-dash && npm run build",
+    "start": "node bin/crawfish.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "anthropic",
+    "tokens",
+    "agents",
+    "multi-agent",
+    "observability",
+    "mcp",
+    "policy"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/Neal-Kotval/crawfish",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Neal-Kotval/crawfish.git"
+  }
+}

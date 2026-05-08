@@ -19,11 +19,25 @@ This is the **umbrella roadmap**. Each submodule has its own milestone-level roa
 
 ## 0. North star
 
-**One sentence:** *Make Claude Code's token consumption visible enough that optimization becomes obvious, then ship the optimizers that close the loop.*
+**One sentence:** *Make multi-agent token waste visible at the team level, then enforce the optimizers that fix it — locally, with no transcripts leaving customer machines.*
 
-**Done looks like:** A Claude Code power user installs `crawfish` once, runs the lens dashboard locally, sees a diagnosis like *"Bash output cost you 4.2M tokens this week — install crawfish-logs"*, runs the suggested install command, and on the next session that line is gone.
+**Done looks like:** A platform engineer at a 50-person AI-forward team runs `npx crawfish` once on their machine, sees the team's compounding factor (4.2× across 80 sessions last week), defines a policy bundle, distributes it via a signed git-pulled URL, and the next week's bill drops measurably. Engineers' Claude Code sessions hit the policy hook → wasteful patterns auto-route to the relevant `crawfish-opt-*`, savings show up in the per-session view, the platform engineer sees the aggregate trend in a self-hosted team-mode aggregator.
 
-**Done does NOT look like:** A hosted SaaS. A generic LLM observability tool. A framework. A prompt-rewriter. See [`PRODUCT.md` § Anti-goals](./crawfish-lens/PRODUCT.md#anti-goals).
+**Done does NOT look like:** A vendor-hosted SaaS that ingests transcripts. A generic LLM observability tool. A framework. A prompt-rewriter. See [`PRODUCT.md` § Anti-goals](./crawfish-lens/PRODUCT.md#anti-goals).
+
+## 0a. Distribution strategy: Tier 1 + Tier 2
+
+The product is local-first, but distribution has two tiers. Tier 1 is the OSS funnel; Tier 2 is the commercial wedge. Same engineering foundation; different go-to-market.
+
+| Tier | Audience | Install | Pitch | Commercial |
+|---|---|---|---|---|
+| **Tier 1 — `npx crawfish`** | Individual ICs running Claude Code (the early adopters) | One command. Boots lens + dash + the codebase optimizer. Hook install with prompt. | "See where your tokens go. Cap the obvious waste." | Free, OSS forever. Drives Tier 2 inbound. |
+| **Tier 2 — `crawfish team install <url>`** | Platform engineers rolling out to teams | Same binary; consumes a signed bundle URL declaring policies + optimizer set + opt-in aggregator endpoint. | "Cap your team's Claude Code spend without slowing them down." | Paid: site licenses + a self-hosted team aggregator (`crawfish-team`) for cross-engineer rollups. |
+| **Tier 3 — `crawfish ci`** *(later)* | Eng managers who want PR-time enforcement | GitHub Action that flags wasteful patterns on PRs that touch agent configs. | "Catch the regression before merge." | Paid: per-seat. |
+
+**Why this shape:** Generic LLM observability is commoditized (Langfuse, Helicone, Braintrust). Our defensible position is *Claude-Code-native fan-out detection plus enforceable policy* — neither incumbent can ship that without rewriting their stack. The OSS funnel earns the team's trust; the team install converts.
+
+**Privacy is the wedge, not the constraint.** "Transcripts never leave the customer machine" isn't a temporary anti-goal; it's the only thing that makes legal say yes at most companies. Self-hosted aggregator preserves this — customers run their own collector pod, ICs opt in to send anonymized stats to it.
 
 ---
 
@@ -32,11 +46,12 @@ This is the **umbrella roadmap**. Each submodule has its own milestone-level roa
 | Phase | What lands | What unlocks | Honest weeks |
 |---|---|---|---|
 | **P0** | Lens M0 CLI + crawfish-opt browser v0.2 | Local data is readable; one optimizer exists | ✅ done |
-| **P1** | Lens M1 dashboard (Vite/React) + diagnoses skeleton + crawfish-opt-codebase v0.1 | The "see → fix" loop runs end-to-end for the first time | 2-3 |
-| **P2** | **crawfish-dash MVP** (Tauri shell, Agents/Sessions/Optimizers tabs) + Lens M2 full diagnoses + crawfish-opt-logs v0.1 | Unified UI; the second-most-painful sink (log dumps) is addressed | 4-5 |
-| **P3** | Lens M3 multi-agent tree + hook-based live mode + dash OpenClaw integration | Subagents visible; live mode doesn't depend on JSONL flush; dash manages OpenClaw skills | 3-4 |
-| **P4** | Lens M4 marketplace + benchmark harness + public release | Diagnoses link to one-click installs; community optimizers possible | 3-4 |
-| **P5** | CI integration ("did this PR regress tokens?") + adapters for Cursor/Aider | Team adoption wedge | open-ended |
+| **P1** | Lens M1 dashboard (Vite/React) + diagnoses skeleton + crawfish-opt-codebase v0.1 | The "see → fix" loop runs end-to-end for the first time | ✅ done |
+| **P1.5** | crawfish-dash v0.1 webapp (Policies / Agents / Optimizers / Sessions / Benchmarks tabs) + topology graph + per-session savings + shared @crawfish/ui | Tier 1 in dogfood form: end-to-end usable platform on one machine | ✅ done |
+| **P2 — Tier 1 ship** | `npx crawfish` one-liner: umbrella publishes to npm, single command boots lens + dash + opens browser, auto-installs hook with confirmation. Public on GitHub. | Real distribution. Anyone can try crawfish in 60 seconds. | 1-2 |
+| **P3 — Tier 2 wedge** | `crawfish-team` self-hosted aggregator (5th submodule). Bundle distribution (signed git URLs). `crawfish team install <url>` consumes policy + optimizer set. Opt-in stat sharing from ICs to org aggregator. | Commercial wedge: platform engineers can roll out and measure across their team. | 4-6 |
+| **P4 — depth** | crawfish-opt-logs v0.1, lens M2 diagnoses catalog, dash Tauri shell, OpenClaw integration, marketplace public submission flow. | Optimizer breadth + native macOS feel. | 4-6 |
+| **P5 — Tier 3** | `crawfish ci` GitHub Action — PR-time token regression checks. Cursor/Aider adapters for non-Claude-Code shops. | Enterprise depth + non-CC reach. | open-ended |
 
 **Total to public release (P0→P4):** 12-16 focused weeks (revised after dash addition). Solo, evening/weekend pace, no surprises.
 

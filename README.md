@@ -4,6 +4,20 @@
 
 Multi-agent setups (Claude Code's agent-teams, OpenClaw, custom orchestrators) routinely cost 4-5× more tokens than the work warrants — most of it spent re-establishing context across parallel subagents. Crawfish is the local platform that makes that fan-out *visible* and *fixable* without sending your transcripts to a third-party service.
 
+## Quick start
+
+```bash
+git clone --recurse-submodules https://github.com/Neal-Kotval/crawfish.git
+cd crawfish && npm run build
+node bin/crawfish.js
+```
+
+That boots **lens** (`:7878`) + **dash** (`:7880`) and opens the dashboard in your browser. `Ctrl-C` cleanly stops both. Add `--install-hook` to wire the policy enforcer into Claude Code (writes a backup of your `~/.claude/settings.json`).
+
+Both servers bind to `127.0.0.1` only. **Nothing leaves your machine.**
+
+> **Coming soon:** `npx crawfish` once the umbrella publishes to npm.
+
 This is the umbrella repo. The actual code lives in four submodules:
 
 | Submodule | What it is | Status |
