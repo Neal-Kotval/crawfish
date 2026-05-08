@@ -1,6 +1,6 @@
 [submodule "crawfish-opt"]
 	path = crawfish-opt
-	url = https://github.com/Neal-Kotval/crawfish.git
+	url = https://github.com/Neal-Kotval/crawfish-opt.git
 	branch = main
 [submodule "crawfish-lens"]
 	path = crawfish-lens
