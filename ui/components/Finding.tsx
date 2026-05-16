@@ -1,4 +1,10 @@
-import type { Finding } from "../lib/api";
+export interface Finding {
+  ruleId: string;
+  severity: "info" | "warn" | "crit";
+  title: string;
+  detail: string;
+  fix?: { kind: "doc" | "config" | "install"; text: string; install?: string };
+}
 
 export function FindingBanner({ f }: { f: Finding }) {
   const icon =

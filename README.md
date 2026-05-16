@@ -1,8 +1,40 @@
 # Crawfish
 
-> **See where your team's agents burn tokens. Stop the 4-5× compounding.**
+> **The operating system for companies that run on AI agents.**
 
-Multi-agent setups (Claude Code's agent-teams, OpenClaw, custom orchestrators) routinely cost 4-5× more tokens than the work warrants — most of it spent re-establishing context across parallel subagents. Crawfish is the local platform that makes that fan-out *visible* and *fixable* without sending your transcripts to a third-party service.
+From solo founders spinning up their first agent team to enterprises managing hundreds of autonomous workers, Crawfish is the platform you build your org on. Pick a template — startup, dev shop, support team, research org — and get a preloaded set of agent containers with sensible defaults. Modify, extend, deploy.
+
+See [PRODUCT.md](./PRODUCT.md) for the full pitch.
+
+---
+
+## Screenshots
+
+### Home — create an org from a template
+
+![Home](./docs/screenshots/home.png)
+
+### Board — Jira-style kanban, shared between humans and agents
+
+![Board](./docs/screenshots/org-board.png)
+
+### Members — agents and humans as first-class peers
+
+![Members](./docs/screenshots/org-members.png)
+
+### Crons — scheduled manager runs
+
+![Crons](./docs/screenshots/org-crons.png)
+
+### Analytics — Dev signals from lens, Product signals from the board
+
+![Analytics](./docs/screenshots/org-analytics.png)
+
+### Files — hosted org filesystem all members can read/write
+
+![Files](./docs/screenshots/org-files.png)
+
+---
 
 ## Quick start
 
@@ -25,51 +57,46 @@ cd crawfish && npm run build
 node bin/crawfish.js
 ```
 
-Boots **lens** (`:7878`) + **dash** (`:7880`) and opens the dashboard in your browser. `Ctrl-C` cleanly stops both. Add `--install-hook` to wire the policy enforcer into Claude Code.
+Boots **lens** (`:7878`) + **dash** (`:7880`) and opens the dashboard in your browser. `Ctrl-C` cleanly stops both.
 
 Both options bind only to `127.0.0.1`. **Nothing leaves your machine.**
 
-> **Coming soon:** `npx crawfish` once the umbrella publishes to npm; signed `.dmg` distribution once notarization is set up.
+---
 
-This is the umbrella repo. The actual code lives in five submodules:
+## What's inside
 
-| Submodule | What it is | Status |
-|---|---|---|
-| **[crawfish-opt](./crawfish-opt)** | Optimizer line — MCP server for the browser/DOM token sink. | v0.2 |
-| **[crawfish-opt-codebase](./crawfish-opt-codebase)** | Optimizer line — MCP server for codebase navigation (replaces blind grep+Read chains; **3.25× token reduction** on the bench). | v0.1 |
-| **[crawfish-lens](./crawfish-lens)** | Local observability — reads `~/.claude/projects` JSONL transcripts, surfaces diagnoses, links to optimizers. Localhost server at `:7878`. | M1 shipped |
-| **[crawfish-dash](./crawfish-dash)** | The dashboard UI — Policies, Agents, Optimizers, Benchmarks, Compare, Sessions. Localhost server at `:7880`. | v0.1 |
-| **[crawfish-app](./crawfish-app)** | Tauri 2 desktop shell that wraps lens + dash as a native `.app`. | v0.1 |
+This is the umbrella repo. The code lives in six submodules:
 
-For the full product story, see [crawfish-lens/PRODUCT.md](./crawfish-lens/PRODUCT.md). For why these are separate repos, see [crawfish-lens/docs/relationship-to-crawfish.md](./crawfish-lens/docs/relationship-to-crawfish.md).
+| Submodule | What it is |
+|---|---|
+| **[crawfish-lens](./crawfish-lens)** | REST + SSE server. Owns the board, hosted FS, cron daemon, session analytics. Localhost `:7878`. |
+| **[crawfish-dash](./crawfish-dash)** | The UI you see above. Org templates, members, board, files, analytics, crons. Localhost `:7880`. |
+| **[crawfish-orgctl](./crawfish-orgctl)** | MCP server giving agents `board_*` and `org_fs_*` tools — so they can pick up tasks and read/write shared files. |
+| **[crawfish-opt](./crawfish-opt)** | MCP server for semantic browser access (token-efficient `browser_*` tools). |
+| **[crawfish-opt-codebase](./crawfish-opt-codebase)** | MCP server for semantic codebase navigation. **3.25× token reduction** on the bench vs. blind grep+Read. |
+| **[crawfish-app](./crawfish-app)** | Tauri 2 desktop shell that wraps lens + dash as a native `.app`. |
 
-## Cloning
+The v1 architecture is pinned in [docs/specs/org-contract.md](./docs/specs/org-contract.md) — org.json schema, board event log, file-system rules, cron entries, MCP tool surface.
 
-```bash
-git clone --recurse-submodules https://github.com/Neal-Kotval/crawfish.git
-# or, after a plain clone:
-git submodule update --init --recursive
-```
+---
 
 ## Working in a submodule
 
 Submodules are **independent git repos**. You commit and push from inside each submodule, then bump the umbrella's pointer:
 
 ```bash
-# Edit code in a submodule
-cd crawfish-opt
+cd crawfish-lens
 # ... edits ...
 git commit -am "..."
 git push                       # to the submodule's own remote
 
-# Back in the umbrella, record the new submodule SHA
 cd ..
-git add crawfish-opt
-git commit -m "Bump crawfish-opt"
+git add crawfish-lens
+git commit -m "Bump crawfish-lens"
 git push
 ```
 
-The umbrella never contains submodule source — only a pinned commit hash per submodule. That's the whole point: `crawfish-opt` and `crawfish-lens` ship on their own cadence; the umbrella is a known-good combination.
+The umbrella never contains submodule source — only a pinned commit hash per submodule. `crawfish-lens`, `crawfish-orgctl`, etc. each ship on their own cadence; the umbrella is a known-good combination.
 
 ## Updating to latest
 
@@ -84,24 +111,18 @@ git submodule update --remote crawfish-lens  # just one
 crawfish/                            # this umbrella repo
 ├── .gitmodules                      # submodule pointers
 ├── README.md                        # you are here
-├── ROADMAP.md                       # multi-phase plan, P0 → P5
+├── PRODUCT.md                       # product pitch
+├── ROADMAP.md                       # what shipped in v1, what's queued for v2
+├── docs/
+│   ├── specs/org-contract.md        # the binding v1 schema
+│   └── screenshots/                 # the images above
+├── crawfish-lens/                   # → github.com/Neal-Kotval/crawfish-lens
+├── crawfish-dash/                   # → github.com/Neal-Kotval/crawfish-dash
+├── crawfish-orgctl/                 # → github.com/Neal-Kotval/crawfish-orgctl
 ├── crawfish-opt/                    # → github.com/Neal-Kotval/crawfish-opt
 ├── crawfish-opt-codebase/           # → github.com/Neal-Kotval/crawfish-opt-codebase
-├── crawfish-lens/                   # → github.com/Neal-Kotval/crawfish-lens
-└── crawfish-dash/                   # → github.com/Neal-Kotval/crawfish-dash
+└── crawfish-app/                    # → github.com/Neal-Kotval/crawfish-app
 ```
-
-## Running the platform
-
-```bash
-# terminal 1 — the observability engine
-cd crawfish-lens && npm install && npm run build && npm run serve   # → :7878
-
-# terminal 2 — the umbrella UI
-cd crawfish-dash && npm install && npm run build && npm run serve   # → :7880
-```
-
-Open dash at <http://127.0.0.1:7880> for the polished surface; lens at <http://127.0.0.1:7878> for the deep-dive token detail.
 
 ## License
 

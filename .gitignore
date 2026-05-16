@@ -1,3 +1,5 @@
 .DS_Store
 *.log
 .claude/settings.local.json
+.audit/
+node_modules/

@@ -1,426 +1,474 @@
 # Crawfish — Platform Roadmap
 
-> The full scope of the crawfish platform: lens (observability) + opt (optimizers), the contract that ties them, and a wave-by-wave build plan that's honest about what's one-shot-able vs. what isn't.
+> **2026-05-15 pivot:** Crawfish reframed from "agent-team observability" to **Agent Organizations** — the OS for companies that run on AI agents. See [`PRODUCT.md`](./PRODUCT.md). The old observability framing (sections below from §0 onward) is **superseded** but kept for historical context until the relevant pieces are either absorbed into the new model or deleted.
 
-This is the **umbrella roadmap**. Each submodule has its own milestone-level roadmap; this doc is the cross-cutting plan and the source of truth when the two diverge.
+This is the **umbrella roadmap**.
 
-- **crawfish-lens roadmap:** [`crawfish-lens/ROADMAP.md`](./crawfish-lens/ROADMAP.md)
-- **crawfish-opt roadmap:** lives in the optimizer repo's docs (TBD — currently implicit in milestones M1.x referenced in the v0.2 ship notes)
-- **crawfish-dash roadmap:** TBD; created at start of P2.
-- **Product overview:** [`crawfish-lens/PRODUCT.md`](./crawfish-lens/PRODUCT.md)
-
-## Three pillars
-
-1. **`crawfish-opt`** — MCP servers that minimize tokens for specific workloads (browser, codebase, logs, search). Each is its own repo, its own release. Composable via the [optimizer contract](#2-the-optimizer-contract-shared-spec).
-2. **`crawfish-lens`** — local observability. Reads `~/.claude/projects` JSONL, reports per-session/tool/model token usage, surfaces diagnoses with optimizer recommendations.
-3. **`crawfish-dash`** — Apple-like dashboard that wraps both. Manages agents (Claude Code subagents → MCP bundles → [OpenClaw](https://openclaw.ai/) skills over time), embeds lens as a tab, installs optimizers from a marketplace tab. **The user-facing surface; lens and opt are the engines underneath.**
+- **Product overview:** [`PRODUCT.md`](./PRODUCT.md)
+- **v1 spec:** [`docs/specs/org-contract.md`](./docs/specs/org-contract.md)
+- **Forward ideas:** [`BRAINSTORM.md`](./BRAINSTORM.md) *(pre-pivot)*
+- **Lens roadmap:** [`crawfish-lens/ROADMAP.md`](./crawfish-lens/ROADMAP.md) *(pre-pivot)*
+- **Integration targets:** [`INTEGRATIONS.md`](./INTEGRATIONS.md) *(pre-pivot)*
 
 ---
 
-## 0. North star
+## v1 — Agent Organizations (shipped 2026-05-15)
+
+**Goal:** smallest slice that demonstrates the new framing end-to-end for the bottoms-up motion. A solo founder installs Crawfish, picks the Startup template, gets 5 preconfigured agent members + seeded kanban + shared FS + one manager cron, and points work at them.
+
+**What landed:**
+
+- **Org as first-class container.** On-disk at `~/.crawfish/orgs/<id>/` with `org.json`, `board.jsonl`, `crons.json`, `members/`, `files/`. Schema in [`docs/specs/org-contract.md`](./docs/specs/org-contract.md).
+- **Templates.** `crawfish-dash/src/templates/startup/` (5 members: Founder, Eng, Design, Support, Ops). Forking = `cp -r`. `dev-shop`, `support`, `research` scaffolded as empty placeholders.
+- **Agent Jira board.** JSONL event log (`task_created | task_updated | task_commented | task_deleted`) + SSE tail in lens. Kanban UI in dash.
+- **Hosted org FS.** REST surface (GET/PUT/DELETE) over `files/` with path-escape rules + 1 MiB cap. UI in dash.
+- **Manager crons.** `node-cron` daemon in lens reads `crons.json` per org; manual trigger + scheduled fires append to the board. Stub for LLM invocation (TODO marker).
+- **Dual analytics.** Dash UI toggle: Dev (existing session token stats via lens proxy) / Product (board aggregations — done count, completion %, tasks per member).
+- **`crawfish-orgctl`.** New MCP server exposing `board_*` and `org_fs_*` tools so agents can read/write the board and shared FS. Conforms to optimizer contract v1.0 (`tokens_used` on every response).
+- **Marketplace** kept as-is (existing Optimizers tab).
+
+**Architecture in v1:** flat only (one default — `architecture: "flat"` in `org.json`). Switchable architectures (hierarchical / pipeline / hybrid) deferred.
+
+**Out of scope (deferred):**
+- Enterprise governance (SSO, RBAC, audit log beyond board.jsonl)
+- Switchable agent architectures
+- Additional templates beyond Startup
+- Multi-org switcher in the desktop shell
+- Real LLM invocation from cron runs (TODO in `crawfish-lens/src/server/crons.ts`)
+- Member validation on board events (server accepts any `by` / `assignee` string)
+
+---
+
+## v2 candidates (post-launch)
+
+In rough priority order — each is independently shippable.
+
+1. **Real cron runs.** Wire `node-cron` fire → Anthropic SDK call using the member's prompt file + tool list. Output target per `output_to` field.
+2. **Member ACL.** Validate `by` / `assignee` against `org.json`; reject unknown members with `invalid_member`.
+3. **More templates.** Flesh out `dev-shop` (agency model: PM + 3 engineers + QA), `support` (tier-1 + escalation), `research` (lead + 3 specialists).
+4. **Architecture picker.** Hierarchical (manager → workers) and pipeline (sequential handoffs) variants of the Startup template.
+5. **Stats endpoint.** Implement `GET /api/orgs/:id/stats?view=dev|product` server-side so the Analytics UI doesn't fold client-side.
+6. **Multi-org switcher.** Top-bar dropdown to switch active org in the Tauri shell.
+7. **Human members.** Promote the v1 human stub (name + avatar) to a real identity with sign-in, mention notifications.
+
+---
+
+## Historical: pre-pivot observability roadmap (superseded)
+
+The sections below described the observability tool Crawfish was before 2026-05-15. They remain here so the diagnoses / policy enforcement / savings work still in the codebase has a paper trail. Sections from §0 ("North star") downward all belong to that pre-pivot model.
+
+---
+
+## 0. North star *(pre-pivot)*
 
 **One sentence:** *Make multi-agent token waste visible at the team level, then enforce the optimizers that fix it — locally, with no transcripts leaving customer machines.*
 
-**Done looks like:** A platform engineer at a 50-person AI-forward team runs `npx crawfish` once on their machine, sees the team's compounding factor (4.2× across 80 sessions last week), defines a policy bundle, distributes it via a signed git-pulled URL, and the next week's bill drops measurably. Engineers' Claude Code sessions hit the policy hook → wasteful patterns auto-route to the relevant `crawfish-opt-*`, savings show up in the per-session view, the platform engineer sees the aggregate trend in a self-hosted team-mode aggregator.
+**Done looks like:** A platform engineer at an AI-forward team installs the desktop app, runs the first-run wizard, sees their team's compounding factor (4.2× across last week's sessions), runs the policy wizard with a dry-run preview that quotes a measured savings number, distributes the resulting bundle via git, and the next week's bill drops measurably. Engineers' agents hit the policy hook → wasteful patterns auto-route to the relevant optimizer → savings show up in the per-session view → the platform engineer watches the trend in dash. Everything runs on `127.0.0.1`. No transcript ever leaves a customer machine.
 
-**Done does NOT look like:** A vendor-hosted SaaS that ingests transcripts. A generic LLM observability tool. A framework. A prompt-rewriter. See [`PRODUCT.md` § Anti-goals](./crawfish-lens/PRODUCT.md#anti-goals).
+**Done does NOT look like:** A vendor-hosted SaaS. A generic LLM observability tool. A framework. A prompt-rewriter. An agent vendor. See [`PRODUCT.md` § Anti-goals](./PRODUCT.md).
 
-## 0a. Distribution strategy: Tier 1 + Tier 2
+---
 
-The product is local-first, but distribution has two tiers. Tier 1 is the OSS funnel; Tier 2 is the commercial wedge. Same engineering foundation; different go-to-market.
+## 0a. Posture for this cycle: free, local, OSS
 
-| Tier | Audience | Install | Pitch | Commercial |
-|---|---|---|---|---|
-| **Tier 1 — `npx crawfish`** | Individual ICs running Claude Code (the early adopters) | One command. Boots lens + dash + the codebase optimizer. Hook install with prompt. | "See where your tokens go. Cap the obvious waste." | Free, OSS forever. Drives Tier 2 inbound. |
-| **Tier 2 — `crawfish team install <url>`** | Platform engineers rolling out to teams | Same binary; consumes a signed bundle URL declaring policies + optimizer set + opt-in aggregator endpoint. | "Cap your team's Claude Code spend without slowing them down." | Paid: site licenses + a self-hosted team aggregator (`crawfish-team`) for cross-engineer rollups. |
-| **Tier 3 — `crawfish ci`** *(later)* | Eng managers who want PR-time enforcement | GitHub Action that flags wasteful patterns on PRs that touch agent configs. | "Catch the regression before merge." | Paid: per-seat. |
+Decision from [BRAINSTORM.md § Decisions](./BRAINSTORM.md): **stay free and local-first through this cycle.** Everything ships MIT, runs on `127.0.0.1`, assumes a single-machine user. Pricing is a later move once adoption is real; the candidate paid tiers when that time comes are team-mode aggregation and the hosted-orchestrator deployment shape — not the solo experience.
 
-**Why this shape:** Generic LLM observability is commoditized (Langfuse, Helicone, Braintrust). Our defensible position is *Claude-Code-native fan-out detection plus enforceable policy* — neither incumbent can ship that without rewriting their stack. The OSS funnel earns the team's trust; the team install converts.
+This decision cascades:
 
-**Privacy is the wedge, not the constraint.** "Transcripts never leave the customer machine" isn't a temporary anti-goal; it's the only thing that makes legal say yes at most companies. Self-hosted aggregator preserves this — customers run their own collector pod, ICs opt in to send anonymized stats to it.
+- **Solo engineer first** for any orchestrator work — single-machine OpenClaw bundle, no auth, no multi-tenant.
+- **In-repo `.crawfish/`** for codebase prep artifacts — committed-to-share is the cheapest team distribution we have without server infra.
+- **OpenTelemetry first** for analysis-tool integration — open standard fits local-first better than vendor-shaped Grafana JSON.
+
+Pricing trigger is a *signal*, not a date: the first team that asks for multi-engineer aggregation we don't already have.
+
+---
 
 ## 0b. Moats — what makes crawfish defensible
 
-The current pitch (*"Claude-Code-native observability + a policy hook + a few MCP optimizers"*) is a **feature combination**, not a moat. A funded competitor could ship the same thing in 3-6 months. To be a fundable *company* (not a tool), at least one of the three edges below has to become load-bearing. **Pick one. Double down. The rest are supporting cast.**
+The current pitch is a *feature combination*, not a moat. To be a fundable company (not a tool), at least one of three edges has to become load-bearing. **Pick one. Double down. The rest are supporting cast.**
 
 ### Edge 1 — Multi-agent topology as a standard
-
-The topology view is the most distinctive primitive in the product. Today it's a viewer. To turn it into a moat: emit OpenTelemetry-compatible **agent fan-out spans** (parent-child relationship, prompt-spawn tokens, child-internal tokens). Define the schema as an open spec (`crawfish-topology-spans@1.0`). Submit to OpenTelemetry's GenAI semantic conventions group.
-
-Outcome: any observability vendor (Datadog, Langfuse, Honeycomb) that wants to talk about subagent costs adopts your schema. You become the *reference for how the industry measures fan-out*. Datadog can't copy that without conceding the format.
+Emit OpenTelemetry-compatible **agent fan-out spans** (parent-child relationship, prompt-spawn tokens, child-internal tokens). Define `crawfish-topology-spans@1.0` as an open spec. Submit to OpenTelemetry's GenAI semantic conventions group. Outcome: any vendor that wants to talk about subagent costs adopts your schema.
 
 ### Edge 2 — Policy bundles as a portable format
-
-Define `crawfish-policy@1.0` as an **open spec** — JSON schema, signed bundles, runtime adapters for Claude Code / LangGraph / OpenClaw / Aider / custom orchestrators. crawfish ships the reference implementation; the format is the moat.
-
-Outcome: when a platform engineer at a 500-person org writes a policy bundle for their team, they're investing in *the format*, not crawfish-the-tool. Switching cost ≈ switching cost of the format itself. Multi-runtime portability is the unlock — competitors building only on one runtime cannot offer the same coverage.
+Define `crawfish-policy@1.0` as an open spec — JSON schema, signed bundles, runtime adapters for Claude Code / OpenClaw / Cursor / custom orchestrators. crawfish ships the reference implementation; the format is the moat.
 
 ### Edge 3 — Closed-loop optimization (the data product)
+Lens watches transcripts and **automatically proposes new policies and optimizer configs** based on observed waste, with confidence scores and predicted savings. Statistical heuristics in v1, opt-in aggregate model in v2.
 
-Right now lens shows costs and dash recommends optimizers; humans connect them. The defensible version: lens watches your team's transcripts, **automatically proposes new policies and optimizer configs** based on observed waste, with confidence scores and predicted savings.
+**Working assumption for this cycle:** Edge 1 (topology spans) lands first because it's a byproduct of the journey + flow work in C2.P1, and it sets up Edge 2 cleanly. Edge 3 needs aggregate data we don't have yet — gated on the post-cycle pricing trigger.
 
-For v1 this is statistical heuristics (e.g., "your team's Read calls average 18KB; installing crawfish-opt-codebase would cap them at ~3KB; predicted savings 40K tok/week"). For v2 it's a small model trained on opt-in aggregate transcripts that predicts which optimizers help which team patterns.
-
-Outcome: an ML / data product that gets smarter with usage. Competitors without your aggregate data can't make the same recommendations.
-
----
-
-## 0c. Two larger strategic plays (only pursue after one of the three Edges is real)
-
-### Play A — The proxy
-
-Sit on the wire between agents and the Anthropic API. Enforce policies *inescapably* (not just hopefully, via PreToolUse hooks). Charge **per-token-saved, per-month**.
-
-**Pros:** high-margin SaaS, clear ROI ("we saved you N tokens, here's M% as our fee"), works regardless of Claude Code's hook stability, doesn't depend on host-runtime cooperation.
-
-**Cons:** infra to run a proxy reliably; legal / ToS conversation with Anthropic; trust required (we sit on every byte of customer agent traffic — opposite of our local-first wedge).
-
-**When to pursue:** after Edge 2 (policy format) is established, so we have something defensible to enforce *with*.
-
-### Play B — Lighthouse for agents
-
-Reposition crawfish as **the benchmarking standard for MCP optimizers and agent runtimes**. Anyone submits an optimizer; crawfish runs reproducible benchmarks and publishes a leaderboard. Vendors prove themselves on our turf — like `web.dev` / Lighthouse for browser performance.
-
-**Pros:** network effects, content/SEO surface drives the OSS funnel, doesn't depend on a single platform, gives a public artifact every quarterly review needs.
-
-**Cons:** content treadmill (must keep benches fresh); competitive risk if a tier-1 vendor builds their own leaderboard; revenue path is indirect (sponsorships? premium analytics?).
-
-**When to pursue:** after Edge 1 (topology spans) is published, so the leaderboard's metrics carry the format's authority.
+**Why Edge 1 lands first, concretely:** the topology visualizer (§ 3.0) makes the schema visible. Spans aren't compelling on their own; a 30-second visualization of multi-agent waste with a *real* policy intervention layered on top is. The visualizer creates demand for the engine; the engine makes the visualizer credible. Neither moves alone — but the visualizer is what gets the schema adopted, not the schema doc. Adoption follows demos, not specs.
 
 ---
 
-## 0d. The strategic choice point
+## 1. Cycle 2 — overview
 
-The three Edges and two Plays are not orthogonal — they reinforce one another, but you cannot pursue all five at once with one builder. The strategic choice for the next 6 months:
+The first cycle (C1: phases P0 → P1.5) shipped the platform substrate. **Cycle 2 turns the substrate into something a team adopts.**
 
-| If we want to be… | …pursue… |
-|---|---|
-| A standards-defining open-source brand | Edge 1 (topology spans) → Play B (Lighthouse) |
-| A defensible commercial enforcement layer | Edge 2 (policy format) → Play A (proxy) |
-| An ML data product with high switching cost | Edge 3 (closed-loop) → either Play |
-
-**Working assumption:** Edge 2 + Play A is the most fundable pairing — clearest enterprise buyer, clearest revenue model, hardest to absorb into incumbents. Edge 1 + Play B is the most likely to win on the OSS-funnel side (Show HN, Hacker News, GitHub stars). Edge 3 is the longest-term moat but requires usage volume we don't have yet.
-
-This document doesn't pick. The phase plan below stays focused on shipping the platform; the moat work begins in earnest at P3 once distribution exists.
-
----
-
-## 1. Phase summary
+The unifying frame: C1 answered *"where did the tokens go?"* C2 answers *"what is the agent **doing**, and was it the right thing?"* — i.e., move from cost accounting to **work accounting**. Same JSONL substrate, richer reductions over it, plus the on-ramps that turn it into adoption.
 
 | Phase | What lands | What unlocks | Honest weeks |
 |---|---|---|---|
-| **P0** | Lens M0 CLI + crawfish-opt browser v0.2 | Local data is readable; one optimizer exists | ✅ done |
-| **P1** | Lens M1 dashboard (Vite/React) + diagnoses skeleton + crawfish-opt-codebase v0.1 | The "see → fix" loop runs end-to-end for the first time | ✅ done |
-| **P1.5** | crawfish-dash v0.1 webapp (Policies / Agents / Optimizers / Sessions / Benchmarks tabs) + topology graph + per-session savings + shared @crawfish/ui | Tier 1 in dogfood form: end-to-end usable platform on one machine | ✅ done |
-| **P2 — Tier 1 ship** | `npx crawfish` one-liner: umbrella publishes to npm, single command boots lens + dash + opens browser, auto-installs hook with confirmation. Public on GitHub. | Real distribution. Anyone can try crawfish in 60 seconds. | 1-2 |
-| **P3 — Tier 2 wedge** | `crawfish-team` self-hosted aggregator (5th submodule). Bundle distribution (signed git URLs). `crawfish team install <url>` consumes policy + optimizer set. Opt-in stat sharing from ICs to org aggregator. | Commercial wedge: platform engineers can roll out and measure across their team. | 4-6 |
-| **P4 — depth** | crawfish-opt-logs v0.1, lens M2 diagnoses catalog, dash Tauri shell, OpenClaw integration, marketplace public submission flow. | Optimizer breadth + native macOS feel. | 4-6 |
-| **P5 — Tier 3** | `crawfish ci` GitHub Action — PR-time token regression checks. Cursor/Aider adapters for non-Claude-Code shops. | Enterprise depth + non-CC reach. | open-ended |
+| **C1.P0–P1.5** | Lens M1, dash v0.2, crawfish-opt v0.2, crawfish-opt-codebase v0.1, crawfish-app v0.1 | Local data is readable; "see → fix" loop runs end-to-end; policy enforcement shipped; native shell. | ✅ done |
+| **C2.P1 — Journeys & flow** | Engine: journey timeline + flow/graph reductions + Lens M2 diagnoses + JSON API v1 + OTel exporter. Legibility: topology visualizer that renders all of it. | Per-agent legibility *and* the engine substance behind it. Engine creates the value; visualizer makes it sellable. Edge 1 anchor. | 4-6 |
+| **C2.P2 — Adoption on-ramps** | First-run wizard, policy wizard with dry-run preview, codebase prep wizard + `.crawfish/` artifacts | A new user gets to a measurable win in <10 minutes. | 3-4 |
+| **C2.P3 — Multi-runtime** | `crawfish-orchestrator` daemon (solo OpenClaw bundle), lens adapters per [INTEGRATIONS.md](./INTEGRATIONS.md), dash runtime selector | Single-platform-dependency objection neutralized; Edge 2 anchor. | 5-7 |
+| **C2.P4 — Integration breadth** | Webhook bus, Linear/Slack hooks, BI export, Grafana dashboards (after OTel), additional optimizers (logs, search) | The data is useful where the team already lives. | 4-5 |
+| **C2.P5 — Pricing trigger gate** | Team-mode aggregator design (build only if signal arrives) | First paid surface, only if real demand. | gated |
 
-**Total to public release (P0→P4):** 12-16 focused weeks (revised after dash addition). Solo, evening/weekend pace, no surprises.
-
-The "one-shot this session" wave is **P1 only**, scoped tightly below. Architectural decisions in P1 (Vite + React + design tokens, no framework lock-in) are chosen so dash (P2) can fold lens components in without rewriting.
+**Total cycle:** 16-22 focused weeks. Solo, evening/weekend pace, no surprises. The signal-gated phase doesn't count.
 
 ---
 
-## 2. The optimizer contract (shared spec)
-
-Lives at this layer because both repos depend on it. Should eventually move to `docs/optimizer-contract.md` in this umbrella.
+## 2. The optimizer contract (shared spec, unchanged from C1)
 
 Every crawfish-line MCP server MUST:
 
-1. **Self-report `tokens_used`** on every tool response. JSON shape:
+1. **Self-report `tokens_used`** on every tool response:
    ```jsonc
    { "tokens_used": { "input_estimate": 312, "output_estimate": 28, "method": "haiku|tiktoken|bytes/4" } }
    ```
 2. **Be idempotent on retry.** An agent re-calling after a stall must not multiply API cost.
 3. **Degrade gracefully without an API key.** Fall back to deterministic logic; surface a `degraded: true` flag.
 4. **Address one token sink.** Browser, codebase, logs, search — not "everything."
-5. **Ship a benchmark.** Each optimizer's repo includes `bench/baseline-vs-optimizer.ts` showing tokens-saved on a fixed task set. Lens's M4 marketplace reads these numbers; without them, the optimizer doesn't list.
-6. **Version compatibility:** declare `crawfish-contract: "1.0"` in `package.json`. Lens checks this before recommending.
+5. **Ship a benchmark.** `bench/baseline-vs-optimizer.ts` with tokens-saved on a fixed task set.
+6. **Version compatibility:** declare `crawfish-contract: "1.0"` in `package.json`.
 
 Lens MUST:
 
 1. **Read** `tokens_used` from tool results when present, treat as authoritative.
-2. **Detect contract violations** by diffing self-report against the next assistant turn's `cache_creation_input_tokens` delta. Flag as "optimizer misreports cost" if drift > 20%.
-3. **Never depend on an optimizer being installed.** The base experience works against any Claude Code session.
+2. **Detect contract violations** by diffing self-report against the next assistant turn's `cache_creation_input_tokens` delta. Flag drift > 20%.
+3. **Never depend on an optimizer being installed.** Base experience works against any session.
 
 ---
 
-## 3. Phase 1 — the one-shot wave
+## 3. C2.P1 — Journeys & flow
 
-**Goal:** end-to-end "see → fix" loop. User opens lens, sees one diagnosis, installs one optimizer, sees the diagnosis go away.
+**Goal:** turn lens from a cost histogram into a work-accounting tool. Per-agent timelines, flow rates, graph structure of fan-out, and the open-format span schema that anchors Edge 1.
 
-This is the wave to commit to in a single focused build session. Everything below is acceptance-criteria sized — when a checkbox is satisfied, that piece is done.
+This is the load-bearing phase of the cycle. Everything in C2.P2-P4 reduces to "make these new reductions adoptable."
 
-### 3.1 Lens M1 — local dashboard
+**Two halves of this phase, both first-class:**
 
-**Stack:** Node 20+, ESM, single-process. **No frontend framework.** Server-rendered HTML + a 40-line vanilla JS file for live updates. Zero build step on the frontend.
+1. **The engine** (§ 3.1–3.4) — the measurements, rules, reductions, and schema that *do something*: detect waste, attribute it to a cause, and feed the policy/optimizer line that fixes it. This is the substance.
+2. **The legibility layer** (§ 3.0 — topology visualizer) — the artifact that makes the engine's invisible value visible to a buyer evaluating the platform, a platform engineer justifying the budget line, a team lead picking which policy to ship. This is what creates demand for the substance.
 
-- [ ] **Server foundation** (`src/server/index.ts`)
-  - Express? No — `node:http` + `node:url` only. Save the 30 deps.
-  - Bind to `127.0.0.1:7878` only. `--bind` flag prints a security warning if non-localhost.
-  - Single-page mode: `/` lists sessions, `/session/<id>` shows detail, `/events` is the SSE stream.
-- [ ] **Tail layer** (`src/server/tail.ts`)
-  - `chokidar` watching `~/.claude/projects/**/*.jsonl`.
-  - Per-file cursor (`{ inode, byteOffset }`) — detects truncation/rotation, re-reads from offset on `change`.
-  - Emits `Entry` objects to subscribers; backpressure-safe (drop oldest on slow consumer).
-- [ ] **Session-list view** (`src/server/views/sessions.ts`)
-  - Renders the same data as the CLI's `sessions` command but as HTML cards.
-  - Live: cards re-render on tail events (server-pushed HTML fragments via SSE; replace by `id`).
-  - Active indicator: mtime within last 5 min OR an SSE update arrived in the last 30 s.
-- [ ] **Session-detail view** (`src/server/views/session.ts`)
-  - Header: model, span, totals, hit rate.
-  - Turn timeline: each assistant turn as a row, with stacked token bar (in / out / cache_read / cache_write).
-  - Tool calls inline with each turn, showing call name + result-bytes badge.
-  - Live: appends rows as new turns arrive.
-- [ ] **JSON API** (`src/server/api.ts`) — same data, machine-readable; M3+ depends on this.
-  - `GET /api/sessions` → `SessionSummary[]`
-  - `GET /api/sessions/:id` → full `SessionDetail`
-  - `GET /api/sessions/:id/events` → SSE turn-by-turn stream
-- [ ] **Smoke tests** (`tests/smoke.test.ts`)
-  - Start server against a fixture transcript dir, assert `/` returns HTML, `/api/sessions` returns expected JSON.
-  - One Playwright test asserting live update propagates within 1s of a JSONL append.
-- [ ] **Install UX**
-  - `npx crawfish-lens serve` opens the browser automatically.
-  - First-run banner explains what's being read, links to `docs/privacy.md`.
+**Both halves are required.** A great engine without legibility is a tool nobody adopts because they can't see what it does. A great visualizer without an engine is a screensaver that doesn't survive contact with real usage. The roadmap historically overweighted the engine; this phase corrects the balance by ranking § 3.0 as a peer of § 3.1–3.4, not a UI afterthought.
 
-**Acceptance:** Open `http://localhost:7878`, see your real sessions, watch a card update live as you run Claude Code in another terminal.
+**Litmus test for any work in this phase:** does it *do something* (reduce tokens / prevent waste / enforce policy) or does it *make something visible* (surface waste / reveal topology / show before-after)? Healthy phase has both. Either alone doesn't sell.
 
-### 3.2 Lens M2 — diagnoses *skeleton*
+### 3.0 Topology visualizer — the legibility layer (BRAINSTORM §3, elevated)
 
-Full M2 is P2. The skeleton in P1 is the rule engine + ONE rule, so the architecture is real and there's at least one finding to surface.
+The artifact that makes the platform's invisible value visible. **Necessary, but not sufficient on its own** — it presents what the engine in § 3.1–3.4 produces; it doesn't replace it. Multi-agent waste is invisible by default (which is why teams overspend on agents in the first place). The visualizer makes the picture.
 
-- [ ] **Rule engine** (`src/diagnoses/engine.ts`)
-  - `Rule = { id: string; severity: "info"|"warn"|"crit"; detect(s: SessionStats): Finding[]; fix: Fix }`
-  - `Fix = { kind: "doc"|"config"|"install"; ... }`
-  - `runDiagnoses(s) → Finding[]`, pure function.
-- [ ] **Rule: oversized-tool-result** (`src/diagnoses/rules/oversized-result.ts`)
-  - Threshold: 5000 tokens (configurable). Estimate via `bytes / 4` proxy at first.
-  - Finding: `"<tool> returned <N>KB on <M> calls — try crawfish-opt-<X>"`
-  - Maps tool name → recommended optimizer via static `tool-optimizer-map.ts`. Empty for now except `Bash → crawfish-logs`, `Read → crawfish-codebase`, `WebFetch → crawfish-search` — all "coming soon" until each ships.
-- [ ] **Findings UI in dashboard** — banner on session-detail view, expandable.
-- [ ] **`crawfish-lens diagnose <id>`** CLI command — same engine, terminal output.
+**Three beats, in this order. Every pixel maps to a real lens measurement — no simulation, no synthetic flows, no smoothing.**
 
-**Acceptance:** A session with a 50KB Read result shows an "oversized tool result" finding in both CLI and web UI.
+1. **The waste.** Animate a real session. Parent at top, subagents spawn under it. Edges are token flows — thickness proportional to volume, color encoding usefulness vs redundancy. Sibling reads of the same file draw a red link between siblings. A path Read 3× with no Edit between pulses. A subagent that burned 40k tokens to produce 200 useful pulses red. The viewer feels waste *viscerally*.
+2. **The intervention.** Replay the same session with a Crawfish policy active. Blocked tool calls flash and disappear. Redundant subagents never spawn. Compounding factor counter at the top drops from 5.2× to 1.8× in real time. Total tokens drop from 240k to 70k. **This is the screenshot the platform engineer sends their VP.**
+3. **The control.** Show the policy that did it: a JSON snippet, four rules, signed bundle, distributed via git, three lines in `~/.claude/settings.json`. The viewer understands they could ship this to their team this afternoon.
 
-### 3.3 crawfish-opt-codebase v0.1
+**Required properties:**
 
-The reference second optimizer. Validates the contract works for something other than browser, and gives lens M2 a real "install this" recommendation.
+- [ ] **Real session data, not demos.** The user's own topology renders within seconds of opening the view. No marketing fixtures.
+- [ ] **Embeddable.** A snapshot can be pasted into Slack and the recipient sees the same picture (static SVG/PNG export of the current view, plus a link back to the live version on the sender's machine if they want to interact).
+- [ ] **Before/after policy preview.** The dry-run preview from the policy wizard (C2.P2 § 4.2) is *visual*, not numeric — same topology with the waste edges removed and the new compounding factor on the badge.
+- [ ] **Live updates.** During an active session, edges grow as tokens flow. This is what goes on the second monitor (currently § 3.2's "live throughput strip" — subsumed into this view).
+- [ ] **60-second loop on the landing page** (eventually). Built from a real anonymized session, not hand-crafted. Loop = waste → intervention → control, three beats, no narration needed.
 
-- [ ] **Repo scaffold:** `Neal-Kotval/crawfish-opt-codebase`, sibling to crawfish-opt.
-- [ ] **MCP tools:**
-  - `codebase_overview()` → returns top-level structure (dirs, key files), <500 tokens.
-  - `codebase_search(intent)` → semantic search over symbols + filenames; returns `{path, line, snippet}[]`, <300 tokens.
-  - `codebase_read(path, intent?)` → returns just the relevant region (function/class) for the intent, summarized if huge. Replaces "Read this 800-line file."
-  - `codebase_outline(path)` → file structure (top-level decls), <200 tokens.
-- [ ] **Index built lazily** on first call per repo; cached in `~/.crawfish/codebase-cache/<repo-hash>/`.
-- [ ] **Benchmark** (`bench/codebase-vs-naive.ts`):
-  - Task set: 10 questions like "where is X defined", "what's the API surface of Y".
-  - Naive baseline: `grep -rn` + `Read` calls.
-  - Crawfish baseline: `codebase_search` + `codebase_read`.
-  - Metric: tokens consumed by tool results.
-- [ ] **Contract compliance:** `tokens_used` on every response, idempotent, `crawfish-contract: "1.0"` in package.json.
+**Discipline (do not violate):**
 
-**Acceptance:** On the benchmark task set, codebase optimizer uses ≥3× fewer tokens than the naive baseline.
+- This is a **presentation layer for the engine.** It shows what lens, dash, and the policy hook already do. Every pixel maps to a measurement that already exists in lens. The visualizer doesn't reduce tokens; the policy hook reduces tokens. The visualizer doesn't fix re-read loops; the codebase optimizer fixes them. What the visualizer does is make the value of those things impossible to ignore.
+- It is **not** an orchestration layer. We do not "improve how agents talk to each other" or provide "agent-to-agent control." Showing the topology = observability. Becoming the topology = framework. The first is the moat; the second dilutes it. See § 10 anti-goal.
+- **Stays a screensaver if § 3.1–3.4 don't ship.** The visualizer's credibility depends on the engine. If users install it, see their topology, click intervene, and the savings number is wrong or the policy doesn't actually block — they leave. Substance under the surface, always.
 
-### 3.4 P1 ship checklist
+**Acceptance:** Open the desktop app on a fresh checkout of a Claude Code project, click any session, see the three-beat demo render against that real session — waste highlighted, dry-run policy applied, control plane revealed — within 60 seconds with no setup. The interventions shown are *real* (the policy actually blocks those tool calls in the engine; the savings number is the real lens reduction, not a mockup). Take a screenshot, paste into Slack, recipient sees the same picture.
 
-- [ ] Lens M1 dashboard usable on real sessions
-- [ ] At least one diagnosis fires
-- [ ] crawfish-opt-codebase passes its benchmark
-- [ ] Umbrella README updated to point at the dashboard install command
-- [ ] [`PRODUCT.md`](./crawfish-lens/PRODUCT.md) "Status" line bumped to P1
+**Dependencies on the rest of § 3:** § 3.1 produces per-call entries the visualizer animates. § 3.2 produces the compounding factor and edge-weight numbers. § 3.3 produces the redness rules (sibling redundancy, re-read loops). § 3.4 produces the schema that makes a snapshot portable. The visualizer *renders* the engine; without § 3.1–3.4 it has nothing to show.
 
-**No P1 task touches:** subagents, hook integration, marketplace UI, or non-Claude-Code adapters. Those are P3+.
+### 3.1 Journey timeline view (BRAINSTORM §3)
 
----
+Per-agent Gantt-shaped artifact: one swimlane per agent (parent + each subagent), each tool call a block (width = duration, color = tool, height = result-byte cost).
 
-## 4. Phase 2 — dash MVP + diagnoses breadth + logs optimizer
+- [ ] **Schema:** `JourneyEvent = { agentId, ts, kind: "tool_use" | "tool_result" | "reasoning" | "spawn", … }` in lens core.
+- [ ] **Endpoint:** `GET /api/sessions/:id/journey` returns time-ordered event list with reasoning attached.
+- [ ] **Dash view:** Sessions tab gains a Journey detail (sibling to the existing list). React component using a virtualized SVG timeline (no chart library — Reactflow / d3 are surface-area sprawl).
+- [ ] **Reasoning overlay:** toggle to show assistant text inline as tooltips. **Default: on** (consistent with local-first posture; flip later if enterprise conversations push back).
+- [ ] **Browser overlay:** when a journey involves `crawfish-opt` tool calls, show the zone summary, chosen element, and action inline.
+- [ ] **Replay scrubber:** drag a cursor to reconstruct the agent's context window at time T. Bounded JSONL replay; fine for sessions up to ~1k turns.
+- [ ] **Journey diff:** two sessions side-by-side with first-divergent-tool-call alignment. (Smith-Waterman is overkill for v1.)
 
-After P1, you have one rule, one optimizer, and a working web dashboard. P2 wraps that in a polished native shell (dash), fills out the diagnoses catalog, and ships the second optimizer. **This is the phase where "platform" stops being aspirational.**
+**Acceptance:** Open any session, see every tool call laid out in time, scrub to any moment and see what the agent knew.
 
-### 4.0 crawfish-dash MVP (NEW pillar)
+### 3.2 Flow rates + graph reductions (BRAINSTORM §1)
 
-The umbrella surface. Wraps lens's frontend in a Tauri 2 shell and adds two new tabs.
+- [ ] **`FlowStats` reduction** in lens core, time-bucketed (default 30s windows + per-tool-call deltas, both available via API).
+- [ ] **Per-agent token velocity** as a first-class metric. Alert threshold default: 40k tok/min sustained for 60s on a subagent.
+- [ ] **Compounding factor** as a session-level KPI: `total_subagent_tokens / parent_useful_tokens`. Surface in lens session detail and dash header.
+- [ ] **Graph reductions:** branching factor, depth, sibling-redundancy (siblings reading the same files), critical path. Computed once per session, cached per `Session.id` until JSONL mtime changes.
+- [ ] **Live throughput strip in dash:** sparklines for in-flight sessions (tok/min, tools/min, active subagent count). Feeds the live-update mode of the topology demo (§ 3.0); the demo is the surface, the strip is the data feed.
 
-- [ ] **Repo:** `Neal-Kotval/crawfish-dash`, sibling submodule.
-- [ ] **Stack:** Tauri 2 + React (same components as lens M1), `src-tauri/` Rust shell, `src/` shared frontend code.
-- [ ] **Window:** native macOS feel — vibrancy, traffic-light controls, sidebar nav, ⌘-tab navigation. Web fallback via `vite preview` for non-Mac.
-- [ ] **Tabs:**
-  - **Sessions** — embeds lens M1's UI verbatim (imports `crawfish-lens/web/src/components/*`).
-  - **Agents** — lists `~/.claude/agents/*.md`, shows frontmatter (name, description, tools, model). Create/edit/delete via filesystem; markdown editor inline.
-  - **Optimizers** — reads `marketplace/optimizers.json` from umbrella; shows install commands per optimizer with copy-to-clipboard. **No auto-install** (security boundary).
-- [ ] **Backend:** Tauri commands wrap the same data layer lens uses; no second server process.
-- [ ] **Onboarding:** first-run flow detects whether ANTHROPIC_API_KEY is set, whether OpenClaw is installed (P3), whether any optimizers are installed; offers to fix each.
+### 3.3 Lens M2 — full diagnoses catalog
 
-**Acceptance:** Open dash, see your real Claude Code sessions in the Sessions tab, see your subagent definitions in the Agents tab, see crawfish-opt + crawfish-opt-codebase in the Optimizers tab.
+The C1 ship had only the oversized-tool-result rule. C2.P1 fills it out, including the new graph + journey rules unlocked by §3.1 and §3.2.
 
-### 4.1 Diagnoses (lens M2 full)
+Each rule is `crawfish-lens/src/diagnoses/rules/<id>.ts`, registered in `registry.ts`. Each ships with a positive fixture, a negative fixture, and a one-paragraph doc fragment.
 
-Each rule is `src/diagnoses/rules/<id>.ts`, registered in `src/diagnoses/registry.ts`.
+**Single-call rules (refined from C1):**
+- [ ] `oversized-tool-result` — upgrade to real tokenizer (`@anthropic-ai/tokenizer` if available).
+- [ ] `dom-dump-detected` — large `tool_result` matching `<html`/`<!doctype`. Recommends `crawfish-opt`.
+- [ ] `log-truncation-pattern` — Bash result ending in `...` or `[truncated at N lines]`. Recommends `crawfish-opt-logs` (C2.P4).
+- [ ] `thinking-overhead` — extended thinking on, output <100 tok. Wasted reasoning budget.
 
-- [ ] **`oversized-tool-result`** — already shipped in P1, upgrade with `--tokenize` mode using a real tokenizer (`@anthropic-ai/tokenizer` if available, else fallback).
-- [ ] **`repeated-identical-read`** — same path/range read ≥3 times with no intervening Edit. Suggests a session-local memo.
-- [ ] **`low-cache-hit-rate`** — long session (>20 turns) with hit rate <50%. Surface the *delta* in `cache_creation_input_tokens` between adjacent turns to point at what's churning.
-- [ ] **`dom-dump-detected`** — large `tool_result` content matching a heuristic (`<html`/`<!doctype` near the head, or huge JSON tree depth). Recommends crawfish-opt browser.
-- [ ] **`log-truncation-pattern`** — Bash result content ending in `...` or matching `[truncated at N lines]`. Suggests crawfish-opt-logs.
-- [ ] **`agent-fanout-cost`** — Agent tool calls whose subagent transcripts (cross-referenced via M3 logic) consumed >10× the parent's tokens.
-- [ ] **`thinking-overhead`** — turns where extended thinking is on but output is trivial (<100 tok). Wasted reasoning budget.
+**Journey rules (new in C2.P1):**
+- [ ] `re-read-loops` — same `Read(path)` ≥3× with no intervening Edit. Recommends `crawfish-opt-codebase` *with the specific path*.
+- [ ] `grep-then-read-storms` — `Grep` followed by ≥5 `Read` calls within 30s. Recommends `codebase_search`.
+- [ ] `dom-oscillation` — repeated `browser_navigate` to the same URL. Recommends `browser_state`.
+- [ ] `subagent-thrash` — parent spawns same Agent type ≥3× in 5 minutes. Recommends agent-definition review.
+- [ ] `context-window-panic` — token velocity at >80% of context window. Pre-empt with checkpoint.
 
-**Each rule ships with:**
-- A unit test against a fixture transcript that contains the pattern.
-- A "false-positive" fixture that does not.
-- A doc fragment (one paragraph) with the why and the fix.
+**Graph rules (new in C2.P1):**
+- [ ] `sibling-redundancy` — N≥3 sibling subagents reading the same file. Recommends `crawfish-opt-codebase` + `crawfish prep` (C2.P2).
+- [ ] `agent-fanout-cost` — Agent's subagent total >10× the parent's tokens. Severity scales with multiplier.
+- [ ] `low-cache-hit-rate` — long session (>20 turns), hit rate <50%. Surface the *delta* in `cache_creation_input_tokens` between adjacent turns.
 
-### 4.2 crawfish-opt-logs v0.1
+### 3.4 JSON API v1 + OpenTelemetry exporter (Edge 1 anchor)
 
-- [ ] **MCP tools:**
-  - `logs_summarize(text, intent?)` — Haiku-summarized log block, returns key events + counts.
-  - `logs_grep(text, pattern, n=20)` — matches with N lines of context around each.
-  - `logs_tail_smart(text, n=50)` — tail, but skips repetitive lines (collapses runs).
-- [ ] **Benchmark:** 10 representative log dumps (npm install, build output, stack traces, K8s events). Naive = full text. Crawfish = summarized.
-- [ ] Contract compliance, same as codebase.
+- [ ] **Stabilize and version** the lens HTTP API under `/api/v1/`. Publish a JSON schema in `crawfish-lens/docs/api-schema.json`.
+- [ ] **Document every endpoint** in `crawfish-lens/docs/api.md`. Backwards-compatibility starts here.
+- [ ] **OTel exporter** — every journey is a trace, every tool call is a span, reasoning is a span event. Use the GenAI semantic conventions where applicable; extend with `crawfish-topology-spans@1.0` for the fan-out fields no current spec covers.
+- [ ] **Span schema spec** in `docs/specs/topology-spans-1.0.md`. Public, versioned.
+- [ ] **Submit to OTel GenAI WG** as an information item once shipped.
 
-### 4.3 Diagnoses → install UX
+**Acceptance for C2.P1 (both halves):**
 
-- [ ] Each finding renders an "Install fix" button in the dashboard.
-- [ ] Button copies the right `claude mcp add` command to clipboard. **Does NOT auto-execute** — security-relevant action requires user confirmation.
+- *Engine half (§ 3.1–3.4):* journey timeline produces per-call entries with reasoning + duration; flow + graph reductions produce per-session compounding factor and live throughput; ≥8 of the 11 diagnoses fire on real fixtures with concrete fixes; API is versioned and OTel spans validate against the published schema.
+- *Legibility half (§ 3.0):* the visualizer renders the three beats — waste / intervention / control — against the user's own data within 60 seconds of opening it; the intervention beat reflects what the *real* policy hook does, not a mockup; a snapshot is shareable as a static image plus an OTel trace.
+
+Either half missing → C2.P1 doesn't ship. The engine without the visualizer is invisible work. The visualizer without the engine is a screensaver. Both, together, are the phase.
 
 ---
 
-## 5. Phase 3 — subagents + live mode + OpenClaw
+## 4. C2.P2 — Adoption on-ramps
 
-The "visualizer of open Claude agents" half of the original pitch, plus OpenClaw integration in dash.
+**Goal:** any new user gets to a measurable win in <10 minutes. Three wizards, ordered by maturity.
 
-### 5.0 Dash OpenClaw integration
+### 4.1 First-run wizard (BRAINSTORM §4a)
 
-[OpenClaw](https://openclaw.ai/) is an existing local agent runtime by Peter Steinberger — handles persistent agents, skills, 50+ integrations. Dash wraps it (we don't replace it).
+- [ ] Detects `~/.claude/projects/` (or fails gracefully).
+- [ ] Imports the most recent week of sessions.
+- [ ] Computes the user's compounding factor and shows it as a number with context: *"Your team is at 4.2× — typical for this size. Top sink: Read on `src/lib/`."*
+- [ ] Offers one action: install `crawfish-opt-codebase` (copy-to-clipboard).
+- [ ] Closes with: *"Lens will keep watching. Open dash anytime."*
+- [ ] Auto-launches when dash detects no prior session view.
 
-- [ ] **Detection:** check for `~/.openclaw/workspace/` and the launchd service on port 18789.
-- [ ] **Agents tab v2:** OpenClaw agents appear as a category beside Claude Code subagents.
-- [ ] **Skills view:** list installed skills, link to source repos, show last-run timestamps.
-- [ ] **Health:** show OpenClaw service status (running, stopped, errored); start/stop button.
-- [ ] **No replication:** dash never duplicates OpenClaw's runtime functionality. If OpenClaw isn't installed, the OpenClaw section of the Agents tab shows an install prompt linking to openclaw.ai.
+### 4.2 Policy wizard (BRAINSTORM §4b)
 
-### 5.1 Subagent correlation
+The wedge for platform engineers. The dry-run preview is the entire pitch.
 
-- [ ] Detect `Agent` tool calls in parent transcripts; capture `description`, `subagent_type`, timestamp window.
-- [ ] Heuristic match: a child JSONL appearing in `~/.claude/projects/<encoded-cwd>/` within ±60s of the parent's Agent call, whose first user turn matches the parent's prompt content. Record the link in a sidecar `<id>.subagents.json`.
-- [ ] M3 schema: `Session.children: SessionRef[]`, `Session.parentId?: string`.
+- [ ] Three questions: (i) what tools were most expensive in the last 30d? (ii) which should warn / block / log-only? (iii) which optimizer should each route to?
+- [ ] **Dry-run preview**: replay past tool calls against the candidate policy, surface the number — *"if this policy had been live last week, it would have saved 3.4M tokens across 12 sessions."*
+- [ ] Outputs `policy.json` and a one-line install command for engineers (`crawfish-dash install-hooks --policy <url>`).
+- [ ] Bundle export: signed git URL distribution (sets up Edge 2 in the next phase).
 
-### 5.2 Tree visualizer
+### 4.3 Codebase prep + wizard (BRAINSTORM §2 + §4c)
 
-- [ ] Tree view in dashboard: parent at root, children indented, each node showing rolled-up token totals.
-- [ ] Highlight expensive branches (>50% of parent's total).
-- [ ] Drill-in: click a child node → opens that session's detail view.
+The intervention before the journey starts. Subcommand of `crawfish-opt-codebase` (avoids surface sprawl) wrapped in a dash UI.
 
-### 5.3 Hook-based live mode
+- [ ] **`crawfish prep` subcommand** generates idempotently:
+  - `.crawfish/map.md` — top-level architecture summary, ~2k tokens, hand-editable.
+  - `.crawfish/index.json` — module → file → top-level decls, pre-computed.
+  - `.crawfish/conventions.md` — naming, layout, "where does X live", distilled from `git log` + structure.
+  - `.crawfish/hot-paths.json` — the 20 files most often touched together (from `git log` co-change).
+  - `.crawfish/agents/` — recommended subagent definitions tuned to this repo.
+- [ ] **Decision: in-repo (committed `.crawfish/`).** Team rollout via PR.
+- [ ] **Idempotent re-run** — diffs artifacts, doesn't churn.
+- [ ] **`pre-commit` hook** to refresh on commit (avoid watch-mode rebuild storms).
+- [ ] **Wizard UI in dash** — detect monorepo vs single-package, suggest defaults, let user review and edit `map.md` before commit, one-click "create PR" if `gh` is configured.
+- [ ] **A/B telemetry**: lens marks sessions on a repo before/after the prep commit and reports the compounding-factor delta in dash. **This is the artifact that justifies the prep tool.**
 
-JSONL flush is bursty (Claude Code may batch multiple turns before fsync). Hooks give us turn-level granularity.
-
-- [ ] Ship a `crawfish-lens-hook` shell script that writes `{sessionId, turnUuid, ts}` to a Unix socket.
-- [ ] Lens server listens on the socket; merges hook events with JSONL tail.
-- [ ] One-line install: `crawfish-lens install-hooks` writes to `~/.claude/settings.json` (uses the `update-config` skill pattern). Always asks before modifying.
-
-### 5.4 Real-time subagent streaming
-
-- [ ] When a hook event indicates an Agent tool call, the dashboard shows a "spawning subagent" state on the parent card.
-- [ ] When the child JSONL appears, link it live; show its tokens accumulating.
-
----
-
-## 6. Phase 4 — marketplace + public release
-
-### 6.1 Optimizer marketplace
-
-- [ ] Static registry: `marketplace/optimizers.json` in this umbrella repo. Schema:
-  ```jsonc
-  {
-    "id": "crawfish-opt-codebase",
-    "tokenSink": "codebase-nav",
-    "install": "claude mcp add crawfish-codebase ...",
-    "benchmark": { "naiveTokens": 12400, "optimizedTokens": 3100, "tasks": 10 }
-  }
-  ```
-- [ ] Dashboard reads this and surfaces in diagnoses.
-- [ ] Submission flow: PR to umbrella, CI runs the submitted optimizer's benchmark, requires it to pass contract checks.
-
-### 6.2 Benchmark harness (shared)
-
-- [ ] `crawfish/bench/` in umbrella: harness that runs any optimizer's bench script and produces a normalized result.
-- [ ] CI runs nightly across all known optimizers; lens dashboard shows historical token-saved trends.
-
-### 6.3 Public release
-
-- [ ] All three repos public.
-- [ ] Landing page (markdown-only, no separate site): `README.md` of umbrella is the landing page. GitHub Pages renders it.
-- [ ] `npm publish` for `crawfish-lens` and each optimizer.
-- [ ] Announce: HN, Anthropic Discord, Claude Code subreddit, agents-themed Twitter.
+**Acceptance for C2.P2:** A platform engineer on a fresh machine opens dash, runs first-run wizard, sees compounding factor, runs policy wizard with dry-run, exports a bundle, runs prep wizard on their main repo, opens a PR with the artifacts. Total time <15 minutes.
 
 ---
 
-## 7. Phase 5+ — beyond v1
+## 5. C2.P3 — Multi-runtime
 
-Not committed; here so we don't accidentally cut off these futures.
+**Goal:** neutralize the single-platform-dependency objection. The data layer is already runtime-agnostic ([INTEGRATIONS.md](./INTEGRATIONS.md)); this phase ships the adapters and the orchestrator wedge.
 
-- **CI integration.** GitHub Action that diffs token usage on PRs that touched MCP server configs or system prompts. Alerts on regressions.
-- **Adapters.** Cursor (`.cursor/logs/`), Aider (its own log format), custom Anthropic SDK apps via an opt-in proxy. Each is a new `src/adapters/<name>.ts`; lens core stays unchanged.
-- **Pricing overlay.** Optional `pricing.json`; dashboard shows $$ alongside tokens. Off by default.
-- **`crawfish-opt-search`** — web search result optimizer (top-3 + summary, not full SERP).
-- **`crawfish-opt-images`** — vision call optimizer (downscale, crop-to-region).
-- **Team mode.** A way for multiple users on the same team to opt into sharing aggregate (not raw) stats. Anonymous-by-default. Possibly a thin self-hosted server. The exact opposite of "no telemetry" — must be explicit and reversible.
+### 5.1 Lens transcript adapters
+
+Cheap pattern, highest ROI per [INTEGRATIONS.md](./INTEGRATIONS.md). Each adapter is `crawfish-lens/src/adapters/<runtime>.ts` producing the same internal `SessionStats` + `JourneyEvents`.
+
+- [ ] **OpenClaw adapter** — read OpenClaw session files, map to crawfish event schema.
+- [ ] **Cursor adapter** — read `.cursor/logs/`, attribute tool calls.
+- [ ] **Anthropic SDK adapter** — for custom orchestrators that import the SDK directly. Opt-in proxy or filesystem dump format.
+- [ ] **Adapter contract doc** at `docs/specs/adapter-contract.md`. Defines the minimum fields a runtime must surface to be observable.
+
+### 5.2 Dash runtime selector
+
+- [ ] Runtime dropdown on the Sessions tab — Claude Code (default), OpenClaw, Cursor, custom.
+- [ ] Cross-runtime aggregation — compounding factor per runtime, total spend per runtime.
+- [ ] Per-runtime install instructions for the optimizer set.
+
+### 5.3 `crawfish-orchestrator` — solo OpenClaw bundle (BRAINSTORM §5a)
+
+**Decision:** solo engineer first. Single-machine launchd / sqlite, no auth, no multi-tenant. Team deployment is a future paid phase.
+
+- [ ] **New submodule:** `crawfish-orchestrator`. Sixth submodule (or seventh if counting `crawfish-opt-codebase` separately — confirm before scaffolding).
+- [ ] **Daemon:** wraps OpenClaw at a pinned version, binds `127.0.0.1`, writes transcripts to `~/.crawfish/openclaw/sessions/*.jsonl` in lens's schema.
+- [ ] **PreToolUse middleware** equivalent: translate the policy bundle contract to OpenClaw's middleware shape.
+- [ ] **Wizard** (C2.P2 sibling): pulls OpenClaw at pinned version, asks 3 questions (which models, context budget, preinstalled optimizers), generates config + launchd plist on macOS, starts daemon, verifies lens sees first transcript within 30s.
+- [ ] **2-3 named profiles** ("solo dev", "platform team", "research") rather than one config.
+- [ ] **Honest docs** about what crawfish adds vs. what's just OpenClaw — the wedge is defaults + integrated observability, not the runtime.
+
+### 5.4 Hook injection per runtime
+
+Per [INTEGRATIONS.md](./INTEGRATIONS.md), this is the team-mode upsell of the future paid tier. C2.P3 ships only the *contract* — `crawfish-policy@1.0` as an open spec — so adapters can be written.
+
+- [ ] **`crawfish-policy@1.0` spec** at `docs/specs/policy-format-1.0.md`. JSON schema, signed-bundle format, runtime-adapter interface. Edge 2 anchor.
+- [ ] **Reference adapter for Claude Code** is the existing `crawfish-hook` — refactor it to consume the spec'd format verbatim.
+- [ ] **Reference adapter for OpenClaw** ships in `crawfish-orchestrator`.
+
+**Schema must cover** (driven by the rules in [BRAINSTORM § 7](./BRAINSTORM.md#7-new-optimizers--policy-rules--token-discipline-wave) — record here so the spec doesn't miss anything when drafted):
+
+*New `match` fields:*
+- `tool_result_size: { gt | lt: <bytes> }` — match on the size of the prior tool's result (oversized DOM, oversized log, oversized fetch).
+- `tool_schema_size: { gt: <bytes> }` — match on the registered schema size of an MCP tool (`opt-mcp-shrinker` trigger).
+- `repeat_count: { tool, args_match, window_seconds, gte: <n> }` — same tool with matching args called ≥N times in a window (`re-read-loops`, `dom-oscillation`).
+- `sequence: [<tool_pattern>, …, { within_seconds: N }]` — ordered tool sequence (`grep-then-read-storms`).
+- `subagent: { siblings_gte, file_overlap_gte, depth_gte }` — graph-shape conditions (`sibling-redundancy`, fan-out blocks).
+- `cache_state: { hit_rate_lt | tool_uses_accumulated_gt }` — context-discipline triggers for `opt-context`.
+- `result_shape: { json_array_len_gt, content_type }` — for `opt-toon` routing.
+
+*New `action` values (extending the current `warn` / `block` / `log-only`):*
+- `rewrite: { via: "<optimizer-id>", mode: "transparent" | "prompt-user" }` — pass the call through an optimizer that returns a smaller equivalent (artifact-id substitution, TOON conversion, log condensation).
+- `trigger: { hook: "<hook-id>" }` — fire a side-effecting hook (e.g., `opt-context` clear) without blocking the call.
+- `route: { to: "<optimizer-id>" }` — proxy the call entirely to a different MCP server (shrinker case).
+
+*New top-level rule fields:*
+- `attribution: { agent_scope: "self" | "any-descendant" }` — does the rule apply to the current agent only, or to anything spawned under it? Required for graph-shape rules.
+- `severity: "info" | "warn" | "high"` — feeds the Linear/Jira hook routing in C2.P4 § 6.2.
+- `recommend.estimated_savings: { method: "static" | "dry-run", tokens: <n> }` — the dry-run preview number from C2.P2 § 4.2 needs a place to live per-rule.
+
+The Claude Code reference adapter must be able to express every existing rule plus all of the above without escape hatches. If a rule needs a custom predicate, the spec is wrong — extend the schema, don't add a JS callback field.
+
+**Acceptance for C2.P3:** Run `crawfish orchestrator init`, get a working local OpenClaw with policy enforcement and lens visibility. Switch the runtime selector in dash to OpenClaw, see the same compounding factor / journey / flow views work without modification.
 
 ---
 
-## 8. Risks, ranked
+## 6. C2.P4 — Integration breadth
 
-1. **Transcript schema drift.** Claude Code releases change the JSONL shape. *Mitigation:* version-pin in `docs/transcript-format.md`, golden-file tests, tolerant parser.
-2. **Optimizer benchmarks are gameable.** Authors tune to the bench, real-world wins don't materialize. *Mitigation:* benchmarks are public and reproducible; lens detects contract violations from real session data, not just bench output.
-3. **Dashboard becomes a generic LLM observability tool.** Scope creep is the failure mode. *Mitigation:* every feature must answer *"does this help a Claude Code user spend fewer tokens?"* If "well, it's nice telemetry" — cut.
-4. **Solo bandwidth.** P0→P4 is 10-14 weeks. Realistic at evenings/weekends, brutal at full-time-job pace. *Mitigation:* P1 is the "one-shot wave" — earn the right to keep going by shipping it.
-5. **Privacy panic.** Someone screenshots a transcript with a secret in it. *Mitigation:* localhost-only, redact mode for `--json` exports, prominent privacy doc.
-6. **Anthropic ships first-party observability.** Possible but unlikely at this granularity, and even then, the optimizer line is independently valuable.
+**Goal:** the data is useful where the team already lives.
+
+### 6.1 Optimizer breadth
+
+The token-discipline wave from [BRAINSTORM § 7](./BRAINSTORM.md#7-new-optimizers--policy-rules--token-discipline-wave) lands here. Sequence by leverage:
+
+- [ ] **`crawfish-opt-context` v0.1** — managed proxy in front of Anthropic's `clear_tool_uses_20250919` beta. Per-tool TTLs, exclude-from-clear lists, every clear logged to lens. Headline number: 84% reduction on a 100-turn web-search eval (Anthropic). Pairs with `opt-artifact` for the "stop silently dropping context" story.
+- [ ] **`crawfish-opt-artifact` v0.1** — durable-reference returns. Tools producing big payloads write to `~/.crawfish/artifacts/<id>` and return `{artifact_id, summary, next_action}`. Maps to MCP `_meta` persistence + `anthropic/maxResultSizeChars`.
+- [ ] **`crawfish-opt-mcp-shrinker` v0.1** — proxy that lazy-loads other MCP servers' tool schemas. Highest cross-stack leverage — benefits every MCP server in the user's environment, not just crawfish's own. Atlassian measured 70-97% schema bloat.
+- [ ] **`crawfish-opt-fork` v0.1** — fork-aware subagent spawner. Collapses N parallel `cache_control` markers into a single trailing breakpoint; prefers forked subagents reusing parent prompt cache. Moves the compounding-factor headline number directly.
+- [ ] **`crawfish-opt-logs` v0.1** — `logs_summarize`, `logs_grep`, `logs_tail_smart`. Benchmark: 10 representative dumps (npm install, build output, stack traces, K8s events). Wired to `log-truncation-pattern` diagnosis.
+- [ ] **`crawfish-opt-codebase` v0.2 — repomap mode** — Aider-style tree-sitter symbol map, PageRank-ranked, token-budgeted. Cursor A/B'd 46.9% reduction on equivalent. Subcommand of existing optimizer, not a new submodule.
+- [ ] **`crawfish-opt-search` v0.1** — top-3 + summary, not full SERP.
+- [ ] **TOON formatter** — utility inside `crawfish-opt-codebase` (and any MCP returning tabular data). 30-60% input-token reduction on uniform records. Tiny; not its own server.
+- [ ] All optimizers wired to journey + graph diagnoses (`log-truncation-pattern` → logs; `re-read-loops` → codebase repomap; `sibling-redundancy` → fork; oversized-result → artifact + context).
+
+**Validation gate before scaffolding:** the 84% / 59% / 70-97% / 46.9% claims came from vendor blogs. Before committing engineering weeks to any of these, run lens against a representative sample of real Claude Code transcripts and confirm the savings would have held. The journey rules in C2.P1 § 3.3 produce the data needed to estimate this.
+
+### 6.2 Webhooks + event bus (BRAINSTORM §6e)
+
+- [ ] **Lens event bus** — subscribers for `policy.block`, `diagnosis.flagged`, `session.complete`.
+- [ ] **Local queue** with best-effort delivery (the user's machine isn't always online).
+- [ ] **Slack adapter** — post on policy block: *"Crawfish blocked an oversized DOM dump in @engineer's session — saved 18k tokens."*
+- [ ] **Linear/Jira adapter** — `severity: high` diagnosis opens a ticket: *"Repo `foo` is at 5.2× compounding. Recommend running `crawfish prep`."*
+
+### 6.3 BI export
+
+- [ ] Nightly dump to `~/.crawfish/data/*.parquet`. User copies to wherever they want.
+- [ ] Schema doc at `docs/specs/data-export-1.0.md`.
+
+### 6.4 Grafana dashboards (after OTel landed in C2.P1)
+
+- [ ] **`crawfish-integrations/grafana/`** — three pre-built dashboards:
+  - "Team weekly spend"
+  - "Compounding factor over time"
+  - "Policy compliance"
+- [ ] PR-driven, not a framework.
+
+### 6.5 Prometheus exporter
+
+- [ ] `/metrics` endpoint on lens: `crawfish_session_tokens_total`, `crawfish_compounding_factor`, `crawfish_policy_decisions_total{action="block"}`.
+
+**Acceptance for C2.P4:** A platform engineer with an existing observability stack imports the Grafana dashboards, points their OTel collector at lens, gets a Slack ping the first time the policy hook blocks something, and never opens dash again unless they want to. Crawfish becomes ambient.
 
 ---
 
-## 9. Build order if you actually try to one-shot P1
+## 7. C2.P5 — Pricing trigger gate
 
-If you sit down for a day and want to land the entire P1 wave, the order that minimizes blocking:
+**Not built unless the trigger fires.** The trigger: first team that asks for multi-engineer aggregation we don't already have.
 
-1. Lens M1 server skeleton (`http`, routes, single fixture page) — 1h
-2. Lens M1 tail layer + SSE — 1h
-3. Lens M1 session-list view (HTML + live) — 1h
-4. Lens M1 session-detail view + token bars — 1.5h
-5. Diagnoses engine (just the types and runner) — 30m
-6. The `oversized-tool-result` rule + UI banner — 45m
-7. Pivot to crawfish-opt-codebase — separate repo, separate session.
+If/when that happens:
 
-The codebase optimizer is its own day. **Do not** try to one-shot M1 *and* the codebase optimizer in the same uninterrupted session — the context-switching cost is real, and the codebase optimizer benefits from being able to dogfood lens against itself while you build it.
+- [ ] **`crawfish-team`** — new submodule, self-hosted aggregator.
+- [ ] **Opt-in stat sharing** from ICs to org aggregator. Anonymous-by-default. Reversible.
+- [ ] **Bundle distribution** via signed git URLs — `crawfish team install <url>` consumes policy + optimizer set + aggregator endpoint.
+- [ ] **Aggregator UI** — cross-engineer rollups, team-wide compounding factor trends, repo-level prep status.
+- [ ] **Pricing model decision** at this point — open core (everything else stays free, team aggregator is paid) is the most likely shape.
 
-Realistic P1 timing: **2 focused days, or ~1 week at evening pace.**
+This is the moment crawfish becomes a company. **Don't build it on spec.**
 
 ---
 
-## 10. What we're NOT building (yet)
+## 8. Continuing work in parallel
+
+Things that don't fit a single phase but should keep moving:
+
+- **Tauri shell maturation** — code-signing + notarization, Linux + Windows verified bundles, auto-updater, bundled Node runtime. Currently deferred per `crawfish-app/BUILD.md`.
+- **Optimizer benchmark harness** — shared `bench/` in umbrella, CI runs nightly across all known optimizers, dash shows historical trends.
+- **Public release polish** — landing page (markdown-only, GitHub Pages), `npm publish` for the umbrella, announce on HN / Anthropic Discord / agents-themed Twitter.
+- **Reference agents** (carried over from product discussion) — open MIT, demonstrate the platform end-to-end. ACTOR / DESIGNER / ARCHITECT / USER / DEVELOPER as forkable definitions wired to the matching optimizers. Ship as the orchestrator's default profile.
+
+---
+
+## 9. Risks, ranked
+
+1. **Transcript schema drift.** Claude Code (or OpenClaw, or Cursor) releases change the JSONL shape. *Mitigation:* version-pin in per-adapter `transcript-format.md`, golden-file tests, tolerant parser. The multi-runtime work in C2.P3 is partly insurance against this.
+2. **Optimizer benchmarks are gameable.** Authors tune to the bench; real-world wins don't materialize. *Mitigation:* benchmarks public and reproducible; lens detects contract violations from real session data.
+3. **Scope creep into generic LLM observability.** Every feature must answer *"does this help a user spend fewer tokens or run a healthier multi-agent setup?"* If "well, it's nice telemetry" — cut.
+4. **Solo bandwidth.** C2 is 16-22 weeks. Realistic at evening pace with discipline. *Mitigation:* C2.P1 is the load-bearing phase; earn the right to keep going by shipping it.
+5. **Privacy panic.** Someone screenshots a transcript with a secret in it. *Mitigation:* localhost-only, redact mode for `--json` exports, prominent privacy doc, reasoning-overlay toggle if enterprise pushback materializes.
+6. **OTel spec submission stalls.** The GenAI WG moves slowly; *crawfish-topology-spans@1.0* may sit unadopted for quarters. *Mitigation:* the schema is valuable to *us* whether or not it's ratified; ship it as our public spec and let adoption follow.
+7. **Anthropic ships first-party multi-agent observability.** Possible but unlikely at this granularity, and even then, the multi-runtime work in C2.P3 + the optimizer line are independently valuable.
+8. **OpenClaw upstream changes.** Pinning a version is fine until a security fix lands and the pin diverges. *Mitigation:* explicit "pinned at vN; bump cadence quarterly" doc, clear escape hatch ("just run OpenClaw yourself").
+
+---
+
+## 10. What we're NOT building this cycle
 
 Listed here so we don't drift:
 
-- A frontend framework integration (React, Next, Vue). M1's stack is HTML + 40 lines of JS. Holds until M3.
-- Authentication of any kind. Localhost-only.
-- A persistent database. The filesystem IS the database.
-- Cost-in-dollars. Tokens are the unit.
-- Auto-installation of optimizers. User confirms every install.
-- Cross-machine session aggregation.
-- A CLI for managing optimizers. `claude mcp add` already exists.
+- **A hosted-by-us SaaS.** Local-first is a feature, not a temporary state.
+- **A generic LLM observability tool.** No OpenAI/Bedrock/Gemini support — dilutes the moat, doubles the maintenance surface.
+- **A prompt-engineering tool.** No "rewrite your system prompt" suggestions.
+- **An evals platform.** Token efficiency ≠ task accuracy.
+- **A framework.** No `crawfish.config.ts`, no plugin lifecycle hooks. Each optimizer stands alone; policies are JSON.
+- **An agent vendor.** Reference agents in §8 are *demonstrations*, not a product line. Open, forkable, replaceable.
+- **An agent orchestration / agent-to-agent communication layer.** The topology demo (§ 3.0) *visualizes* parent-child agent control so users can see what's happening; it does not *provide* that control. The moment the pitch becomes "we improve how agents talk to each other," we're an agent framework competing with everyone, not a measurement-and-control platform. Showing the topology = observability (the moat). Becoming the topology = framework (dilutes everything).
+- **A persistent database.** The filesystem IS the database.
+- **Cost-in-dollars as the primary unit.** Tokens are the unit. Pricing overlay (`pricing.json`) is opt-in, off by default.
+- **Auto-installation of optimizers or policy bundles.** User confirms every install.
+- **Authentication.** Localhost-only.
+- **Cross-machine session aggregation.** Gated on the C2.P5 trigger.
 
 ---
 
 ## 11. Source of truth
 
-- **What's shipped:** the `main` branch of each repo.
+- **What's shipped:** `main` branch of each submodule.
 - **What's planned:** this file.
-- **What's been asked for:** GitHub issues on the umbrella repo.
-- **What we've decided NOT to do:** § 10 above, and `PRODUCT.md` § Anti-goals.
+- **What's been considered and decided against:** § 10 above + [`PRODUCT.md` § Anti-goals](./PRODUCT.md).
+- **Half-formed ideas with assigned phase pointers:** [`BRAINSTORM.md`](./BRAINSTORM.md).
+- **Decisions log:** [`BRAINSTORM.md` § Decisions](./BRAINSTORM.md).
 
-Last updated: 2026-05-07.
+Last updated: 2026-05-08.
