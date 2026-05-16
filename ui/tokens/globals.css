@@ -1,95 +1,91 @@
 /* crawfish design tokens.
-   Aesthetic: warm + tactile, inspired by Animal Crossing / Splatoon UI
-   (see /Users/nealkotval/nealkotval/DESIGN.md).
+   Aesthetic: professional blue / white / gray. Inspired by the working
+   surfaces of Jira, Monday, and Workday — calm, dense, information-first.
+   One brand accent (--cf-accent, atlassian blue), neutral gray scaffolding,
+   semantic colors reserved for state (success / warning / danger).
 
-   Two-accent system — every primary surface picks ONE; never both side-by-side:
-     1. --cf-accent   (coral orange)  — brand pop. Primary buttons, brand links,
-                                        active route, "in progress" status.
-     2. --cf-accent-2 (leaf green)    — positive/success. Success messages,
-                                        "done" status, live indicators, growth.
-
-   Light mode is warm cream + wood trim. Dark mode is deep-forest night.
-   Documented in DESIGN.md. */
+   --cf-accent-2 is retained as an ALIAS of --cf-accent so legacy refs
+   compile; new code should reference --cf-accent only. */
 
 :root {
-  /* Surfaces — warm cream */
-  --cf-bg:            #FBF6E7;      /* page background — cream */
-  --cf-bg-elevated:   #FFFBEC;      /* cards, sheets, drawers */
-  --cf-bg-sunken:     #F1E8C9;      /* under cards, kanban troughs */
-  --cf-bg-sidebar:    #FBF6E7;      /* sidebar matches app bg */
-  --cf-bg-hover:      rgba(46, 42, 31, 0.06);
-  --cf-bg-selected:   rgba(91, 164, 106, 0.16);
+  /* Surfaces — cool neutrals (Atlassian "neutral" scale) */
+  --cf-bg:            #F7F8FA;      /* page background — cool off-white */
+  --cf-bg-elevated:   #FFFFFF;      /* cards, sheets, drawers */
+  --cf-bg-sunken:     #EBECF0;      /* under cards, kanban troughs */
+  --cf-bg-sidebar:    #FFFFFF;      /* sidebar — clean white rail */
+  --cf-bg-hover:      rgba(9, 30, 66, 0.06);
+  --cf-bg-selected:   rgba(0, 82, 204, 0.10);  /* blue-tinted selection */
 
-  /* Foregrounds — espresso ink. Tuned for ≥7:1 fg-on-bg and ≥4.5:1
-     secondary-on-bg against #FBF6E7 cream (WCAG AAA / AA). */
-  --cf-fg:            #1F1B12;       /* ~14.5:1 on bg — primary text */
-  --cf-fg-secondary:  #4A4231;       /* ~8.4:1 on bg — meta, labels */
-  --cf-fg-tertiary:   #6B5F40;       /* ~5.6:1 on bg — eyebrows, captions */
-  --cf-fg-muted:      #8A7C5A;       /* ~3.5:1 — placeholder/disabled only */
+  /* Foregrounds — Atlassian navy ink. Tuned for ≥7:1 fg-on-bg and ≥4.5:1
+     secondary-on-bg against #F7F8FA (WCAG AAA / AA). */
+  --cf-fg:            #172B4D;       /* primary text — deep navy */
+  --cf-fg-secondary:  #42526E;       /* meta, labels */
+  --cf-fg-tertiary:   #5E6C84;       /* eyebrows, captions */
+  --cf-fg-muted:      #8993A4;       /* placeholder / disabled only */
 
-  /* Borders — wheat (visible), then wood-trim (emphasized) */
-  --cf-border:        #D9CB97;
-  --cf-border-strong: #B58E54;       /* wood */
+  /* Borders — cool neutral, then darker stroke */
+  --cf-border:        #DFE1E6;
+  --cf-border-strong: #C1C7D0;
 
-  /* Shadows — soft, stacked with a wood offset (AC card tell) */
-  --cf-shadow-sm: 0 1px 0 #C6A36B, 0 1px 2px rgba(46, 42, 31, 0.06);
-  --cf-shadow-md: 0 1px 0 #C6A36B, 0 6px 14px -4px rgba(46, 42, 31, 0.14), 0 1px 2px rgba(46, 42, 31, 0.06);
-  --cf-shadow-lg: 0 2px 0 #C6A36B, 0 18px 32px -10px rgba(46, 42, 31, 0.22), 0 2px 4px rgba(46, 42, 31, 0.08);
+  /* Shadows — soft elevation, no offset hue. Crisp and professional. */
+  --cf-shadow-sm: 0 1px 1px rgba(9, 30, 66, 0.08), 0 0 1px rgba(9, 30, 66, 0.10);
+  --cf-shadow-md: 0 3px 5px rgba(9, 30, 66, 0.12), 0 0 1px rgba(9, 30, 66, 0.12);
+  --cf-shadow-lg: 0 8px 16px -4px rgba(9, 30, 66, 0.18), 0 0 1px rgba(9, 30, 66, 0.14);
 
-  /* Primary accent — light coral orange. Brand pop. Deep espresso text
-     reads at ~7.5:1 against the coral, so primary buttons stay AAA. */
-  --cf-accent:        #F2916D;
-  --cf-accent-hover:  #E07A55;
-  --cf-accent-subtle: rgba(242, 145, 109, 0.18);
-  --cf-accent-fg:     #2A1812;                    /* deep brown ink on coral */
+  /* Primary accent — Atlassian blue. Single brand pop, used sparingly for
+     primary buttons, brand links, active route, "in progress" status.
+     ~6.7:1 on bg; --cf-accent-fg keeps white ink on blue at ~7:1. */
+  --cf-accent:        #0052CC;
+  --cf-accent-hover:  #0747A6;
+  --cf-accent-subtle: rgba(0, 82, 204, 0.12);
+  --cf-accent-fg:     #FFFFFF;
 
-  /* Secondary accent — leaf green. Positive / success / live / growth.
-     Pairs with coral on the same page (one primary surface, not both). */
-  --cf-accent-2:        #5BA46A;
-  --cf-accent-2-hover:  #4B8C58;
-  --cf-accent-2-subtle: rgba(91, 164, 106, 0.18);
-  --cf-accent-2-fg:     #0F2818;                  /* deep forest ink on leaf */
+  /* Secondary accent — alias of --cf-accent. */
+  --cf-accent-2:        #0052CC;
+  --cf-accent-2-hover:  #0747A6;
+  --cf-accent-2-subtle: rgba(0, 82, 204, 0.12);
+  --cf-accent-2-fg:     #FFFFFF;
 
-  /* Status — `progress` reuses leaf accent; `review` is sky; `done` is
-     leaf-soft; `todo` is warm sand. */
-  --cf-status-todo-bg:        #EDE0B7;
-  --cf-status-todo-fg:        #6B5F40;
-  --cf-status-progress-bg:    rgba(242, 145, 109, 0.20);
-  --cf-status-progress-fg:    #B0432A;
-  --cf-status-review-bg:      #D9ECF7;
-  --cf-status-review-fg:      #2F6F9A;
-  --cf-status-done-bg:        #BFE3B5;
-  --cf-status-done-fg:        #2F6438;
+  /* Status — workflow palette. `progress` reuses accent (blue);
+     `review` is violet; `done` is teal-blue (neutral-cool, not green);
+     `todo` is cool gray. */
+  --cf-status-todo-bg:        #DFE1E6;
+  --cf-status-todo-fg:        #42526E;
+  --cf-status-progress-bg:    rgba(0, 82, 204, 0.14);
+  --cf-status-progress-fg:    #0747A6;
+  --cf-status-review-bg:      #EAE6FF;
+  --cf-status-review-fg:      #403294;
+  --cf-status-done-bg:        #DEEBFF;
+  --cf-status-done-fg:        #0747A6;
 
-  /* Semantic — `success` aliases the secondary accent (leaf) so green has
-     ONE source of truth. `warning` + `danger` stay warm-biased but
-     unambiguously distinct from wood-trim and the coral primary. */
-  --cf-success: #3E7A4B;             /* deep leaf — readable as small text */
-  --cf-warning: #A66A1F;             /* burnt amber */
-  --cf-danger:  #B0432A;             /* deep coral-red — passes AA on cream */
+  /* Semantic — reserved strictly for state. Success is muted teal-green
+     (not vivid leaf green); warning is muted amber; danger is desaturated
+     red. None of these participate in the brand palette. */
+  --cf-success: #006644;
+  --cf-warning: #974F0C;
+  --cf-danger:  #BF2600;
 
-  /* Token-bucket colors — visualization only. Distinct hues across the
-     warm-cream / leaf / sky / berry palette so they read as separate
-     swatches in token bars and graphs. */
-  --cf-color-bucket-input:       #7CB8E0;   /* sky */
-  --cf-color-bucket-output:      #5BA46A;   /* leaf — the "useful work" bucket */
-  --cf-color-bucket-cache-read:  #C6A36B;   /* wood amber */
-  --cf-color-bucket-cache-write: #E08A6E;   /* berry */
+  /* Token-bucket colors — cool blue ramp so the four buckets read as
+     a single hue family in token bars and stacked graphs. */
+  --cf-color-bucket-input:       #0052CC;   /* primary blue */
+  --cf-color-bucket-output:      #4C9AFF;   /* mid blue */
+  --cf-color-bucket-cache-read:  #B3D4FF;   /* pale blue */
+  --cf-color-bucket-cache-write: #7A869A;   /* cool gray */
 
-  /* Avatar palette — warm villager set, coral + leaf as the brand pair */
-  --cf-avatar-1: #F2916D;   /* coral */
-  --cf-avatar-2: #5BA46A;   /* leaf */
-  --cf-avatar-3: #7CB8E0;   /* sky */
-  --cf-avatar-4: #E08A6E;   /* berry */
-  --cf-avatar-5: #C6A36B;   /* wood */
-  --cf-avatar-6: #7A6F55;   /* mocha */
+  /* Avatar palette — cool blues + violet + gray. No green/orange. */
+  --cf-avatar-1: #0052CC;   /* blue */
+  --cf-avatar-2: #00B8D9;   /* cyan */
+  --cf-avatar-3: #6554C0;   /* violet */
+  --cf-avatar-4: #5243AA;   /* indigo */
+  --cf-avatar-5: #4C9AFF;   /* sky */
+  --cf-avatar-6: #5E6C84;   /* slate */
 
-  /* Radii — AC round-everything scale. sm/md still tight enough for chips
-     and inputs; lg/xl get noticeably more pillowy for cards and panels. */
-  --cf-radius-sm: 6px;
-  --cf-radius-md: 12px;
-  --cf-radius-lg: 18px;
-  --cf-radius-xl: 24px;
+  /* Radii — Jira-tight. Crisp rectangular surfaces; chips and inputs round
+     just enough to read as interactive, not as marketing balloons. */
+  --cf-radius-sm: 3px;
+  --cf-radius-md: 4px;
+  --cf-radius-lg: 6px;
+  --cf-radius-xl: 8px;
 
   /* Type — Inter for both body and display. Geometric humanist, neutral,
      reads well at 13–28px without bouncing. Display uses the same family
@@ -103,58 +99,57 @@
 }
 
 :root[data-theme="dark"] {
-    /* Surfaces — deep forest night */
-    --cf-bg:            #1A2620;
-    --cf-bg-elevated:   #243530;
-    --cf-bg-sunken:     #1F2D27;
-    --cf-bg-sidebar:    #1A2620;
-    --cf-bg-hover:      rgba(243, 233, 200, 0.06);
-    --cf-bg-selected:   rgba(130, 199, 146, 0.18);
+    /* Surfaces — Atlassian dark neutrals. Deep navy-leaning gray, no green. */
+    --cf-bg:            #0D1424;
+    --cf-bg-elevated:   #1B2638;
+    --cf-bg-sunken:     #0A1020;
+    --cf-bg-sidebar:    #0D1424;
+    --cf-bg-hover:      rgba(255, 255, 255, 0.06);
+    --cf-bg-selected:   rgba(76, 154, 255, 0.18);   /* blue-tinted selection */
 
-    /* Foregrounds — warm cream off-white. Tuned for ≥10:1 fg-on-bg and
-       ≥4.5:1 secondary-on-bg against #1A2620 deep-forest. */
-    --cf-fg:            #FAF2D4;     /* ~13:1 on bg */
-    --cf-fg-secondary:  #E2D5A8;     /* ~8.5:1 */
-    --cf-fg-tertiary:   #C0B287;     /* ~5.7:1 */
-    --cf-fg-muted:      #968A66;     /* ~3.6:1 — placeholder/disabled only */
+    /* Foregrounds — cool off-white. Tuned for ≥10:1 fg-on-bg and ≥4.5:1
+       secondary-on-bg against #0D1424. */
+    --cf-fg:            #E6E8EC;
+    --cf-fg-secondary:  #B3BAC5;
+    --cf-fg-tertiary:   #8C97A8;
+    --cf-fg-muted:      #6B7588;
 
-    --cf-border:        #3F5A50;
-    --cf-border-strong: #6B8A7A;     /* dark wood — brighter so it reads */
+    --cf-border:        #2C3654;
+    --cf-border-strong: #44506E;
 
-    --cf-shadow-sm: 0 1px 0 #355048, 0 1px 2px rgba(0, 0, 0, 0.45);
-    --cf-shadow-md: 0 1px 0 #355048, 0 8px 18px -4px rgba(0, 0, 0, 0.55);
-    --cf-shadow-lg: 0 2px 0 #355048, 0 24px 36px -10px rgba(0, 0, 0, 0.7);
+    --cf-shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.45), 0 0 1px rgba(0, 0, 0, 0.55);
+    --cf-shadow-md: 0 3px 6px rgba(0, 0, 0, 0.55), 0 0 1px rgba(0, 0, 0, 0.6);
+    --cf-shadow-lg: 0 10px 20px -6px rgba(0, 0, 0, 0.7), 0 0 1px rgba(0, 0, 0, 0.6);
 
-    /* Primary accent — bright coral at night, glows over forest */
-    --cf-accent:        #FFA688;
-    --cf-accent-hover:  #FFC0A8;
-    --cf-accent-subtle: rgba(255, 166, 136, 0.22);
-    --cf-accent-fg:     #1A2620;
+    /* Primary accent — bright Atlassian blue. */
+    --cf-accent:        #4C9AFF;
+    --cf-accent-hover:  #B3D4FF;
+    --cf-accent-subtle: rgba(76, 154, 255, 0.22);
+    --cf-accent-fg:     #0A1020;
 
-    /* Secondary accent — bright mint at night */
-    --cf-accent-2:        #82C792;
-    --cf-accent-2-hover:  #9ED6AC;
-    --cf-accent-2-subtle: rgba(130, 199, 146, 0.22);
-    --cf-accent-2-fg:     #1A2620;
+    --cf-accent-2:        #4C9AFF;
+    --cf-accent-2-hover:  #B3D4FF;
+    --cf-accent-2-subtle: rgba(76, 154, 255, 0.22);
+    --cf-accent-2-fg:     #0A1020;
 
-    --cf-status-todo-bg:     #2F3A30;
-    --cf-status-todo-fg:     #C9BE99;
-    --cf-status-progress-bg: rgba(255, 166, 136, 0.22);
-    --cf-status-progress-fg: #FFC0A8;
-    --cf-status-review-bg:   #25405A;
-    --cf-status-review-fg:   #A8D3EE;
-    --cf-status-done-bg:     #2F4A39;
-    --cf-status-done-fg:     #BFE3B5;
+    --cf-status-todo-bg:     #2C3654;
+    --cf-status-todo-fg:     #B3BAC5;
+    --cf-status-progress-bg: rgba(76, 154, 255, 0.22);
+    --cf-status-progress-fg: #B3D4FF;
+    --cf-status-review-bg:   #2C2256;
+    --cf-status-review-fg:   #C0B6F2;
+    --cf-status-done-bg:     #0E2A52;
+    --cf-status-done-fg:     #B3D4FF;
 
-    /* Dark semantic — coral and amber tuned to the forest base */
-    --cf-success: #82C792;
-    --cf-warning: #D6B673;
-    --cf-danger:  #EAA48C;
+    /* Dark semantic — muted, accessible on deep navy. */
+    --cf-success: #57D9A3;
+    --cf-warning: #FFC400;
+    --cf-danger:  #FF7452;
 
-    --cf-color-bucket-input:       #A8D3EE;   /* sky */
-    --cf-color-bucket-output:      #82C792;   /* mint — useful work bucket */
-    --cf-color-bucket-cache-read:  #D6B673;   /* warm amber */
-    --cf-color-bucket-cache-write: #EAA48C;   /* berry */
+    --cf-color-bucket-input:       #4C9AFF;
+    --cf-color-bucket-output:      #B3D4FF;
+    --cf-color-bucket-cache-read:  #2684FF;
+    --cf-color-bucket-cache-write: #7A869A;
 }
 
 * { box-sizing: border-box; }
@@ -168,32 +163,21 @@ html, body, #root {
 body {
   margin: 0;
   font-family: var(--cf-font);
-  font-size: 14.5px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.5;
   font-weight: 400;
   color: var(--cf-fg);
   background-color: var(--cf-bg);
-  /* Subtle vertical gradient — cream warms slightly toward the bottom. No
-     radial pools (those read as "spots" against the warm surface). */
-  background-image: linear-gradient(
-    180deg,
-    var(--cf-bg) 0%,
-    var(--cf-bg-sunken) 100%
-  );
-  background-attachment: fixed;
+  background-image: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "tnum", "kern";
   overscroll-behavior: none;
-  letter-spacing: 0;
+  letter-spacing: -0.003em;
 }
 
 :root[data-theme="dark"] body {
-  background-image: linear-gradient(
-    180deg,
-    var(--cf-bg) 0%,
-    var(--cf-bg-sunken) 100%
-  );
+  background-image: none;
 }
 
 /* Display headings — same Inter family at heavier weight, tighter tracking. */
@@ -757,20 +741,31 @@ code, pre, kbd, samp {
   border: 1px solid var(--cf-border);
   background: var(--cf-bg-elevated);
   color: var(--cf-fg);
-  padding: 10px 18px;
+  padding: 6px 14px;
+  height: 32px;
   border-radius: var(--cf-radius-md);
   font: inherit;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: -0.003em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
-  transition: background 80ms ease, border-color 80ms ease;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 .cf-btn:hover { background: var(--cf-bg-hover); border-color: var(--cf-border-strong); }
+.cf-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--cf-bg-elevated), 0 0 0 4px var(--cf-accent);
+}
 .cf-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .cf-btn--primary {
   background: var(--cf-accent);
   border-color: var(--cf-accent);
   color: var(--cf-accent-fg);
+  font-weight: 500;
 }
 .cf-btn--primary:hover {
   background: var(--cf-accent-hover);
@@ -785,8 +780,9 @@ code, pre, kbd, samp {
   background: var(--cf-accent-hover);
   border-color: var(--cf-accent-hover);
 }
-/* Secondary brand button — leaf-green. Reserve for success/positive actions
-   that should not compete with the coral primary on the same surface. */
+/* Secondary brand button — alias of primary in the new palette; the
+   distinct accent-2 is gone (we have one brand color now). Kept for
+   legacy references. */
 .cf-btn--accent-2 {
   background: var(--cf-accent-2);
   border-color: var(--cf-accent-2);
@@ -823,16 +819,15 @@ code, pre, kbd, samp {
 /* Chip variants — deeper foregrounds so the small text passes AA
    against the tinted, low-alpha backgrounds. The colour-coded border
    reinforces the variant when the bg is faint. */
-.cf-chip--accent  { background: var(--cf-accent-subtle); color: var(--cf-status-progress-fg); border-color: rgba(242, 145, 109, 0.45); }
-.cf-chip--success { background: var(--cf-status-done-bg); color: var(--cf-status-done-fg); border-color: rgba(91, 164, 106, 0.40); }
-.cf-chip--warning { background: rgba(166, 106, 31, 0.14); color: #6B3E0F; border-color: rgba(166, 106, 31, 0.45); }
-.cf-chip--danger  { background: rgba(176, 67, 42, 0.12); color: #7A2A18; border-color: rgba(176, 67, 42, 0.45); }
+.cf-chip--accent  { background: var(--cf-accent-subtle); color: var(--cf-status-progress-fg); border-color: rgba(0, 82, 204, 0.30); }
+.cf-chip--success { background: rgba(0, 102, 68, 0.10); color: var(--cf-success); border-color: rgba(0, 102, 68, 0.30); }
+.cf-chip--warning { background: rgba(151, 79, 12, 0.10); color: var(--cf-warning); border-color: rgba(151, 79, 12, 0.30); }
+.cf-chip--danger  { background: rgba(191, 38, 0, 0.10); color: var(--cf-danger); border-color: rgba(191, 38, 0, 0.30); }
 .cf-chip--mono    { font-family: var(--cf-font-mono); font-size: 11px; }
-/* Dark-theme chip foregrounds — keep semantic hue but lift contrast on forest */
-:root[data-theme="dark"] .cf-chip--accent  { color: #FFD4C0; border-color: rgba(255, 166, 136, 0.50); }
-:root[data-theme="dark"] .cf-chip--success { color: #C9EDD1; border-color: rgba(130, 199, 146, 0.45); }
-:root[data-theme="dark"] .cf-chip--warning { background: rgba(214, 182, 115, 0.16); color: #F0D89A; border-color: rgba(214, 182, 115, 0.45); }
-:root[data-theme="dark"] .cf-chip--danger  { background: rgba(234, 164, 140, 0.16); color: #F6C8B5; border-color: rgba(234, 164, 140, 0.50); }
+:root[data-theme="dark"] .cf-chip--accent  { color: var(--cf-accent-hover); border-color: rgba(76, 154, 255, 0.45); }
+:root[data-theme="dark"] .cf-chip--success { background: rgba(87, 217, 163, 0.14); color: var(--cf-success); border-color: rgba(87, 217, 163, 0.35); }
+:root[data-theme="dark"] .cf-chip--warning { background: rgba(255, 196, 0, 0.14); color: var(--cf-warning); border-color: rgba(255, 196, 0, 0.35); }
+:root[data-theme="dark"] .cf-chip--danger  { background: rgba(255, 116, 82, 0.14); color: var(--cf-danger); border-color: rgba(255, 116, 82, 0.40); }
 
 /* Status chips */
 .cf-status {
@@ -2456,14 +2451,16 @@ code, pre, kbd, samp {
   pointer-events: none;
   z-index: 0;
 }
-.cf-blob--leaf  { background: radial-gradient(circle, rgba(91,164,106,0.55), transparent 65%); }
-.cf-blob--sky   { background: radial-gradient(circle, rgba(124,184,224,0.50), transparent 65%); }
-.cf-blob--berry { background: radial-gradient(circle, rgba(224,138,110,0.45), transparent 65%); }
-.cf-blob--wood  { background: radial-gradient(circle, rgba(198,163,107,0.45), transparent 65%); }
-:root[data-theme="dark"] .cf-blob--leaf  { background: radial-gradient(circle, rgba(130,199,146,0.45), transparent 65%); }
-:root[data-theme="dark"] .cf-blob--sky   { background: radial-gradient(circle, rgba(168,211,238,0.35), transparent 65%); }
-:root[data-theme="dark"] .cf-blob--berry { background: radial-gradient(circle, rgba(234,164,140,0.40), transparent 65%); }
-:root[data-theme="dark"] .cf-blob--wood  { background: radial-gradient(circle, rgba(181,143,90,0.40),  transparent 65%); }
+/* Decorative blobs — recolored as cool blue/violet/gray washes. Kept for
+   legacy class names; should be used sparingly. */
+.cf-blob--leaf  { background: radial-gradient(circle, rgba(76, 154, 255, 0.32), transparent 65%); }
+.cf-blob--sky   { background: radial-gradient(circle, rgba(0, 184, 217, 0.28), transparent 65%); }
+.cf-blob--berry { background: radial-gradient(circle, rgba(101, 84, 192, 0.28), transparent 65%); }
+.cf-blob--wood  { background: radial-gradient(circle, rgba(122, 134, 154, 0.24), transparent 65%); }
+:root[data-theme="dark"] .cf-blob--leaf  { background: radial-gradient(circle, rgba(76, 154, 255, 0.24), transparent 65%); }
+:root[data-theme="dark"] .cf-blob--sky   { background: radial-gradient(circle, rgba(0, 184, 217, 0.20), transparent 65%); }
+:root[data-theme="dark"] .cf-blob--berry { background: radial-gradient(circle, rgba(101, 84, 192, 0.22), transparent 65%); }
+:root[data-theme="dark"] .cf-blob--wood  { background: radial-gradient(circle, rgba(122, 134, 154, 0.18), transparent 65%); }
 
 /* Gentle drift — only when the user has not requested reduced motion */
 @keyframes cf-blob-drift {
@@ -2494,22 +2491,19 @@ code, pre, kbd, samp {
 }
 .cf-halo:hover::after { opacity: 1; }
 
-/* Tactile primary button — gains a subtle outer halo + bouncier hover.
-   Composes with existing .cf-btn--primary; no change to that base class. */
+/* Primary button micro-interaction — subtle, no bounce. */
 .cf-btn--primary {
-  transition:
-    transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    background 120ms ease,
-    box-shadow 180ms ease;
+  transition: background 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.08);
 }
-.cf-btn--primary:hover { transform: translateY(-1px); }
-.cf-btn--primary:active { transform: translateY(0); }
+.cf-btn--primary:active { box-shadow: inset 0 1px 0 rgba(9, 30, 66, 0.18); }
 
-/* Wood-trim border — for hero/onboarding cards that want the AC frame look */
+/* Bordered frame — kept name for backward compat; now a flat professional
+   frame, not a wood trim. */
 .cf-wood-frame {
-  border: 2px solid var(--cf-border-strong);
-  border-radius: var(--cf-radius-xl);
-  box-shadow: var(--cf-shadow-lg);
+  border: 1px solid var(--cf-border-strong);
+  border-radius: var(--cf-radius-lg);
+  box-shadow: var(--cf-shadow-md);
 }
 
 /* Eyebrow — small uppercase label paired with display titles */

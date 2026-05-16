@@ -7,20 +7,20 @@
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
     "h1": "",
-    "gotoErr": null,
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs"
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent",
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/1-home/desktop-light.png"
   },
@@ -32,20 +32,20 @@
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
     "h1": "",
-    "gotoErr": null,
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs"
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent",
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/1-home/mobile-light.png"
   },
@@ -57,20 +57,20 @@
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
     "h1": "",
-    "gotoErr": null,
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs"
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent",
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/1-home/desktop-dark.png"
   },
@@ -82,20 +82,20 @@
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
     "h1": "",
-    "gotoErr": null,
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs"
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent",
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/1-home/mobile-dark.png"
   },
@@ -107,21 +107,20 @@
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
     "h1": "",
-    "gotoErr": null,
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: .cf-toolbar .cf-org-switcher__trigger, [aria-haspopup='listbox'], button:has-text('Demo Org'), .cf-org-switcher button"
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs"
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent",
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/2-org-switcher/desktop-light.png"
   },
@@ -133,21 +132,20 @@
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
     "h1": "",
-    "gotoErr": null,
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: .cf-toolbar .cf-org-switcher__trigger, [aria-haspopup='listbox'], button:has-text('Demo Org'), .cf-org-switcher button"
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs"
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent",
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/2-org-switcher/mobile-light.png"
   },
@@ -159,21 +157,20 @@
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
     "h1": "",
-    "gotoErr": null,
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: .cf-toolbar .cf-org-switcher__trigger, [aria-haspopup='listbox'], button:has-text('Demo Org'), .cf-org-switcher button"
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs"
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent",
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/2-org-switcher/desktop-dark.png"
   },
@@ -185,21 +182,20 @@
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
     "h1": "",
-    "gotoErr": null,
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: .cf-toolbar .cf-org-switcher__trigger, [aria-haspopup='listbox'], button:has-text('Demo Org'), .cf-org-switcher button"
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "error: Failed to load resource: the server responded with a status of 404 (Not Found)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/orgs"
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent",
+      "404 http://localhost:7881/api/sessions/recent?days=7",
+      "404 http://localhost:7881/api/diagnoses/recent"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/2-org-switcher/mobile-dark.png"
   },
@@ -210,23 +206,13 @@
     "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
-    "h1": "",
-    "gotoErr": null,
+    "h1": "Knowledge",
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/orgs/01krq5xe4m3p6s71e117g4xsan\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Knowledge'), [role='tab']:has-text('Knowledge'), .cf-tab:has-text('Knowledge')"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/3-org-knowledge/desktop-light.png"
   },
   {
@@ -236,23 +222,13 @@
     "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
-    "h1": "",
-    "gotoErr": null,
+    "h1": "Knowledge",
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/orgs/01krq5xe4m3p6s71e117g4xsan\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Knowledge'), [role='tab']:has-text('Knowledge'), .cf-tab:has-text('Knowledge')"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/3-org-knowledge/mobile-light.png"
   },
   {
@@ -262,23 +238,13 @@
     "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
-    "h1": "",
-    "gotoErr": null,
+    "h1": "Knowledge",
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/orgs/01krq5xe4m3p6s71e117g4xsan\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Knowledge'), [role='tab']:has-text('Knowledge'), .cf-tab:has-text('Knowledge')"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/3-org-knowledge/desktop-dark.png"
   },
   {
@@ -288,127 +254,77 @@
     "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
-    "h1": "",
-    "gotoErr": null,
+    "h1": "Knowledge",
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/orgs/01krq5xe4m3p6s71e117g4xsan\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Knowledge'), [role='tab']:has-text('Knowledge'), .cf-tab:has-text('Knowledge')"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/3-org-knowledge/mobile-dark.png"
   },
   {
     "flow": "4-org-plan",
     "theme": "light",
     "vp": "desktop",
-    "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
+    "path": "/plan",
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
     "h1": "",
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Plan'), [role='tab']:has-text('Plan'), .cf-tab:has-text('Plan')"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/4-org-plan/desktop-light.png"
   },
   {
     "flow": "4-org-plan",
     "theme": "light",
     "vp": "mobile",
-    "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
+    "path": "/plan",
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
     "h1": "",
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Plan'), [role='tab']:has-text('Plan'), .cf-tab:has-text('Plan')"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/4-org-plan/mobile-light.png"
   },
   {
     "flow": "4-org-plan",
     "theme": "dark",
     "vp": "desktop",
-    "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
+    "path": "/plan",
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
     "h1": "",
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Plan'), [role='tab']:has-text('Plan'), .cf-tab:has-text('Plan')"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/4-org-plan/desktop-dark.png"
   },
   {
     "flow": "4-org-plan",
     "theme": "dark",
     "vp": "mobile",
-    "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
+    "path": "/plan",
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
     "h1": "",
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Plan'), [role='tab']:has-text('Plan'), .cf-tab:has-text('Plan')"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/4-org-plan/mobile-dark.png"
   },
   {
@@ -418,23 +334,15 @@
     "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
-    "h1": "",
-    "gotoErr": null,
+    "h1": "Board",
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/orgs/01krq5xe4m3p6s71e117g4xsan\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Board'), [role='tab']:has-text('Board'), .cf-tab:has-text('Board')",
-      "step-click-miss: .cf-task-card"
+      "error: Failed to load resource: the server responded with a status of 400 (Bad Request)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
+      "400 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan/board"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/5-org-board/desktop-light.png"
   },
@@ -445,23 +353,15 @@
     "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
     "overflow": 0,
     "bodyBg": "rgb(251, 246, 231)",
-    "h1": "",
-    "gotoErr": null,
+    "h1": "Board",
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/orgs/01krq5xe4m3p6s71e117g4xsan\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Board'), [role='tab']:has-text('Board'), .cf-tab:has-text('Board')",
-      "step-click-miss: .cf-task-card"
+      "error: Failed to load resource: the server responded with a status of 400 (Bad Request)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
+      "400 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan/board"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/5-org-board/mobile-light.png"
   },
@@ -472,23 +372,15 @@
     "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
-    "h1": "",
-    "gotoErr": null,
+    "h1": "Board",
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/orgs/01krq5xe4m3p6s71e117g4xsan\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Board'), [role='tab']:has-text('Board'), .cf-tab:has-text('Board')",
-      "step-click-miss: .cf-task-card"
+      "error: Failed to load resource: the server responded with a status of 400 (Bad Request)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
+      "400 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan/board"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/5-org-board/desktop-dark.png"
   },
@@ -499,23 +391,15 @@
     "path": "/orgs/01krq5xe4m3p6s71e117g4xsan",
     "overflow": 0,
     "bodyBg": "rgb(26, 38, 32)",
-    "h1": "",
-    "gotoErr": null,
+    "h1": "Board",
+    "gotoErr": "page.goto: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - navigating to \"http://localhost:7881/orgs/01krq5xe4m3p6s71e117g4xsan\", waiting until \"networkidle\"\u001b[22m\n",
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
       "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "step-click-miss: button:has-text('Board'), [role='tab']:has-text('Board'), .cf-tab:has-text('Board')",
-      "step-click-miss: .cf-task-card"
+      "error: Failed to load resource: the server responded with a status of 400 (Bad Request)"
     ],
     "netFails": [
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan",
-      "500 http://localhost:7881/api/lens/health",
-      "500 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan"
+      "400 http://localhost:7881/api/orgs/01krq5xe4m3p6s71e117g4xsan/board"
     ],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/5-org-board/mobile-dark.png"
   },
@@ -530,22 +414,9 @@
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/optimizers",
-      "500 http://localhost:7881/api/optimizers/installed",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/optimizers",
-      "500 http://localhost:7881/api/optimizers/installed"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/6-settings-optimizers/desktop-light.png"
   },
   {
@@ -559,22 +430,9 @@
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/optimizers",
-      "500 http://localhost:7881/api/optimizers/installed",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/optimizers",
-      "500 http://localhost:7881/api/optimizers/installed"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/6-settings-optimizers/mobile-light.png"
   },
   {
@@ -588,22 +446,9 @@
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/optimizers",
-      "500 http://localhost:7881/api/optimizers/installed",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/optimizers",
-      "500 http://localhost:7881/api/optimizers/installed"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/6-settings-optimizers/desktop-dark.png"
   },
   {
@@ -617,22 +462,9 @@
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/optimizers",
-      "500 http://localhost:7881/api/optimizers/installed",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/optimizers",
-      "500 http://localhost:7881/api/optimizers/installed"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/6-settings-optimizers/mobile-dark.png"
   },
   {
@@ -646,18 +478,9 @@
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/runtimes",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/runtimes"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/7-settings-runtimes/desktop-light.png"
   },
   {
@@ -671,18 +494,9 @@
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/runtimes",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/runtimes"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/7-settings-runtimes/mobile-light.png"
   },
   {
@@ -696,18 +510,9 @@
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/runtimes",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/runtimes"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/7-settings-runtimes/desktop-dark.png"
   },
   {
@@ -721,18 +526,9 @@
     "gotoErr": null,
     "errors": [
       "warning: ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.",
-      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
-      "error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      "warning: ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath."
     ],
-    "netFails": [
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/runtimes",
-      "500 http://localhost:7881/api/orgs",
-      "500 http://localhost:7881/api/runtimes"
-    ],
+    "netFails": [],
     "file": "/Users/nealkotval/crawfish/docs/screenshots/stage1-audit-20260516-104500/7-settings-runtimes/mobile-dark.png"
   }
 ]
