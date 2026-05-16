@@ -34,6 +34,14 @@ See [PRODUCT.md](./PRODUCT.md) for the full pitch.
 
 ![Files](./docs/screenshots/org-files.png)
 
+### Topology — see exactly how your agents fan out and where tokens compound
+
+![Topology](./docs/screenshots/lens-topology.png)
+
+### Optimizers — drop-in MCP servers that cut token waste at the source
+
+![Optimizers](./docs/screenshots/org-optimizers.png)
+
 ---
 
 ## Quick start
