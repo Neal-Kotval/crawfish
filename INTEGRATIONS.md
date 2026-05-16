@@ -39,6 +39,7 @@ Sorted by **leverage × ease**, not popularity. Numbers are honest engineering e
 
 | Runtime | Audience size | Pattern fit | Engineering effort | Priority |
 |---|---|---|---|---|
+| **Claude multi-agent teams** | growing fast (Claude Code native) | transcript adapter + topology | ~2-4 days | **High** — already in our wheelhouse; the `team_name` fan-out is exactly the topology view's killer demo. |
 | **OpenClaw** | small but motivated | transcript + MCP | ~3-5 days | **High** — the user is local-first OSS-aligned, exactly our buyer. |
 | **LangGraph** | large + enterprise | SDK + transcript | ~1-2 weeks | **High** — token compounding shines on multi-step graphs. |
 | **Aider** | medium, terminal-first | transcript only | ~2-3 days | Medium — small daily-active dev cohort that loves OSS tools. |
@@ -55,7 +56,25 @@ Sorted by **leverage × ease**, not popularity. Numbers are honest engineering e
 
 ---
 
-## OpenClaw — the highest-priority integration
+## Claude multi-agent teams — the lowest-friction win
+
+Claude Code's Agent tool exposes a `team_name` parameter that lets the parent spawn subagents into named teams, with cross-team coordination via `SendMessage`. From a topology standpoint this is the single richest fan-out shape we'll see in the wild — multiple named agents, persistent IDs, sometimes long-running, sometimes coordinating laterally rather than strictly parent → child.
+
+**Pattern fit:** transcript adapter (passive, already 90% there) + topology view extension.
+
+The transcripts already land in `~/.claude/projects/<project>/*.jsonl` — same path crawfish-lens already reads. What's missing:
+
+1. **Team-aware grouping.** Today's topology view assumes one parent + a flat row of subagents. Teams introduce a second level: parent → team → agents. The radial layout we just shipped extends naturally — render team boundaries as concentric arcs or color-coded sectors.
+2. **`SendMessage` edges.** Cross-agent messages are *lateral* edges, not tree edges. The graph layout needs to handle them without the radial assumption breaking. Probably: dotted edges between sibling nodes, drawn last so they don't dominate the parent → child fan-out.
+3. **Long-running agent state.** Background agents (`run_in_background: true`) outlive the turn that spawned them. Lens needs to surface "still running" vs "completed" state — token totals are a moving target until the agent terminates.
+
+**Engineering:** ~2-4 days. The adapter work is minimal because we already parse the transcripts; the lift is the topology view extensions and a "Teams" subsection in dash that mirrors the existing Agents tab.
+
+**Why this is priority 1, not OpenClaw:** the data is *already* in the lens. We're the only ones who can ship this without leaving our existing audience. Every Claude Code user who runs multi-agent teams becomes a free demo for the topology view. OpenClaw is still the biggest *new-audience* opportunity, but Claude teams is the biggest *existing-audience* depth play.
+
+---
+
+## OpenClaw — the highest-priority new-audience integration
 
 [OpenClaw](https://openclaw.ai/) ([github.com/openclaw/openclaw](https://github.com/openclaw/openclaw)) is Peter Steinberger's open-source local agent runtime. Personal AI assistant framework, persistent memory, 50+ skills, runs as a launchd daemon, MCP-aware, model-agnostic (Claude or GPT). It's the closest fit to crawfish's audience: **local-first, OSS-aligned, multi-skill (≈ multi-agent), already MCP-fluent.**
 
@@ -147,12 +166,13 @@ Engineering: ~3-5 days **per extension** because the formats differ. Reasonable 
 
 If we have one builder and want to ship in this order:
 
-1. **OpenClaw transcript adapter** — fastest credibility with the OSS-aligned local-first audience that *is* our buyer. ~3 days.
-2. **Aider transcript adapter** — second cheapest, distinct distribution channel, drives GitHub stars. ~2-3 days.
-3. **LangGraph + topology spans** — the moat-defining bet (forces us to publish Edge 1's open standard). ~1-2 weeks.
-4. **Cline / Continue / Roo** — VS Code marketplace surface; spread distribution. ~1-2 weeks combined.
-5. **OpenClaw hook injection or proxy** — if Steinberger is open to a PR, this is the team-mode upsell for OpenClaw users. Otherwise the soft-guidance SKILL.md path.
-6. **CrewAI + AutoGen + Mastra** — the SDK family, after `@crawfish/sdk` is published.
+1. **Claude multi-agent teams (topology v2)** — extends the radial graph to handle teams + lateral `SendMessage` edges. Zero new audience required; immediate demo lift for every existing user. ~2-4 days.
+2. **OpenClaw transcript adapter** — fastest credibility with the OSS-aligned local-first audience that *is* our buyer. ~3-5 days.
+3. **Aider transcript adapter** — second cheapest new-audience play, distinct distribution channel, drives GitHub stars. ~2-3 days.
+4. **LangGraph + topology spans** — the moat-defining bet (forces us to publish Edge 1's open standard). ~1-2 weeks.
+5. **Cline / Continue / Roo** — VS Code marketplace surface; spread distribution. ~1-2 weeks combined.
+6. **OpenClaw hook injection or proxy** — if Steinberger is open to a PR, this is the team-mode upsell for OpenClaw users. Otherwise the soft-guidance SKILL.md path.
+7. **CrewAI + AutoGen + Mastra** — the SDK family, after `@crawfish/sdk` is published.
 
 Each step is independently shippable and produces a public artifact (a repo, a Show HN, a marketplace listing). The sequence is also a hedge — if any single integration flops, the next one is on a different audience and timeline.
 

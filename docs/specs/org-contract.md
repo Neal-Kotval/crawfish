@@ -72,12 +72,78 @@ Append-only log. Each line is one event. State is derived by folding. SSE tails 
 
 ```ts
 type BoardEvent =
-  | { type: "task_created"; ts: string; task_id: string; title: string; description: string; assignee: string | null; created_by: string }
-  | { type: "task_updated"; ts: string; task_id: string; by: string; patch: Partial<{ title: string; description: string; assignee: string; status: TaskStatus }> }
+  | {
+      type: "task_created";
+      ts: string;
+      task_id: string;
+      title: string;
+      description: string;
+      assignee: string | null;
+      created_by: string;
+      // Phase 3 additions (all optional on create)
+      cycle_id?: string | null;
+      epic_id?: string | null;
+      labels?: string[];
+      watchers?: string[];
+    }
+  | {
+      type: "task_updated";
+      ts: string;
+      task_id: string;
+      by: string;
+      patch: Partial<{
+        title: string;
+        description: string;
+        assignee: string | null;
+        status: TaskStatus;
+        // Phase 3 additions
+        cycle_id: string | null;
+        epic_id: string | null;
+        labels: string[];
+        watchers: string[];
+        links: TaskLink[];
+        // Board-UI extensions (rank for drag-to-rank; budget/activity for
+        // client-emitted budget-breach / escalation entries).
+        rank: number;
+        token_budget: number;
+        token_spent: number;
+        activity_log: ActivityEntry[];
+      }>;
+    }
   | { type: "task_commented"; ts: string; task_id: string; by: string; body: string }
   | { type: "task_deleted"; ts: string; task_id: string; by: string };
 
 type TaskStatus = "backlog" | "in_progress" | "review" | "done";
+
+// Phase 3 — task-graph + activity primitives
+type TaskLinkKind =
+  | "blocks"
+  | "depends_on"
+  | "duplicates"
+  | "relates_to"
+  | "subtask_of";
+
+interface TaskLink {
+  kind: TaskLinkKind;
+  task_id: string;
+}
+
+type ActivityKind =
+  | "status_changed"
+  | "assigned"
+  | "commented"
+  | "mentioned"
+  | "budget_breach"
+  | "escalated"
+  | "linked"
+  | "labeled";
+
+interface ActivityEntry {
+  by: string;                  // member id
+  at: string;                  // RFC3339 UTC
+  kind: ActivityKind;
+  payload: Record<string, unknown>;
+}
 ```
 
 - `ts` is RFC3339 UTC.
@@ -99,8 +165,20 @@ type Task = {
   created_at: string;
   updated_at: string;
   comments: Array<{ by: string; body: string; ts: string }>;
+  // Phase 3 — planning + activity (all default to empty/null on fold)
+  cycle_id: string | null;
+  epic_id: string | null;
+  links: TaskLink[];
+  labels: string[];
+  watchers: string[];
+  activity_log: ActivityEntry[];
 };
 ```
+
+`activity_log` is *derived* by the fold: each `task_updated`/`task_commented`
+event projects one entry (e.g. `status_changed`, `assigned`, `labeled`,
+`linked`, `commented`). The Phase 3 `activity` teammate owns the projection
+function; consumers SHOULD treat `activity_log` as read-only.
 
 ---
 

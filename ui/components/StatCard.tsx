@@ -25,37 +25,13 @@ export function StatCard({
   return (
     <Card onClick={onClick} cornerIcon={cornerIcon} ariaLabel={label}>
       <div className="cf-card__header">
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <span style={{ fontSize: 20 }}>{icon}</span>
-          <div
-            style={{
-              fontSize: 12,
-              color: "var(--cf-fg-secondary)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              fontWeight: 600,
-            }}
-          >
-            {label}
-          </div>
+        <div className="cf-row cf-gap-3">
+          <span className="cf-text-lg">{icon}</span>
+          <div className="cf-kicker">{label}</div>
         </div>
       </div>
-      <div
-        style={{
-          fontSize: 28,
-          fontWeight: 600,
-          letterSpacing: "-0.02em",
-          color: "var(--cf-fg)",
-          lineHeight: 1.1,
-        }}
-      >
-        {value}
-      </div>
-      {sub ? (
-        <div style={{ fontSize: 12, color: "var(--cf-fg-secondary)" }}>
-          {sub}
-        </div>
-      ) : null}
+      <div className="cf-text-2xl cf-num">{value}</div>
+      {sub ? <div className="cf-text-sm cf-fg-secondary">{sub}</div> : null}
     </Card>
   );
 }

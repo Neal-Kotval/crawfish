@@ -1,113 +1,160 @@
 /* crawfish design tokens.
-   Aesthetic: Atlassian/Jira-style agent workplace OS.
-   Neutral grays, single accent blue, dense type, generous chips. */
+   Aesthetic: warm + tactile, inspired by Animal Crossing / Splatoon UI
+   (see /Users/nealkotval/nealkotval/DESIGN.md).
+
+   Two-accent system — every primary surface picks ONE; never both side-by-side:
+     1. --cf-accent   (coral orange)  — brand pop. Primary buttons, brand links,
+                                        active route, "in progress" status.
+     2. --cf-accent-2 (leaf green)    — positive/success. Success messages,
+                                        "done" status, live indicators, growth.
+
+   Light mode is warm cream + wood trim. Dark mode is deep-forest night.
+   Documented in DESIGN.md. */
 
 :root {
-  /* Surfaces */
-  --cf-bg:            #f7f8fa;      /* app background — neutral cool gray */
-  --cf-bg-elevated:   #ffffff;      /* cards, sheets */
-  --cf-bg-sunken:     #f1f2f4;      /* under cards, kanban column */
-  --cf-bg-sidebar:    #ffffff;      /* sidebar — opaque, no vibrancy */
-  --cf-bg-hover:      rgba(9, 30, 66, 0.06);
-  --cf-bg-selected:   rgba(0, 82, 204, 0.08);
+  /* Surfaces — warm cream */
+  --cf-bg:            #FBF6E7;      /* page background — cream */
+  --cf-bg-elevated:   #FFFBEC;      /* cards, sheets, drawers */
+  --cf-bg-sunken:     #F1E8C9;      /* under cards, kanban troughs */
+  --cf-bg-sidebar:    #FBF6E7;      /* sidebar matches app bg */
+  --cf-bg-hover:      rgba(46, 42, 31, 0.06);
+  --cf-bg-selected:   rgba(91, 164, 106, 0.16);
 
-  /* Foregrounds */
-  --cf-fg:            #172b4d;      /* primary text */
-  --cf-fg-secondary:  #44546f;
-  --cf-fg-tertiary:   #6b778c;
-  --cf-fg-muted:      #8993a4;
+  /* Foregrounds — espresso ink. Tuned for ≥7:1 fg-on-bg and ≥4.5:1
+     secondary-on-bg against #FBF6E7 cream (WCAG AAA / AA). */
+  --cf-fg:            #1F1B12;       /* ~14.5:1 on bg — primary text */
+  --cf-fg-secondary:  #4A4231;       /* ~8.4:1 on bg — meta, labels */
+  --cf-fg-tertiary:   #6B5F40;       /* ~5.6:1 on bg — eyebrows, captions */
+  --cf-fg-muted:      #8A7C5A;       /* ~3.5:1 — placeholder/disabled only */
 
-  /* Borders */
-  --cf-border:        #dfe1e6;
-  --cf-border-strong: #c1c7d0;
+  /* Borders — wheat (visible), then wood-trim (emphasized) */
+  --cf-border:        #D9CB97;
+  --cf-border-strong: #B58E54;       /* wood */
 
-  /* Shadows — denser, Jira-style */
-  --cf-shadow-sm: 0 1px 1px rgba(9, 30, 66, 0.08), 0 0 0.5px rgba(9, 30, 66, 0.06);
-  --cf-shadow-md: 0 4px 8px -2px rgba(9, 30, 66, 0.12), 0 0 1px rgba(9, 30, 66, 0.08);
-  --cf-shadow-lg: 0 12px 24px -6px rgba(9, 30, 66, 0.16), 0 0 1px rgba(9, 30, 66, 0.08);
+  /* Shadows — soft, stacked with a wood offset (AC card tell) */
+  --cf-shadow-sm: 0 1px 0 #C6A36B, 0 1px 2px rgba(46, 42, 31, 0.06);
+  --cf-shadow-md: 0 1px 0 #C6A36B, 0 6px 14px -4px rgba(46, 42, 31, 0.14), 0 1px 2px rgba(46, 42, 31, 0.06);
+  --cf-shadow-lg: 0 2px 0 #C6A36B, 0 18px 32px -10px rgba(46, 42, 31, 0.22), 0 2px 4px rgba(46, 42, 31, 0.08);
 
-  /* Accent — Jira blue */
-  --cf-accent:        #0052cc;
-  --cf-accent-hover:  #0747a6;
-  --cf-accent-subtle: rgba(0, 82, 204, 0.10);
-  --cf-accent-fg:     #ffffff;
+  /* Primary accent — light coral orange. Brand pop. Deep espresso text
+     reads at ~7.5:1 against the coral, so primary buttons stay AAA. */
+  --cf-accent:        #F2916D;
+  --cf-accent-hover:  #E07A55;
+  --cf-accent-subtle: rgba(242, 145, 109, 0.18);
+  --cf-accent-fg:     #2A1812;                    /* deep brown ink on coral */
 
-  /* Status colors (Jira-ish) */
-  --cf-status-todo-bg:        #dfe1e6;
-  --cf-status-todo-fg:        #42526e;
-  --cf-status-progress-bg:    #deebff;
-  --cf-status-progress-fg:    #0052cc;
-  --cf-status-review-bg:      #eae6ff;
-  --cf-status-review-fg:      #403294;
-  --cf-status-done-bg:        #e3fcef;
-  --cf-status-done-fg:        #006644;
+  /* Secondary accent — leaf green. Positive / success / live / growth.
+     Pairs with coral on the same page (one primary surface, not both). */
+  --cf-accent-2:        #5BA46A;
+  --cf-accent-2-hover:  #4B8C58;
+  --cf-accent-2-subtle: rgba(91, 164, 106, 0.18);
+  --cf-accent-2-fg:     #0F2818;                  /* deep forest ink on leaf */
 
-  /* Semantic */
-  --cf-success: #00875a;
-  --cf-warning: #ff8b00;
-  --cf-danger:  #de350b;
+  /* Status — `progress` reuses leaf accent; `review` is sky; `done` is
+     leaf-soft; `todo` is warm sand. */
+  --cf-status-todo-bg:        #EDE0B7;
+  --cf-status-todo-fg:        #6B5F40;
+  --cf-status-progress-bg:    rgba(242, 145, 109, 0.20);
+  --cf-status-progress-fg:    #B0432A;
+  --cf-status-review-bg:      #D9ECF7;
+  --cf-status-review-fg:      #2F6F9A;
+  --cf-status-done-bg:        #BFE3B5;
+  --cf-status-done-fg:        #2F6438;
 
-  /* Token-bucket colors — keep distinguishable but desaturated */
-  --cf-color-bucket-input:       #5243aa;
-  --cf-color-bucket-output:      #de350b;
-  --cf-color-bucket-cache-read:  #00875a;
-  --cf-color-bucket-cache-write: #ff8b00;
+  /* Semantic — `success` aliases the secondary accent (leaf) so green has
+     ONE source of truth. `warning` + `danger` stay warm-biased but
+     unambiguously distinct from wood-trim and the coral primary. */
+  --cf-success: #3E7A4B;             /* deep leaf — readable as small text */
+  --cf-warning: #A66A1F;             /* burnt amber */
+  --cf-danger:  #B0432A;             /* deep coral-red — passes AA on cream */
 
-  /* Avatar palette — cycled by hash */
-  --cf-avatar-1: #0052cc;
-  --cf-avatar-2: #00875a;
-  --cf-avatar-3: #ff8b00;
-  --cf-avatar-4: #403294;
-  --cf-avatar-5: #97a0af;
-  --cf-avatar-6: #c9372c;
+  /* Token-bucket colors — visualization only. Distinct hues across the
+     warm-cream / leaf / sky / berry palette so they read as separate
+     swatches in token bars and graphs. */
+  --cf-color-bucket-input:       #7CB8E0;   /* sky */
+  --cf-color-bucket-output:      #5BA46A;   /* leaf — the "useful work" bucket */
+  --cf-color-bucket-cache-read:  #C6A36B;   /* wood amber */
+  --cf-color-bucket-cache-write: #E08A6E;   /* berry */
 
-  /* Radii */
-  --cf-radius-sm: 3px;
-  --cf-radius-md: 6px;
-  --cf-radius-lg: 8px;
-  --cf-radius-xl: 12px;
+  /* Avatar palette — warm villager set, coral + leaf as the brand pair */
+  --cf-avatar-1: #F2916D;   /* coral */
+  --cf-avatar-2: #5BA46A;   /* leaf */
+  --cf-avatar-3: #7CB8E0;   /* sky */
+  --cf-avatar-4: #E08A6E;   /* berry */
+  --cf-avatar-5: #C6A36B;   /* wood */
+  --cf-avatar-6: #7A6F55;   /* mocha */
 
-  /* Type */
+  /* Radii — AC round-everything scale. sm/md still tight enough for chips
+     and inputs; lg/xl get noticeably more pillowy for cards and panels. */
+  --cf-radius-sm: 6px;
+  --cf-radius-md: 12px;
+  --cf-radius-lg: 18px;
+  --cf-radius-xl: 24px;
+
+  /* Type — Inter for both body and display. Geometric humanist, neutral,
+     reads well at 13–28px without bouncing. Display uses the same family
+     at heavier weights + tighter tracking. */
   --cf-font:      "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
                   "Helvetica Neue", system-ui, sans-serif;
-  --cf-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --cf-font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                     system-ui, sans-serif;
+  --cf-font-mono: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono",
+                  Menlo, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --cf-bg:            #0f1419;
-    --cf-bg-elevated:   #1d2125;
-    --cf-bg-sunken:     #161a1d;
-    --cf-bg-sidebar:    #161a1d;
-    --cf-bg-hover:      rgba(255, 255, 255, 0.06);
-    --cf-bg-selected:   rgba(85, 145, 255, 0.16);
+:root[data-theme="dark"] {
+    /* Surfaces — deep forest night */
+    --cf-bg:            #1A2620;
+    --cf-bg-elevated:   #243530;
+    --cf-bg-sunken:     #1F2D27;
+    --cf-bg-sidebar:    #1A2620;
+    --cf-bg-hover:      rgba(243, 233, 200, 0.06);
+    --cf-bg-selected:   rgba(130, 199, 146, 0.18);
 
-    --cf-fg:            #e4e6ea;
-    --cf-fg-secondary:  #b6bac2;
-    --cf-fg-tertiary:   #8c95a3;
-    --cf-fg-muted:      #6f7785;
+    /* Foregrounds — warm cream off-white. Tuned for ≥10:1 fg-on-bg and
+       ≥4.5:1 secondary-on-bg against #1A2620 deep-forest. */
+    --cf-fg:            #FAF2D4;     /* ~13:1 on bg */
+    --cf-fg-secondary:  #E2D5A8;     /* ~8.5:1 */
+    --cf-fg-tertiary:   #C0B287;     /* ~5.7:1 */
+    --cf-fg-muted:      #968A66;     /* ~3.6:1 — placeholder/disabled only */
 
-    --cf-border:        #2d3338;
-    --cf-border-strong: #3b434a;
+    --cf-border:        #3F5A50;
+    --cf-border-strong: #6B8A7A;     /* dark wood — brighter so it reads */
 
-    --cf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-    --cf-shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.55);
-    --cf-shadow-lg: 0 12px 24px -6px rgba(0, 0, 0, 0.6);
+    --cf-shadow-sm: 0 1px 0 #355048, 0 1px 2px rgba(0, 0, 0, 0.45);
+    --cf-shadow-md: 0 1px 0 #355048, 0 8px 18px -4px rgba(0, 0, 0, 0.55);
+    --cf-shadow-lg: 0 2px 0 #355048, 0 24px 36px -10px rgba(0, 0, 0, 0.7);
 
-    --cf-accent:        #579dff;
-    --cf-accent-hover:  #85b8ff;
-    --cf-accent-subtle: rgba(87, 157, 255, 0.16);
-    --cf-accent-fg:     #0f1419;
+    /* Primary accent — bright coral at night, glows over forest */
+    --cf-accent:        #FFA688;
+    --cf-accent-hover:  #FFC0A8;
+    --cf-accent-subtle: rgba(255, 166, 136, 0.22);
+    --cf-accent-fg:     #1A2620;
 
-    --cf-status-todo-bg:     #2d3338;
-    --cf-status-todo-fg:     #b6bac2;
-    --cf-status-progress-bg: rgba(87, 157, 255, 0.16);
-    --cf-status-progress-fg: #85b8ff;
-    --cf-status-review-bg:   rgba(159, 138, 255, 0.16);
-    --cf-status-review-fg:   #b8acf6;
-    --cf-status-done-bg:     rgba(46, 199, 122, 0.16);
-    --cf-status-done-fg:     #7ee2b8;
-  }
+    /* Secondary accent — bright mint at night */
+    --cf-accent-2:        #82C792;
+    --cf-accent-2-hover:  #9ED6AC;
+    --cf-accent-2-subtle: rgba(130, 199, 146, 0.22);
+    --cf-accent-2-fg:     #1A2620;
+
+    --cf-status-todo-bg:     #2F3A30;
+    --cf-status-todo-fg:     #C9BE99;
+    --cf-status-progress-bg: rgba(255, 166, 136, 0.22);
+    --cf-status-progress-fg: #FFC0A8;
+    --cf-status-review-bg:   #25405A;
+    --cf-status-review-fg:   #A8D3EE;
+    --cf-status-done-bg:     #2F4A39;
+    --cf-status-done-fg:     #BFE3B5;
+
+    /* Dark semantic — coral and amber tuned to the forest base */
+    --cf-success: #82C792;
+    --cf-warning: #D6B673;
+    --cf-danger:  #EAA48C;
+
+    --cf-color-bucket-input:       #A8D3EE;   /* sky */
+    --cf-color-bucket-output:      #82C792;   /* mint — useful work bucket */
+    --cf-color-bucket-cache-read:  #D6B673;   /* warm amber */
+    --cf-color-bucket-cache-write: #EAA48C;   /* berry */
 }
 
 * { box-sizing: border-box; }
@@ -121,15 +168,39 @@ html, body, #root {
 body {
   margin: 0;
   font-family: var(--cf-font);
-  font-size: 14px;
-  line-height: 1.43;
+  font-size: 14.5px;
+  line-height: 1.55;
+  font-weight: 400;
   color: var(--cf-fg);
-  background: var(--cf-bg);
+  background-color: var(--cf-bg);
+  /* Subtle vertical gradient — cream warms slightly toward the bottom. No
+     radial pools (those read as "spots" against the warm surface). */
+  background-image: linear-gradient(
+    180deg,
+    var(--cf-bg) 0%,
+    var(--cf-bg-sunken) 100%
+  );
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "cv11", "ss01", "tnum";
+  font-feature-settings: "tnum", "kern";
   overscroll-behavior: none;
-  letter-spacing: -0.003em;
+  letter-spacing: 0;
+}
+
+:root[data-theme="dark"] body {
+  background-image: linear-gradient(
+    180deg,
+    var(--cf-bg) 0%,
+    var(--cf-bg-sunken) 100%
+  );
+}
+
+/* Display headings — same Inter family at heavier weight, tighter tracking. */
+.cf-display, h1.cf-h1, h2.cf-h2 {
+  font-family: var(--cf-font-display);
+  font-weight: 600;
+  letter-spacing: -0.018em;
 }
 
 ::selection { background: var(--cf-accent-subtle); color: var(--cf-fg); }
@@ -161,8 +232,9 @@ code, pre, kbd, samp {
 /* ─── Layout primitives ─── */
 
 .cf-app {
+  /* sidebar width: 264 — comfortable for 14px Inter nav labels + icon */
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 264px 1fr;
   height: 100vh;
   overflow: hidden;
   overscroll-behavior: none;
@@ -177,10 +249,10 @@ code, pre, kbd, samp {
 .cf-sidebar {
   background: var(--cf-bg-sidebar);
   border-right: 1px solid var(--cf-border);
-  padding: 12px 8px;
+  padding: 16px 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   height: 100vh;
   position: sticky;
   top: 0;
@@ -189,48 +261,68 @@ code, pre, kbd, samp {
 }
 
 .cf-sidebar__section {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--cf-fg-tertiary);
-  padding: 14px 12px 6px;
+  padding: 16px 14px 6px;
 }
 
 .cf-sidebar__item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
+  gap: 11px;
+  padding: 9px 12px;
   margin: 1px 4px;
   border-radius: var(--cf-radius-md);
   color: var(--cf-fg-secondary);
+  font-family: var(--cf-font-display);
   font-size: 14px;
   font-weight: 500;
+  letter-spacing: -0.005em;
   cursor: pointer;
-  transition: background 80ms ease, color 80ms ease;
+  transition: background 140ms ease-out, color 140ms ease-out, transform 140ms ease-out;
   user-select: none;
 }
-.cf-sidebar__item:hover { background: var(--cf-bg-hover); color: var(--cf-fg); }
-.cf-sidebar__item--active {
-  background: var(--cf-bg-selected);
+.cf-sidebar__item:hover {
+  background: var(--cf-bg-hover);
+  color: var(--cf-fg);
+}
+.cf-sidebar__item:active { transform: translateX(0); }
+.cf-sidebar__item--active,
+.cf-sidebar__item--active:hover {
+  /* Single-hue coral state: coral-subtle wash + coral ink + accent rail.
+     Replaces the dissonant leaf-green-bg / coral-text pairing. */
+  background: var(--cf-accent-subtle);
+  color: var(--cf-status-progress-fg);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--cf-accent);
+}
+.cf-sidebar__item--active .cf-sidebar__icon { color: var(--cf-accent); }
+:root[data-theme="dark"] .cf-sidebar__item--active .cf-sidebar__icon {
   color: var(--cf-accent);
 }
-.cf-sidebar__item--active:hover { background: var(--cf-bg-selected); }
 
 .cf-sidebar__icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
-  color: currentColor;
+  color: var(--cf-fg-tertiary);
+  transition: color 140ms ease-out;
 }
+.cf-sidebar__item:hover .cf-sidebar__icon { color: var(--cf-fg); }
+.cf-brand + .cf-sidebar__item { margin-top: 6px; }
 
 /* Brand */
 .cf-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 12px 18px;
+  padding: 4px 12px 20px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--cf-border);
 }
 .cf-brand__logo {
   width: 26px;
@@ -245,16 +337,27 @@ code, pre, kbd, samp {
   letter-spacing: -0.02em;
   flex-shrink: 0;
 }
+/* Emoji-as-mark variant: 🦞 sits in the slot, so drop the accent fill and
+   let the glyph itself carry the brand. */
+.cf-brand__logo--emoji {
+  background: transparent;
+  color: inherit;
+  font-size: 22px;
+  line-height: 1;
+}
 .cf-brand__title {
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: -0.01em;
+  font-family: var(--cf-font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.015em;
   color: var(--cf-fg);
+  line-height: 1.1;
 }
 .cf-brand__sub {
   font-size: 11px;
   color: var(--cf-fg-tertiary);
-  margin-top: 1px;
+  margin-top: 2px;
+  letter-spacing: 0.005em;
 }
 
 .cf-main {
@@ -264,7 +367,15 @@ code, pre, kbd, samp {
   height: 100vh;
   overscroll-behavior: contain;
   position: relative;
-  background: var(--cf-bg);
+  /* Subtle vertical gradient — mirrors the body so the workspace surface
+     keeps the same warm wash even though it layers above the page bg. */
+  background-color: var(--cf-bg);
+  background-image: linear-gradient(
+    180deg,
+    var(--cf-bg) 0%,
+    var(--cf-bg-sunken) 100%
+  );
+  background-attachment: local;
 }
 
 /* Toolbar */
@@ -274,21 +385,22 @@ code, pre, kbd, samp {
   z-index: 10;
   background: var(--cf-bg-elevated);
   border-bottom: 1px solid var(--cf-border);
-  padding: 10px 24px;
-  height: 48px;
+  padding: 14px 32px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .cf-toolbar__title {
-  font-size: 14px;
+  font-family: var(--cf-font-display);
+  font-size: 22px;
   font-weight: 600;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.012em;
   color: var(--cf-fg);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .cf-toolbar__live {
@@ -313,11 +425,11 @@ code, pre, kbd, samp {
 }
 
 .cf-content {
-  padding: 24px 32px;
+  padding: 32px 44px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 1400px;
+  gap: 28px;
+  max-width: 1440px;
   width: 100%;
   margin: 0 auto;
 }
@@ -325,21 +437,21 @@ code, pre, kbd, samp {
 /* ─── Cards (sessions/agents list) ─── */
 .cf-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
 }
 
 .cf-card {
   background: var(--cf-bg-elevated);
   border: 1px solid var(--cf-border);
-  border-radius: var(--cf-radius-lg);
-  padding: 14px 16px;
+  border-radius: var(--cf-radius-xl);
+  padding: 24px 26px;
   box-shadow: var(--cf-shadow-sm);
   transition: border-color 120ms ease, box-shadow 120ms ease;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
   text-decoration: none;
   color: inherit;
 }
@@ -349,41 +461,61 @@ code, pre, kbd, samp {
   text-decoration: none;
 }
 
+/* Card header: left text-stack (title + sub) gets a flex column with min-width:0
+   so it truncates cleanly instead of pushing the right chip-column out of frame.
+   Right column right-aligns its children for consistent rhythm. */
 .cf-card__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
+}
+.cf-card__header > :first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.cf-card__header > :last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .cf-card__title {
-  font-size: 14px;
+  font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.005em;
   color: var(--cf-fg);
-  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
 }
 
 .cf-card__sub {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--cf-fg-tertiary);
-  margin-top: 2px;
   font-feature-settings: "tnum";
+  line-height: 1.5;
 }
 
 .cf-card__active {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--cf-success);
+  color: var(--cf-success);                /* leaf — "running, healthy" */
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   white-space: nowrap;
 }
 .cf-card__active::before {
   content: "";
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   background: currentColor;
 }
@@ -391,23 +523,24 @@ code, pre, kbd, samp {
 .cf-card__metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
-.cf-metric { display: flex; flex-direction: column; gap: 2px; }
+.cf-metric { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 .cf-metric__label {
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--cf-fg-tertiary);
   font-weight: 600;
 }
 .cf-metric__value {
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 600;
   letter-spacing: -0.015em;
   font-feature-settings: "tnum";
   color: var(--cf-fg);
+  line-height: 1.2;
 }
 .cf-metric__sub {
   font-size: 11px;
@@ -445,17 +578,17 @@ code, pre, kbd, samp {
 .cf-section {
   background: var(--cf-bg-elevated);
   border: 1px solid var(--cf-border);
-  border-radius: var(--cf-radius-lg);
-  padding: 18px 20px;
+  border-radius: var(--cf-radius-xl);
+  padding: 26px 28px;
   box-shadow: var(--cf-shadow-sm);
 }
 .cf-section__title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--cf-fg-tertiary);
-  margin: 0 0 12px;
+  margin: 0 0 18px;
 }
 
 .cf-stats-grid {
@@ -548,6 +681,35 @@ code, pre, kbd, samp {
   color: var(--cf-fg-secondary);
   margin-bottom: 4px;
 }
+.cf-empty__illustration {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+  opacity: 0.95;
+}
+.cf-empty__body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--cf-fg-tertiary);
+  max-width: 380px;
+  margin: 0 auto;
+}
+.cf-empty__cta {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+.cf-italic { font-style: italic; }
+.cf-link-plain { text-decoration: none; }
+.cf-link-plain:hover { text-decoration: underline; }
+.cf-install-cmd--disabled { opacity: 0.5; cursor: default; }
+.cf-warm .cf-empty__illustration {
+  margin-bottom: 20px;
+}
+.cf-warm .cf-empty__body {
+  font-size: 14px;
+  color: var(--cf-fg-secondary);
+}
 
 .cf-spinner {
   display: inline-block;
@@ -566,24 +728,28 @@ code, pre, kbd, samp {
 .cf-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: var(--cf-radius-md);
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
   background: var(--cf-bg-elevated);
   border: 1px solid var(--cf-border);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--cf-fg);
   cursor: pointer;
-  transition: background 80ms ease, border-color 80ms ease;
+  transition: background 80ms ease, border-color 80ms ease, transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+.cf-pill:hover { transform: translateY(-1px); }
 .cf-pill:hover { background: var(--cf-bg-hover); border-color: var(--cf-border-strong); }
 .cf-pill--primary {
   background: var(--cf-accent);
   color: var(--cf-accent-fg);
   border-color: var(--cf-accent);
 }
-.cf-pill--primary:hover { background: var(--cf-accent-hover); border-color: var(--cf-accent-hover); }
+.cf-pill--primary:hover {
+  background: var(--cf-accent-hover);
+  border-color: var(--cf-accent-hover);
+}
 .cf-pill:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .cf-btn {
@@ -591,11 +757,11 @@ code, pre, kbd, samp {
   border: 1px solid var(--cf-border);
   background: var(--cf-bg-elevated);
   color: var(--cf-fg);
-  padding: 6px 14px;
+  padding: 10px 18px;
   border-radius: var(--cf-radius-md);
   font: inherit;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   transition: background 80ms ease, border-color 80ms ease;
 }
@@ -610,34 +776,63 @@ code, pre, kbd, samp {
   background: var(--cf-accent-hover);
   border-color: var(--cf-accent-hover);
 }
+:root[data-theme="dark"] .cf-btn--primary {
+  background: var(--cf-accent);
+  border-color: var(--cf-accent);
+  color: var(--cf-accent-fg);
+}
+:root[data-theme="dark"] .cf-btn--primary:hover {
+  background: var(--cf-accent-hover);
+  border-color: var(--cf-accent-hover);
+}
+/* Secondary brand button — leaf-green. Reserve for success/positive actions
+   that should not compete with the coral primary on the same surface. */
+.cf-btn--accent-2 {
+  background: var(--cf-accent-2);
+  border-color: var(--cf-accent-2);
+  color: var(--cf-accent-2-fg);
+}
+.cf-btn--accent-2:hover {
+  background: var(--cf-accent-2-hover);
+  border-color: var(--cf-accent-2-hover);
+}
 .cf-btn--ghost {
   background: transparent;
   border-color: transparent;
   color: var(--cf-fg-secondary);
 }
 .cf-btn--ghost:hover { color: var(--cf-fg); background: var(--cf-bg-hover); }
-.cf-link { color: var(--cf-accent); cursor: pointer; }
+.cf-link { color: var(--cf-accent); cursor: pointer; font-weight: 600; }
 .cf-link:hover { text-decoration: underline; }
-.cf-label { font-size: 12px; color: var(--cf-fg-secondary); }
+.cf-label { font-size: 13px; color: var(--cf-fg-secondary); font-weight: 500; }
 
 /* Chips */
 .cf-chip {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 3px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
   background: var(--cf-bg-sunken);
   color: var(--cf-fg-secondary);
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.005em;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   border: 1px solid transparent;
 }
-.cf-chip--accent  { background: var(--cf-accent-subtle); color: var(--cf-accent); }
-.cf-chip--success { background: var(--cf-status-done-bg); color: var(--cf-status-done-fg); }
-.cf-chip--warning { background: rgba(255, 139, 0, 0.14); color: var(--cf-warning); }
-.cf-chip--danger  { background: rgba(222, 53, 11, 0.10); color: var(--cf-danger); }
+/* Chip variants — deeper foregrounds so the small text passes AA
+   against the tinted, low-alpha backgrounds. The colour-coded border
+   reinforces the variant when the bg is faint. */
+.cf-chip--accent  { background: var(--cf-accent-subtle); color: var(--cf-status-progress-fg); border-color: rgba(242, 145, 109, 0.45); }
+.cf-chip--success { background: var(--cf-status-done-bg); color: var(--cf-status-done-fg); border-color: rgba(91, 164, 106, 0.40); }
+.cf-chip--warning { background: rgba(166, 106, 31, 0.14); color: #6B3E0F; border-color: rgba(166, 106, 31, 0.45); }
+.cf-chip--danger  { background: rgba(176, 67, 42, 0.12); color: #7A2A18; border-color: rgba(176, 67, 42, 0.45); }
 .cf-chip--mono    { font-family: var(--cf-font-mono); font-size: 11px; }
+/* Dark-theme chip foregrounds — keep semantic hue but lift contrast on forest */
+:root[data-theme="dark"] .cf-chip--accent  { color: #FFD4C0; border-color: rgba(255, 166, 136, 0.50); }
+:root[data-theme="dark"] .cf-chip--success { color: #C9EDD1; border-color: rgba(130, 199, 146, 0.45); }
+:root[data-theme="dark"] .cf-chip--warning { background: rgba(214, 182, 115, 0.16); color: #F0D89A; border-color: rgba(214, 182, 115, 0.45); }
+:root[data-theme="dark"] .cf-chip--danger  { background: rgba(234, 164, 140, 0.16); color: #F6C8B5; border-color: rgba(234, 164, 140, 0.50); }
 
 /* Status chips */
 .cf-status {
@@ -1152,7 +1347,7 @@ code, pre, kbd, samp {
 /* ─── Org shell ─── */
 .cf-org {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 264px 1fr;
   height: 100vh;
   overflow: hidden;
 }
@@ -1617,3 +1812,712 @@ code, pre, kbd, samp {
 .cf-member-row__name { font-weight: 500; color: var(--cf-fg); }
 .cf-member-row__role { color: var(--cf-fg-secondary); font-size: 12px; }
 .cf-member-row__kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cf-fg-tertiary); }
+
+/* ─── Utility classes ───
+   These exist so app code never needs inline styles for spacing, type, color,
+   or simple flex layout. If you find yourself writing style={{...}} for one of
+   these primitives, use a utility instead. New utilities go here, not inline. */
+
+/* Flex layout */
+.cf-row { display: flex; align-items: center; gap: 8px; }
+.cf-row--start { align-items: flex-start; }
+.cf-row--baseline { align-items: baseline; }
+.cf-row--between { justify-content: space-between; }
+.cf-row--end { justify-content: flex-end; }
+.cf-row--wrap { flex-wrap: wrap; }
+.cf-col { display: flex; flex-direction: column; gap: 8px; }
+.cf-col--end { align-items: flex-end; }
+.cf-gap-1 { gap: 4px; }
+.cf-gap-2 { gap: 8px; }
+.cf-gap-3 { gap: 12px; }
+.cf-gap-4 { gap: 16px; }
+.cf-gap-5 { gap: 20px; }
+.cf-gap-6 { gap: 24px; }
+.cf-grow { flex: 1 1 auto; min-width: 0; }
+
+/* Type scale */
+.cf-text-xs   { font-size: 12px; line-height: 1.45; }
+.cf-text-sm   { font-size: 13px; line-height: 1.5; }
+.cf-text-base { font-size: 14px; line-height: 1.55; }
+.cf-text-md   { font-size: 15.5px; line-height: 1.55; }
+.cf-text-lg   { font-size: 18px; line-height: 1.4; }
+.cf-text-xl   { font-size: 22px; line-height: 1.3; letter-spacing: -0.01em; }
+.cf-text-2xl  { font-size: 30px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 600; }
+.cf-text-3xl  { font-size: 38px; line-height: 1.1;  letter-spacing: -0.02em; font-weight: 600; }
+.cf-weight-medium   { font-weight: 500; }
+.cf-weight-semibold { font-weight: 600; }
+.cf-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cf-fg-tertiary);
+}
+.cf-mono { font-family: var(--cf-font-mono); font-feature-settings: "tnum"; }
+.cf-num  { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.cf-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* Foreground color modifiers */
+.cf-fg          { color: var(--cf-fg); }
+.cf-fg-secondary{ color: var(--cf-fg-secondary); }
+.cf-fg-tertiary { color: var(--cf-fg-tertiary); }
+.cf-fg-muted    { color: var(--cf-fg-muted); }
+.cf-fg-accent    { color: var(--cf-accent); }
+.cf-fg-accent-2  { color: var(--cf-accent-2); }
+.cf-fg-success   { color: var(--cf-success); }
+.cf-fg-warning  { color: var(--cf-warning); }
+.cf-fg-danger   { color: var(--cf-danger); }
+
+/* Chip size + variant additions */
+.cf-chip--sm { font-size: 10px; padding: 1px 6px; }
+.cf-chip--lg { font-size: 12px; padding: 4px 10px; }
+.cf-chip--output {
+  background: rgba(222, 53, 11, 0.10);
+  color: var(--cf-color-bucket-output);
+}
+.cf-chip--outline {
+  background: transparent;
+  border-color: var(--cf-border);
+  color: var(--cf-fg-secondary);
+}
+
+/* Section header — emoji/icon + title + optional status. Replaces the
+   handcrafted flex header repeated across OpenClaw* and wizard files. */
+.cf-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.cf-section-header__icon { font-size: 24px; line-height: 1; }
+.cf-section-header__title { font-size: 18px; font-weight: 600; color: var(--cf-fg); letter-spacing: -0.005em; }
+.cf-section-header__sub   { font-size: 14px; color: var(--cf-fg-tertiary); }
+
+/* Inline error / hint messages */
+.cf-msg {
+  font-size: 12px;
+  line-height: 1.5;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.cf-msg--error { color: var(--cf-danger); }
+.cf-msg--warn  { color: var(--cf-warning); }
+.cf-msg--hint  { color: var(--cf-fg-tertiary); }
+.cf-msg--success { color: var(--cf-success); }
+
+/* ---------- Phase 3 — Activity feed + Comments + Mention popup ---------- */
+
+.cf-activity { display: flex; flex-direction: column; }
+.cf-activity__entry { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--cf-border); }
+.cf-activity__entry:last-child { border-bottom: none; }
+.cf-activity__icon { width: 20px; flex-shrink: 0; color: var(--cf-fg-tertiary); font-size: 13px; display: flex; align-items: flex-start; padding-top: 2px; }
+.cf-activity__body { flex: 1; min-width: 0; }
+.cf-activity__meta { font-size: 12px; color: var(--cf-fg-secondary); }
+.cf-activity__text { font-size: 13px; color: var(--cf-fg); line-height: 1.5; }
+
+.cf-comments { display: flex; flex-direction: column; }
+.cf-comment { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--cf-border); }
+.cf-comment:last-child { border-bottom: none; }
+.cf-comment__body { flex: 1; min-width: 0; }
+.cf-comment__header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.cf-comment__author { font-size: 13px; font-weight: 500; color: var(--cf-fg); }
+.cf-comment__ts { font-size: 11px; color: var(--cf-fg-muted); }
+.cf-comment__text { font-size: 13px; color: var(--cf-fg); line-height: 1.5; white-space: pre-wrap; }
+.cf-comment__reactions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+
+.cf-reaction-btn {
+  background: var(--cf-bg-sunken);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-sm);
+  padding: 2px 7px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--cf-fg-secondary);
+}
+.cf-reaction-btn:hover { border-color: var(--cf-accent); color: var(--cf-accent); }
+.cf-reaction-btn--active {
+  background: color-mix(in srgb, var(--cf-accent) 10%, transparent);
+  border-color: var(--cf-accent);
+  color: var(--cf-accent);
+}
+
+.cf-composer { border-top: 1px solid var(--cf-border); padding-top: 12px; margin-top: 4px; }
+.cf-composer__input {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--cf-font);
+  color: var(--cf-fg);
+  background: var(--cf-bg-elevated);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-md);
+  outline: none;
+  box-sizing: border-box;
+}
+.cf-composer__input:focus { border-color: var(--cf-accent); }
+.cf-composer__actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; justify-content: flex-end; }
+.cf-composer__mention-hint { font-size: 11px; color: var(--cf-fg-muted); flex: 1; }
+
+.cf-mention-popup {
+  position: absolute;
+  z-index: 100;
+  background: var(--cf-bg-elevated);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-md);
+  box-shadow: var(--cf-shadow-md);
+  min-width: 180px;
+  overflow: hidden;
+}
+.cf-mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--cf-fg);
+}
+.cf-mention-item:hover, .cf-mention-item--active { background: var(--cf-bg-hover); }
+
+.cf-watchers { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cf-watchers__label { font-size: 12px; color: var(--cf-fg-tertiary); }
+
+/* ---------- Phase 3 — Board task card budget + WIP ---------- */
+
+.cf-task-card--selected {
+  outline: 2px solid var(--cf-accent);
+  outline-offset: -2px;
+}
+.cf-task-card--budget-warn {
+  border-color: var(--cf-warning);
+}
+.cf-task-card--budget-breach {
+  border-color: var(--cf-danger);
+  background: color-mix(in srgb, var(--cf-danger) 6%, var(--cf-bg-elevated));
+}
+
+.cf-task-card__check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.cf-task-card__budget {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.cf-task-card__budget-bar {
+  height: 4px;
+  background: var(--cf-bg-sunken);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.cf-task-card__budget-fill {
+  height: 100%;
+  background: var(--cf-accent);
+  transition: width 120ms ease-out;
+}
+.cf-task-card__budget-fill--warn   { background: var(--cf-warning); }
+.cf-task-card__budget-fill--breach { background: var(--cf-danger); }
+
+.cf-kanban-column__header--at-limit   { color: var(--cf-warning); }
+.cf-kanban-column__header--over-limit { color: var(--cf-danger); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Warm mode — onboarding, empty states, welcome surfaces
+   ─────────────────────────────────────────────────────────────────────────
+   The default Crawfish skin is dense (13px, tight letter-spacing, single
+   accent, neutral grays) — appropriate for board / plan / sessions data.
+   Wrap a surface in .cf-warm to soften: larger type, more line-height,
+   warmer accent, softer borders, friendly card chrome. Use on wizards,
+   <EmptyState> instances, and first-launch surfaces.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* `.cf-warm` softens type + chrome but inherits the global palette so the
+   coral/leaf system stays consistent. (Previously this block hard-coded a
+   cool grey-blue accent that fought the cream surface — removed.) */
+.cf-warm {
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: -0.001em;
+  color: var(--cf-fg);
+}
+
+/* Type rhythm */
+.cf-warm h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  margin: 0 0 12px;
+}
+.cf-warm h2 {
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.006em;
+  margin: 0 0 8px;
+}
+.cf-warm h3 {
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 500;
+  margin: 0 0 6px;
+}
+.cf-warm p {
+  margin: 0 0 12px;
+  color: var(--cf-fg-secondary);
+}
+.cf-warm p:last-child { margin-bottom: 0; }
+
+/* Softer cards in warm mode */
+.cf-warm .cf-card {
+  border-radius: var(--cf-radius-xl);
+  padding: 24px;
+  border-color: var(--cf-border);
+  box-shadow: var(--cf-shadow-sm);
+}
+
+/* Inputs feel friendlier */
+.cf-warm .cf-input,
+.cf-warm input[type="text"],
+.cf-warm input[type="email"],
+.cf-warm textarea {
+  width: 100%;
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 10px 14px;
+  background: var(--cf-bg-elevated);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-md);
+  color: var(--cf-fg);
+  font-family: var(--cf-font);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  box-sizing: border-box;
+}
+.cf-warm .cf-input:focus,
+.cf-warm input[type="text"]:focus,
+.cf-warm input[type="email"]:focus,
+.cf-warm textarea:focus {
+  border-color: var(--cf-accent);
+  box-shadow: 0 0 0 3px var(--cf-accent-subtle);
+}
+
+.cf-warm .cf-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cf-fg);
+  margin-bottom: 6px;
+}
+.cf-warm .cf-help {
+  font-size: 12px;
+  color: var(--cf-fg-tertiary);
+  margin-top: 6px;
+}
+
+/* Primary action in warm mode is generous, with breathing room */
+.cf-warm .cf-btn--primary,
+.cf-warm .cf-pill--primary {
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--cf-radius-md);
+}
+.cf-warm .cf-btn,
+.cf-warm .cf-pill {
+  padding: 10px 16px;
+  font-size: 14px;
+  border-radius: var(--cf-radius-md);
+}
+
+/* Wizard surface */
+.cf-warm__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.cf-warm__hero-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cf-fg-tertiary);
+  font-weight: 500;
+}
+.cf-warm__hero-spot {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 4px;
+  opacity: 0.95;
+}
+
+/* Empty states in warm mode get extra padding + a softer feel */
+.cf-warm .cf-empty {
+  padding: 48px 32px;
+  text-align: center;
+  background: var(--cf-bg-elevated);
+  border-radius: var(--cf-radius-xl);
+  border: 1px solid var(--cf-border);
+}
+.cf-warm .cf-empty__title {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--cf-fg);
+  margin-bottom: 6px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Coachmark — small in-app pointer used after onboarding to highlight
+   the user's next likely action. Anchored via inline `top`/`left` style.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.cf-coachmark {
+  position: fixed;
+  z-index: 90;
+  background: var(--cf-bg-elevated);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-lg);
+  box-shadow: var(--cf-shadow-lg);
+  padding: 14px 16px 12px;
+  max-width: 280px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--cf-fg);
+}
+.cf-coachmark__title {
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 4px;
+  color: var(--cf-fg);
+}
+.cf-coachmark__body {
+  font-size: 13px;
+  color: var(--cf-fg-secondary);
+  margin-bottom: 10px;
+}
+.cf-coachmark__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.cf-coachmark__dismiss {
+  background: transparent;
+  border: none;
+  color: var(--cf-fg-tertiary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--cf-radius-sm);
+}
+.cf-coachmark__dismiss:hover { color: var(--cf-fg); background: var(--cf-bg-hover); }
+.cf-coachmark__cta {
+  background: var(--cf-accent);
+  color: white;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--cf-radius-sm);
+}
+.cf-coachmark__arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--cf-bg-elevated);
+  border-left: 1px solid var(--cf-border);
+  border-top: 1px solid var(--cf-border);
+  transform: rotate(-45deg);
+  left: -7px;
+  top: 18px;
+}
+
+/* Sidebar — additional helpers for the 4-tab "minimal" shape */
+.cf-sidebar__spacer { flex: 1; }
+
+/* Suggestion card — used on the Home dashboard for next-likely-action
+   surfacing. Click is the only interaction; dismiss is on the sub-row. */
+.cf-suggestion {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: var(--cf-bg-elevated);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-lg);
+  padding: 16px 18px;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+.cf-suggestion:hover {
+  border-color: var(--cf-accent);
+  box-shadow: var(--cf-shadow-sm);
+}
+.cf-suggestion__icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: var(--cf-radius-md);
+  background: var(--cf-accent-subtle);
+  color: var(--cf-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cf-suggestion__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cf-suggestion__title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cf-fg);
+  margin-bottom: 4px;
+}
+.cf-suggestion__text {
+  display: block;
+  font-size: 13px;
+  color: var(--cf-fg-secondary);
+  line-height: 1.5;
+}
+.cf-suggestion__cta {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cf-accent);
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cf-suggestion__dismiss {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--cf-fg-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--cf-radius-sm);
+  font-size: 16px;
+  line-height: 1;
+}
+.cf-suggestion__dismiss:hover { color: var(--cf-fg); background: var(--cf-bg-hover); }
+
+/* Settings sub-tabs — used inside the single /settings route */
+.cf-settings {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 24px;
+  height: 100%;
+  min-height: 0;
+}
+.cf-settings__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cf-settings__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--cf-radius-md);
+  font-size: 14px;
+  color: var(--cf-fg-secondary);
+  cursor: pointer;
+  font-weight: 400;
+}
+.cf-settings__nav-item:hover { background: var(--cf-bg-hover); color: var(--cf-fg); }
+.cf-settings__nav-item--active {
+  background: var(--cf-accent-subtle);
+  color: var(--cf-status-progress-fg);
+  font-weight: 600;
+}
+:root[data-theme="dark"] .cf-settings__nav-item--active {
+  color: var(--cf-status-progress-fg);
+}
+.cf-settings__panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Home dashboard — the "what to do next" grid */
+.cf-home {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 8px 4px;
+}
+.cf-home__greeting {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--cf-fg);
+  letter-spacing: -0.01em;
+}
+.cf-home__section-title {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--cf-fg-tertiary);
+  margin-bottom: 12px;
+}
+.cf-home__suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cf-home__pinned {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.cf-home__pinned-card {
+  background: var(--cf-bg-elevated);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-lg);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+.cf-home__pinned-card:hover { border-color: var(--cf-accent); }
+.cf-home__pinned-title { font-size: 14px; font-weight: 500; color: var(--cf-fg); }
+.cf-home__pinned-sub { font-size: 12px; color: var(--cf-fg-tertiary); margin-top: 2px; }
+
+/* ─── Glass + artistic primitives ───
+   Frosted translucent surfaces. Used on hero panels, drawers, modal sheets,
+   anywhere we want a layered "looking through paper" feel over the painterly
+   page background. The fallback (no backdrop-filter) keeps the surface
+   opaque-enough that text contrast still passes. */
+
+.cf-glass {
+  position: relative;
+  background: rgba(255, 251, 236, 0.62);
+  border: 1px solid rgba(217, 203, 151, 0.55);
+  border-radius: var(--cf-radius-xl);
+  box-shadow: var(--cf-shadow-md);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+.cf-glass--strong {
+  background: rgba(255, 251, 236, 0.78);
+  box-shadow: var(--cf-shadow-lg);
+}
+/* Glass over the dark forest needs more opacity to keep text readable. */
+:root[data-theme="dark"] .cf-glass {
+  background: rgba(36, 53, 48, 0.62);
+  border-color: rgba(94, 125, 110, 0.45);
+}
+:root[data-theme="dark"] .cf-glass--strong {
+  background: rgba(36, 53, 48, 0.82);
+}
+/* Subtle inner highlight to sell the curved-paper feel */
+.cf-glass::before {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 30%);
+  mix-blend-mode: soft-light;
+}
+:root[data-theme="dark"] .cf-glass::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0) 35%);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .cf-glass { background: var(--cf-bg-elevated); }
+  :root[data-theme="dark"] .cf-glass { background: var(--cf-bg-elevated); }
+}
+
+/* Artistic blob — drop into any container as a positioned decoration.
+   Inert (pointer-events:none), no layout impact. Use .cf-blob--leaf|sky|berry
+   for color, and the inline `--x/--y/--r` for placement and size. */
+.cf-blob {
+  position: absolute;
+  width: var(--r, 320px);
+  height: var(--r, 320px);
+  left: var(--x, 0);
+  top:  var(--y, 0);
+  border-radius: 50%;
+  filter: blur(50px);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
+}
+.cf-blob--leaf  { background: radial-gradient(circle, rgba(91,164,106,0.55), transparent 65%); }
+.cf-blob--sky   { background: radial-gradient(circle, rgba(124,184,224,0.50), transparent 65%); }
+.cf-blob--berry { background: radial-gradient(circle, rgba(224,138,110,0.45), transparent 65%); }
+.cf-blob--wood  { background: radial-gradient(circle, rgba(198,163,107,0.45), transparent 65%); }
+:root[data-theme="dark"] .cf-blob--leaf  { background: radial-gradient(circle, rgba(130,199,146,0.45), transparent 65%); }
+:root[data-theme="dark"] .cf-blob--sky   { background: radial-gradient(circle, rgba(168,211,238,0.35), transparent 65%); }
+:root[data-theme="dark"] .cf-blob--berry { background: radial-gradient(circle, rgba(234,164,140,0.40), transparent 65%); }
+:root[data-theme="dark"] .cf-blob--wood  { background: radial-gradient(circle, rgba(181,143,90,0.40),  transparent 65%); }
+
+/* Gentle drift — only when the user has not requested reduced motion */
+@keyframes cf-blob-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(20px, -16px, 0) scale(1.05); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+.cf-blob--drift { animation: cf-blob-drift 18s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .cf-blob--drift { animation: none; }
+  body { background-attachment: scroll; }
+}
+
+/* Artistic accent halo — a soft glow ring around primary CTAs */
+.cf-halo {
+  position: relative;
+}
+.cf-halo::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  background: radial-gradient(circle at 50% 50%, var(--cf-accent-subtle), transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.cf-halo:hover::after { opacity: 1; }
+
+/* Tactile primary button — gains a subtle outer halo + bouncier hover.
+   Composes with existing .cf-btn--primary; no change to that base class. */
+.cf-btn--primary {
+  transition:
+    transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 120ms ease,
+    box-shadow 180ms ease;
+}
+.cf-btn--primary:hover { transform: translateY(-1px); }
+.cf-btn--primary:active { transform: translateY(0); }
+
+/* Wood-trim border — for hero/onboarding cards that want the AC frame look */
+.cf-wood-frame {
+  border: 2px solid var(--cf-border-strong);
+  border-radius: var(--cf-radius-xl);
+  box-shadow: var(--cf-shadow-lg);
+}
+
+/* Eyebrow — small uppercase label paired with display titles */
+.cf-eyebrow {
+  font-family: var(--cf-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--cf-fg-tertiary);
+}

@@ -2,18 +2,29 @@
 
 Canonical UI primitives for the crawfish platform. Imported by **both** `crawfish-lens` and `crawfish-dash` via the `@crawfish/ui` Vite alias. Edit once, ship everywhere.
 
+**The design system is documented in `../DESIGN.md`** — tokens, utility
+classes, component primitives, and authoring rules. Read it before adding
+anything here.
+
 ## Layout
 
 ```
 ui/
 ├── tokens/
-│   ├── globals.css       # the entire stylesheet (1097 lines, dark+light themes)
+│   ├── globals.css       # the entire stylesheet — variables, layout, every .cf-* class
 │   └── design-tokens.ts  # programmatic access to tokens
 ├── lib/
 │   └── format.ts         # fmtCompact, fmtBytes, fmtMtime, copyToClipboard, etc.
 └── components/
-    ├── TokenBar.tsx      # 4-bucket token visualization (input/cache_read/cache_write/output)
-    └── Finding.tsx       # diagnostics banner with severity icon + fix install command
+    ├── Card.tsx          # base card frame
+    ├── StatCard.tsx      # overview tile (kicker + value + sub)
+    ├── Badge.tsx         # .cf-chip wrapper
+    ├── EmptyState.tsx    # .cf-empty wrapper
+    ├── SectionHeader.tsx # icon + title + sub + status
+    ├── Message.tsx       # inline error/warn/hint/success
+    ├── Finding.tsx       # diagnostics banner
+    ├── TokenBar.tsx      # 4-bucket token visualization
+    └── CardCorner.tsx    # decorative diagonal glyph
 ```
 
 ## How it's wired

@@ -1,0 +1,31 @@
+{
+  "name": "crawfish-opt-logs",
+  "version": "0.1.0",
+  "description": "Log-tailing MCP server — turns 100k-line dumps into the 50 lines that matter. Replaces blind 'bash cat /var/log/...' chains.",
+  "type": "module",
+  "bin": {
+    "crawfish-opt-logs": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "bench": "tsc && node dist/bench/run.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": ["mcp", "claude", "tokens", "logs", "ai-agent"],
+  "license": "MIT",
+  "crawfish-contract": "1.0"
+}

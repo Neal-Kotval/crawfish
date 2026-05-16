@@ -90,8 +90,10 @@ if [ -n "$DEV" ]; then
 fi
 rm -f "$APP_DIR"/src-tauri/target/release/bundle/macos/rw.*.dmg 2>/dev/null || true
 
-echo "▸ building Crawfish.dmg…"
-( cd "$APP_DIR" && cargo tauri build --bundles dmg )
+echo "▸ building Crawfish.app + Crawfish.dmg…"
+# Build both targets so the standalone .app sticks around for direct
+# launch (handy for dev iteration); --bundles dmg alone cleans it up.
+( cd "$APP_DIR" && cargo tauri build --bundles app dmg )
 
 DMG_DIR="$APP_DIR/src-tauri/target/release/bundle/dmg"
 DMG=$(ls -t "$DMG_DIR"/Crawfish_*.dmg 2>/dev/null | head -1)

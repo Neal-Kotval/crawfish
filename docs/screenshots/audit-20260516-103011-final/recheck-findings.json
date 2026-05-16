@@ -1,0 +1,824 @@
+{
+  "findings": [
+    {
+      "step": "home",
+      "theme": "light",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(91, 164, 106, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(124, 184, 224, 0.1), rgba(0, 0, 0, 0) 65%), r",
+      "blobs": 3,
+      "glasses": 1,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Home",
+          "color": "rgb(62, 122, 75)",
+          "bg": "rgba(91, 164, 106, 0.16)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1.7,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-suggestion__title",
+          "text": "Open Demo Org",
+          "color": "rgb(31, 27, 18)",
+          "bg": "rgb(255, 251, 236)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 16.56,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-suggestion__title",
+          "text": "Plan a cycle",
+          "color": "rgb(31, 27, 18)",
+          "bg": "rgb(255, 251, 236)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 16.56,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-suggestion__text",
+          "text": "Jump straight to the board for y",
+          "color": "rgb(74, 66, 49)",
+          "bg": "rgb(255, 251, 236)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 9.58,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-suggestion__text",
+          "text": "Group tasks into a sprint or wee",
+          "color": "rgb(74, 66, 49)",
+          "bg": "rgb(255, 251, 236)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 9.58,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-glass",
+          "text": "For you📂Open Demo OrgJump strai",
+          "color": "rgb(31, 27, 18)",
+          "bg": "rgba(255, 251, 236, 0.62)",
+          "fontSize": "14.5px",
+          "fontWeight": "500",
+          "ratio": 16.56,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-blob",
+          "text": "",
+          "color": "rgb(31, 27, 18)",
+          "bg": "rgb(251, 246, 231)",
+          "fontSize": "14.5px",
+          "fontWeight": "500",
+          "ratio": 15.88,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-blob",
+          "text": "",
+          "color": "rgb(31, 27, 18)",
+          "bg": "rgb(251, 246, 231)",
+          "fontSize": "14.5px",
+          "fontWeight": "500",
+          "ratio": 15.88,
+          "failsAA": false,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "home",
+      "theme": "dark",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(130, 199, 146, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(168, 211, 238, 0.08), rgba(0, 0, 0, 0) 65%),",
+      "blobs": 3,
+      "glasses": 1,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Home",
+          "color": "rgb(130, 199, 146)",
+          "bg": "rgba(130, 199, 146, 0.18)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-suggestion__title",
+          "text": "Open Demo Org",
+          "color": "rgb(250, 242, 212)",
+          "bg": "rgb(36, 53, 48)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 11.5,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-suggestion__title",
+          "text": "Plan a cycle",
+          "color": "rgb(250, 242, 212)",
+          "bg": "rgb(36, 53, 48)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 11.5,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-suggestion__text",
+          "text": "Jump straight to the board for y",
+          "color": "rgb(226, 213, 168)",
+          "bg": "rgb(36, 53, 48)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 8.8,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-suggestion__text",
+          "text": "Group tasks into a sprint or wee",
+          "color": "rgb(226, 213, 168)",
+          "bg": "rgb(36, 53, 48)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 8.8,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-glass",
+          "text": "For you📂Open Demo OrgJump strai",
+          "color": "rgb(250, 242, 212)",
+          "bg": "rgba(36, 53, 48, 0.62)",
+          "fontSize": "14.5px",
+          "fontWeight": "500",
+          "ratio": 11.5,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-blob",
+          "text": "",
+          "color": "rgb(250, 242, 212)",
+          "bg": "rgb(26, 38, 32)",
+          "fontSize": "14.5px",
+          "fontWeight": "500",
+          "ratio": 13.95,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-blob",
+          "text": "",
+          "color": "rgb(250, 242, 212)",
+          "bg": "rgb(26, 38, 32)",
+          "fontSize": "14.5px",
+          "fontWeight": "500",
+          "ratio": 13.95,
+          "failsAA": false,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "settings-policies",
+      "theme": "light",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(91, 164, 106, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(124, 184, 224, 0.1), rgba(0, 0, 0, 0) 65%), r",
+      "blobs": 0,
+      "glasses": 0,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Settings",
+          "color": "rgb(62, 122, 75)",
+          "bg": "rgba(91, 164, 106, 0.16)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1.7,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-pill--primary",
+          "text": "On",
+          "color": "rgb(255, 251, 236)",
+          "bg": "rgb(62, 122, 75)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 4.95,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-pill--primary",
+          "text": "On",
+          "color": "rgb(255, 251, 236)",
+          "bg": "rgb(62, 122, 75)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 4.95,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--accent",
+          "text": "warn",
+          "color": "rgb(47, 100, 56)",
+          "bg": "rgba(91, 164, 106, 0.16)",
+          "fontSize": "10px",
+          "fontWeight": "500",
+          "ratio": 2.32,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--accent",
+          "text": "warn",
+          "color": "rgb(47, 100, 56)",
+          "bg": "rgba(91, 164, 106, 0.16)",
+          "fontSize": "10px",
+          "fontWeight": "500",
+          "ratio": 2.32,
+          "failsAA": true,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "settings-policies",
+      "theme": "dark",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(130, 199, 146, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(168, 211, 238, 0.08), rgba(0, 0, 0, 0) 65%),",
+      "blobs": 0,
+      "glasses": 0,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Settings",
+          "color": "rgb(130, 199, 146)",
+          "bg": "rgba(130, 199, 146, 0.18)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-pill--primary",
+          "text": "On",
+          "color": "rgb(26, 38, 32)",
+          "bg": "rgb(130, 199, 146)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 7.85,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-pill--primary",
+          "text": "On",
+          "color": "rgb(26, 38, 32)",
+          "bg": "rgb(130, 199, 146)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 7.85,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--accent",
+          "text": "warn",
+          "color": "rgb(201, 237, 209)",
+          "bg": "rgba(130, 199, 146, 0.2)",
+          "fontSize": "10px",
+          "fontWeight": "500",
+          "ratio": 1.57,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--accent",
+          "text": "warn",
+          "color": "rgb(201, 237, 209)",
+          "bg": "rgba(130, 199, 146, 0.2)",
+          "fontSize": "10px",
+          "fontWeight": "500",
+          "ratio": 1.57,
+          "failsAA": true,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "settings-appearance",
+      "theme": "light",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(91, 164, 106, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(124, 184, 224, 0.1), rgba(0, 0, 0, 0) 65%), r",
+      "blobs": 0,
+      "glasses": 0,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Settings",
+          "color": "rgb(62, 122, 75)",
+          "bg": "rgba(91, 164, 106, 0.16)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1.7,
+          "failsAA": true,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "settings-appearance",
+      "theme": "dark",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(130, 199, 146, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(168, 211, 238, 0.08), rgba(0, 0, 0, 0) 65%),",
+      "blobs": 0,
+      "glasses": 0,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Settings",
+          "color": "rgb(130, 199, 146)",
+          "bg": "rgba(130, 199, 146, 0.18)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1,
+          "failsAA": true,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "dashboard",
+      "theme": "light",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(91, 164, 106, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(124, 184, 224, 0.1), rgba(0, 0, 0, 0) 65%), r",
+      "blobs": 0,
+      "glasses": 0,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Home",
+          "color": "rgb(62, 122, 75)",
+          "bg": "rgba(91, 164, 106, 0.16)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1.7,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-pill--primary",
+          "text": "Start gateway",
+          "color": "rgb(255, 251, 236)",
+          "bg": "rgb(62, 122, 75)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 4.95,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-pill--primary",
+          "text": "Send",
+          "color": "rgb(255, 251, 236)",
+          "bg": "rgb(62, 122, 75)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 4.95,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--accent",
+          "text": "OpenClaw",
+          "color": "rgb(47, 100, 56)",
+          "bg": "rgba(91, 164, 106, 0.16)",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "ratio": 2.32,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--warning",
+          "text": "Not ready",
+          "color": "rgb(107, 62, 15)",
+          "bg": "rgba(166, 106, 31, 0.14)",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "ratio": 2.03,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--warning",
+          "text": "gateway down",
+          "color": "rgb(107, 62, 15)",
+          "bg": "rgba(166, 106, 31, 0.14)",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "ratio": 2.03,
+          "failsAA": true,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "dashboard",
+      "theme": "dark",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(130, 199, 146, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(168, 211, 238, 0.08), rgba(0, 0, 0, 0) 65%),",
+      "blobs": 0,
+      "glasses": 0,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Home",
+          "color": "rgb(130, 199, 146)",
+          "bg": "rgba(130, 199, 146, 0.18)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-pill--primary",
+          "text": "Start gateway",
+          "color": "rgb(26, 38, 32)",
+          "bg": "rgb(130, 199, 146)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 7.85,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-pill--primary",
+          "text": "Send",
+          "color": "rgb(26, 38, 32)",
+          "bg": "rgb(130, 199, 146)",
+          "fontSize": "13px",
+          "fontWeight": "500",
+          "ratio": 7.85,
+          "failsAA": false,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--accent",
+          "text": "OpenClaw",
+          "color": "rgb(201, 237, 209)",
+          "bg": "rgba(130, 199, 146, 0.2)",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "ratio": 1.57,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--warning",
+          "text": "Not ready",
+          "color": "rgb(240, 216, 154)",
+          "bg": "rgba(214, 182, 115, 0.16)",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "ratio": 1.39,
+          "failsAA": true,
+          "large": false
+        },
+        {
+          "sel": ".cf-chip--warning",
+          "text": "gateway down",
+          "color": "rgb(240, 216, 154)",
+          "bg": "rgba(214, 182, 115, 0.16)",
+          "fontSize": "11px",
+          "fontWeight": "500",
+          "ratio": 1.39,
+          "failsAA": true,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "benchmarks",
+      "theme": "light",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(91, 164, 106, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(124, 184, 224, 0.1), rgba(0, 0, 0, 0) 65%), r",
+      "blobs": 0,
+      "glasses": 0,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Home",
+          "color": "rgb(62, 122, 75)",
+          "bg": "rgba(91, 164, 106, 0.16)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1.7,
+          "failsAA": true,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "benchmarks",
+      "theme": "dark",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(130, 199, 146, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(168, 211, 238, 0.08), rgba(0, 0, 0, 0) 65%),",
+      "blobs": 0,
+      "glasses": 0,
+      "samples": [
+        {
+          "sel": ".cf-sidebar__item--active",
+          "text": "Home",
+          "color": "rgb(130, 199, 146)",
+          "bg": "rgba(130, 199, 146, 0.18)",
+          "fontSize": "14px",
+          "fontWeight": "600",
+          "ratio": 1,
+          "failsAA": true,
+          "large": false
+        }
+      ],
+      "errors": []
+    },
+    {
+      "step": "org-board",
+      "theme": "light",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(91, 164, 106, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(124, 184, 224, 0.1), rgba(0, 0, 0, 0) 65%), r",
+      "blobs": 0,
+      "glasses": 0,
+      "h1": "Board",
+      "samples": [],
+      "errors": []
+    },
+    {
+      "step": "org-board",
+      "theme": "dark",
+      "vp": "desktop",
+      "status": 200,
+      "hasMainRadial": true,
+      "mainBgImage": "radial-gradient(1100px 700px at 8% -10%, rgba(130, 199, 146, 0.1), rgba(0, 0, 0, 0) 60%), radial-gradient(900px 600px at 95% 110%, rgba(168, 211, 238, 0.08), rgba(0, 0, 0, 0) 65%),",
+      "blobs": 0,
+      "glasses": 0,
+      "h1": "Board",
+      "samples": [],
+      "errors": []
+    }
+  ],
+  "contrastIssues": [
+    {
+      "step": "home",
+      "theme": "light",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1.7,
+      "color": "rgb(62, 122, 75)",
+      "bg": "rgba(91, 164, 106, 0.16)",
+      "text": "Home",
+      "fontSize": "14px"
+    },
+    {
+      "step": "home",
+      "theme": "dark",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1,
+      "color": "rgb(130, 199, 146)",
+      "bg": "rgba(130, 199, 146, 0.18)",
+      "text": "Home",
+      "fontSize": "14px"
+    },
+    {
+      "step": "settings-policies",
+      "theme": "light",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1.7,
+      "color": "rgb(62, 122, 75)",
+      "bg": "rgba(91, 164, 106, 0.16)",
+      "text": "Settings",
+      "fontSize": "14px"
+    },
+    {
+      "step": "settings-policies",
+      "theme": "light",
+      "sel": ".cf-chip--accent",
+      "ratio": 2.32,
+      "color": "rgb(47, 100, 56)",
+      "bg": "rgba(91, 164, 106, 0.16)",
+      "text": "warn",
+      "fontSize": "10px"
+    },
+    {
+      "step": "settings-policies",
+      "theme": "light",
+      "sel": ".cf-chip--accent",
+      "ratio": 2.32,
+      "color": "rgb(47, 100, 56)",
+      "bg": "rgba(91, 164, 106, 0.16)",
+      "text": "warn",
+      "fontSize": "10px"
+    },
+    {
+      "step": "settings-policies",
+      "theme": "dark",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1,
+      "color": "rgb(130, 199, 146)",
+      "bg": "rgba(130, 199, 146, 0.18)",
+      "text": "Settings",
+      "fontSize": "14px"
+    },
+    {
+      "step": "settings-policies",
+      "theme": "dark",
+      "sel": ".cf-chip--accent",
+      "ratio": 1.57,
+      "color": "rgb(201, 237, 209)",
+      "bg": "rgba(130, 199, 146, 0.2)",
+      "text": "warn",
+      "fontSize": "10px"
+    },
+    {
+      "step": "settings-policies",
+      "theme": "dark",
+      "sel": ".cf-chip--accent",
+      "ratio": 1.57,
+      "color": "rgb(201, 237, 209)",
+      "bg": "rgba(130, 199, 146, 0.2)",
+      "text": "warn",
+      "fontSize": "10px"
+    },
+    {
+      "step": "settings-appearance",
+      "theme": "light",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1.7,
+      "color": "rgb(62, 122, 75)",
+      "bg": "rgba(91, 164, 106, 0.16)",
+      "text": "Settings",
+      "fontSize": "14px"
+    },
+    {
+      "step": "settings-appearance",
+      "theme": "dark",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1,
+      "color": "rgb(130, 199, 146)",
+      "bg": "rgba(130, 199, 146, 0.18)",
+      "text": "Settings",
+      "fontSize": "14px"
+    },
+    {
+      "step": "dashboard",
+      "theme": "light",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1.7,
+      "color": "rgb(62, 122, 75)",
+      "bg": "rgba(91, 164, 106, 0.16)",
+      "text": "Home",
+      "fontSize": "14px"
+    },
+    {
+      "step": "dashboard",
+      "theme": "light",
+      "sel": ".cf-chip--accent",
+      "ratio": 2.32,
+      "color": "rgb(47, 100, 56)",
+      "bg": "rgba(91, 164, 106, 0.16)",
+      "text": "OpenClaw",
+      "fontSize": "11px"
+    },
+    {
+      "step": "dashboard",
+      "theme": "light",
+      "sel": ".cf-chip--warning",
+      "ratio": 2.03,
+      "color": "rgb(107, 62, 15)",
+      "bg": "rgba(166, 106, 31, 0.14)",
+      "text": "Not ready",
+      "fontSize": "11px"
+    },
+    {
+      "step": "dashboard",
+      "theme": "light",
+      "sel": ".cf-chip--warning",
+      "ratio": 2.03,
+      "color": "rgb(107, 62, 15)",
+      "bg": "rgba(166, 106, 31, 0.14)",
+      "text": "gateway down",
+      "fontSize": "11px"
+    },
+    {
+      "step": "dashboard",
+      "theme": "dark",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1,
+      "color": "rgb(130, 199, 146)",
+      "bg": "rgba(130, 199, 146, 0.18)",
+      "text": "Home",
+      "fontSize": "14px"
+    },
+    {
+      "step": "dashboard",
+      "theme": "dark",
+      "sel": ".cf-chip--accent",
+      "ratio": 1.57,
+      "color": "rgb(201, 237, 209)",
+      "bg": "rgba(130, 199, 146, 0.2)",
+      "text": "OpenClaw",
+      "fontSize": "11px"
+    },
+    {
+      "step": "dashboard",
+      "theme": "dark",
+      "sel": ".cf-chip--warning",
+      "ratio": 1.39,
+      "color": "rgb(240, 216, 154)",
+      "bg": "rgba(214, 182, 115, 0.16)",
+      "text": "Not ready",
+      "fontSize": "11px"
+    },
+    {
+      "step": "dashboard",
+      "theme": "dark",
+      "sel": ".cf-chip--warning",
+      "ratio": 1.39,
+      "color": "rgb(240, 216, 154)",
+      "bg": "rgba(214, 182, 115, 0.16)",
+      "text": "gateway down",
+      "fontSize": "11px"
+    },
+    {
+      "step": "benchmarks",
+      "theme": "light",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1.7,
+      "color": "rgb(62, 122, 75)",
+      "bg": "rgba(91, 164, 106, 0.16)",
+      "text": "Home",
+      "fontSize": "14px"
+    },
+    {
+      "step": "benchmarks",
+      "theme": "dark",
+      "sel": ".cf-sidebar__item--active",
+      "ratio": 1,
+      "color": "rgb(130, 199, 146)",
+      "bg": "rgba(130, 199, 146, 0.18)",
+      "text": "Home",
+      "fontSize": "14px"
+    }
+  ]
+}
