@@ -81,21 +81,93 @@
   --cf-avatar-6: #5E6C84;   /* slate */
 
   /* Radii — Jira-tight. Crisp rectangular surfaces; chips and inputs round
-     just enough to read as interactive, not as marketing balloons. */
-  --cf-radius-sm: 3px;
-  --cf-radius-md: 4px;
-  --cf-radius-lg: 6px;
-  --cf-radius-xl: 8px;
+     just enough to read as interactive, not as marketing balloons. The
+     `--cf-radius-pill` is reserved for iOS-style fully-rounded controls. */
+  --cf-radius-sm:   3px;
+  --cf-radius-md:   4px;
+  --cf-radius-lg:   6px;
+  --cf-radius-xl:   8px;
+  --cf-radius-2xl:  12px;
+  --cf-radius-pill: 999px;
 
-  /* Type — Inter for both body and display. Geometric humanist, neutral,
-     reads well at 13–28px without bouncing. Display uses the same family
-     at heavier weights + tighter tracking. */
-  --cf-font:      "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-                  "Helvetica Neue", system-ui, sans-serif;
-  --cf-font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+  /* Spacing — 4px grid, exposed for inline use when a class doesn't fit. */
+  --cf-space-1:  4px;
+  --cf-space-2:  8px;
+  --cf-space-3: 12px;
+  --cf-space-4: 16px;
+  --cf-space-5: 20px;
+  --cf-space-6: 24px;
+  --cf-space-8: 32px;
+  --cf-space-10: 40px;
+  --cf-space-12: 48px;
+
+  /* Type scale — Inter, 4-step modular. */
+  --cf-text-xs:   11px;
+  --cf-text-sm:   12px;
+  --cf-text-base: 14px;
+  --cf-text-md:   16px;
+  --cf-text-lg:   18px;
+  --cf-text-xl:   22px;
+  --cf-text-2xl:  28px;
+  --cf-text-3xl:  34px;
+
+  /* Motion */
+  --cf-ease:        cubic-bezier(0.2, 0, 0, 1);    /* iOS standard */
+  --cf-ease-out:    cubic-bezier(0.16, 1, 0.3, 1); /* gentle settle */
+  --cf-duration-1:   90ms;
+  --cf-duration-2:  140ms;
+  --cf-duration-3:  220ms;
+
+  /* Extended palette — secondary hues for charts, status pills, avatars.
+     Always paired with blue as the dominant brand color; never the
+     primary surface. */
+  --cf-blue:    #0052CC;
+  --cf-sky:     #4C9AFF;
+  --cf-cyan:    #00B8D9;
+  --cf-mint:    #36B37E;
+  --cf-violet:  #6554C0;
+  --cf-indigo:  #5243AA;
+  --cf-pink:    #FF5C8A;
+  --cf-amber:   #FFAB00;
+  --cf-slate:   #5E6C84;
+
+  /* Chart palette — 8 hues in a deliberate order. Cycle in this order
+     when graphing N series. */
+  --cf-chart-1: #0052CC;
+  --cf-chart-2: #00B8D9;
+  --cf-chart-3: #6554C0;
+  --cf-chart-4: #36B37E;
+  --cf-chart-5: #FFAB00;
+  --cf-chart-6: #FF5C8A;
+  --cf-chart-7: #4C9AFF;
+  --cf-chart-8: #7A869A;
+
+  /* Glass — iOS-style frosted surfaces. Use sparingly: sticky headers,
+     command bars, floating toolbars, modal chrome. */
+  --cf-glass-bg:       rgba(255, 255, 255, 0.72);
+  --cf-glass-bg-soft:  rgba(255, 255, 255, 0.55);
+  --cf-glass-border:   rgba(9, 30, 66, 0.08);
+  --cf-glass-shadow:   0 1px 0 rgba(255, 255, 255, 0.8) inset,
+                        0 1px 1px rgba(9, 30, 66, 0.06),
+                        0 12px 24px -8px rgba(9, 30, 66, 0.14);
+  --cf-glass-blur:     saturate(140%) blur(20px);
+
+  /* Focus ring — same in light and dark; uses accent + bg as the inner halo */
+  --cf-focus-ring: 0 0 0 2px var(--cf-bg-elevated), 0 0 0 4px var(--cf-accent);
+
+  /* Type — Geist for body + display. A geometric grotesk with subtly
+     humanist details; reads as professional but distinctive (not the
+     default system look). Geist Mono for tabular numerics and code.
+     Instrument Serif used very sparingly for editorial-style display
+     accents (page-header italic phrases, empty-state titles). */
+  --cf-font:         "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                     "Helvetica Neue", system-ui, sans-serif;
+  --cf-font-display: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
                      system-ui, sans-serif;
-  --cf-font-mono: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono",
-                  Menlo, Consolas, monospace;
+  --cf-font-mono:    "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono",
+                     "JetBrains Mono", Menlo, Consolas, monospace;
+  --cf-font-serif:   "Instrument Serif", "Iowan Old Style", Georgia,
+                     "Times New Roman", serif;
 }
 
 :root[data-theme="dark"] {
@@ -150,6 +222,37 @@
     --cf-color-bucket-output:      #B3D4FF;
     --cf-color-bucket-cache-read:  #2684FF;
     --cf-color-bucket-cache-write: #7A869A;
+
+    /* Extended palette — dark-mode tuned (brighter, slightly desaturated) */
+    --cf-blue:   #4C9AFF;
+    --cf-sky:    #B3D4FF;
+    --cf-cyan:   #5BD3E8;
+    --cf-mint:   #57D9A3;
+    --cf-violet: #998DD9;
+    --cf-indigo: #8777D9;
+    --cf-pink:   #FF8FA3;
+    --cf-amber:  #FFC400;
+    --cf-slate:  #97A0AF;
+
+    --cf-chart-1: #4C9AFF;
+    --cf-chart-2: #5BD3E8;
+    --cf-chart-3: #998DD9;
+    --cf-chart-4: #57D9A3;
+    --cf-chart-5: #FFC400;
+    --cf-chart-6: #FF8FA3;
+    --cf-chart-7: #B3D4FF;
+    --cf-chart-8: #97A0AF;
+
+    /* Glass — dark frosted */
+    --cf-glass-bg:       rgba(27, 38, 56, 0.66);
+    --cf-glass-bg-soft:  rgba(27, 38, 56, 0.48);
+    --cf-glass-border:   rgba(255, 255, 255, 0.08);
+    --cf-glass-shadow:   0 1px 0 rgba(255, 255, 255, 0.04) inset,
+                          0 1px 1px rgba(0, 0, 0, 0.5),
+                          0 14px 26px -8px rgba(0, 0, 0, 0.6);
+    --cf-glass-blur:     saturate(160%) blur(20px);
+
+    --cf-focus-ring: 0 0 0 2px var(--cf-bg-elevated), 0 0 0 4px var(--cf-accent);
 }
 
 * { box-sizing: border-box; }
@@ -168,13 +271,22 @@ body {
   font-weight: 400;
   color: var(--cf-fg);
   background-color: var(--cf-bg);
-  background-image: none;
+  /* Faint cool wash — almost imperceptible, gives depth without "blob" */
+  background-image:
+    radial-gradient(1200px 600px at 80% -10%, color-mix(in srgb, var(--cf-accent) 4%, transparent), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, color-mix(in srgb, var(--cf-violet) 4%, transparent), transparent 60%);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "tnum", "kern";
+  font-feature-settings: "ss01", "cv11", "tnum", "kern";
   overscroll-behavior: none;
-  letter-spacing: -0.003em;
+  letter-spacing: -0.005em;
 }
+
+/* Serif display accent — pair with sans copy; use rarely (page headers,
+   empty-state heroes). The italic variant adds editorial warmth. */
+.cf-serif        { font-family: var(--cf-font-serif); font-weight: 400; letter-spacing: -0.012em; }
+.cf-serif--italic { font-family: var(--cf-font-serif); font-style: italic; font-weight: 400; letter-spacing: -0.012em; }
 
 :root[data-theme="dark"] body {
   background-image: none;
@@ -1524,6 +1636,126 @@ code, pre, kbd, samp {
 .cf-members__tools { display: flex; flex-wrap: wrap; gap: 4px; }
 
 /* ─── Board: Jira kanban ─── */
+
+/* Filter row — dense single line above the columns. Search input expands,
+   selects sit tight, a clear button appears when filters are active. */
+.cf-board-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 12px;
+  font-family: var(--cf-font);
+}
+.cf-board-filters__search {
+  position: relative;
+  flex: 0 1 280px;
+  display: flex;
+  align-items: center;
+}
+.cf-board-filters__search-icon {
+  position: absolute;
+  left: 8px;
+  color: var(--cf-fg-tertiary);
+  pointer-events: none;
+}
+.cf-board-filters__search-input {
+  width: 100%;
+  height: 28px;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px 4px 28px;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-md);
+  background: var(--cf-bg-elevated);
+  color: var(--cf-fg);
+  outline: none;
+  transition: border-color 100ms ease, box-shadow 100ms ease;
+}
+.cf-board-filters__search-input::placeholder { color: var(--cf-fg-muted); }
+.cf-board-filters__search-input:focus {
+  border-color: var(--cf-accent);
+  box-shadow: 0 0 0 2px var(--cf-accent-subtle);
+}
+.cf-board-filters__select {
+  appearance: none;
+  height: 28px;
+  padding: 0 24px 0 10px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--cf-bg-elevated)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%235E6C84' stroke-width='1.6'><path d='M3 5l3 3 3-3'/></svg>")
+    no-repeat right 8px center;
+  background-size: 12px;
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-md);
+  color: var(--cf-fg);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 100ms ease, box-shadow 100ms ease;
+}
+.cf-board-filters__select:hover { border-color: var(--cf-border-strong); }
+.cf-board-filters__select:focus {
+  border-color: var(--cf-accent);
+  box-shadow: 0 0 0 2px var(--cf-accent-subtle);
+}
+.cf-board-filters__count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--cf-fg-tertiary);
+  font-weight: 500;
+}
+
+/* Bulk command bar — floats at bottom-center as glass when a selection
+   exists. Linear-style: actions stay reachable without pushing the board. */
+.cf-bulk-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--cf-radius-pill);
+  font-family: var(--cf-font);
+  animation: cf-bulk-bar-rise 220ms var(--cf-ease-out);
+  max-width: calc(100vw - 48px);
+  flex-wrap: wrap;
+}
+@keyframes cf-bulk-bar-rise {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-bulk-bar { animation: none; }
+}
+.cf-bulk-bar__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--cf-accent);
+  color: var(--cf-accent-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+.cf-bulk-bar__sep {
+  width: 1px;
+  height: 20px;
+  background: var(--cf-border);
+  flex-shrink: 0;
+}
+.cf-bulk-bar__label-input {
+  height: 28px;
+  width: 140px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
 .cf-board {
   display: grid;
   grid-template-columns: repeat(4, minmax(260px, 1fr));
@@ -1559,6 +1791,9 @@ code, pre, kbd, samp {
   font-size: 11px;
   font-weight: 600;
   border: 1px solid var(--cf-border);
+  font-variant-numeric: tabular-nums;
+  min-width: 22px;
+  text-align: center;
 }
 .cf-kanban-column__add {
   display: flex;
@@ -1592,15 +1827,22 @@ code, pre, kbd, samp {
   overflow: hidden;
 }
 .cf-task-card:hover { box-shadow: var(--cf-shadow-md); border-color: var(--cf-border-strong); }
-.cf-task-card__accent {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
+.cf-task-card__accent { display: none; }
+
+/* Status dot — Linear-style 6px disc paired with the issue key in the
+   card footer. Replaces the old top-stripe accent (redundant inside a
+   labelled column, and a near-miss to the side-stripe ban). */
+.cf-status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }
-.cf-task-card__accent--todo     { background: var(--cf-status-todo-fg); opacity: 0.4; }
-.cf-task-card__accent--progress { background: var(--cf-status-progress-fg); }
-.cf-task-card__accent--review   { background: var(--cf-status-review-fg); }
-.cf-task-card__accent--done     { background: var(--cf-status-done-fg); }
+.cf-status-dot--todo     { background: var(--cf-fg-muted); }
+.cf-status-dot--progress { background: var(--cf-accent); box-shadow: 0 0 0 2px var(--cf-accent-subtle); }
+.cf-status-dot--review   { background: var(--cf-violet); }
+.cf-status-dot--done     { background: var(--cf-status-done-fg); }
 
 .cf-task-card__title {
   font-size: 13px;
@@ -2514,4 +2756,437 @@ code, pre, kbd, samp {
   text-transform: uppercase;
   letter-spacing: 0.18em;
   color: var(--cf-fg-tertiary);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Glass — iOS-style frosted surfaces
+   ─────────────────────────────────────────────────────────────────────────
+   Use sparingly. The default surfaces are crisp opaque cards. Glass is
+   for *floating* chrome that sits over content: command palettes, sticky
+   route headers, side-drawers, modal headers, tooltips, vibrancy strips.
+   Always provides a fallback for browsers without backdrop-filter.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.cf-glass {
+  background: var(--cf-glass-bg);
+  border: 1px solid var(--cf-glass-border);
+  border-radius: var(--cf-radius-xl);
+  box-shadow: var(--cf-glass-shadow);
+  backdrop-filter: var(--cf-glass-blur);
+  -webkit-backdrop-filter: var(--cf-glass-blur);
+}
+@supports not ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0))) {
+  .cf-glass { background: var(--cf-bg-elevated); }
+}
+.cf-glass--soft { background: var(--cf-glass-bg-soft); }
+.cf-glass--strong {
+  background: var(--cf-glass-bg);
+  box-shadow: var(--cf-glass-shadow), 0 24px 48px -12px rgba(9, 30, 66, 0.18);
+}
+:root[data-theme="dark"] .cf-glass--strong {
+  box-shadow: var(--cf-glass-shadow), 0 24px 48px -12px rgba(0, 0, 0, 0.7);
+}
+
+/* Glass toolbar — sticky header strip that floats over scrolling content */
+.cf-glass-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--cf-space-3);
+  padding: 10px 16px;
+  background: var(--cf-glass-bg);
+  border-bottom: 1px solid var(--cf-glass-border);
+  backdrop-filter: var(--cf-glass-blur);
+  -webkit-backdrop-filter: var(--cf-glass-blur);
+}
+@supports not ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0))) {
+  .cf-glass-bar { background: var(--cf-bg-elevated); }
+}
+
+/* Hairline separator — iOS-style 0.5px line where supported. */
+.cf-hairline {
+  border-top: 1px solid var(--cf-border);
+  transform: scaleY(0.5);
+  transform-origin: top;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Button system — extended
+   ─────────────────────────────────────────────────────────────────────────
+   Sizes: --xs / --sm / (default) / --lg. Variants: primary / secondary /
+   ghost / danger / glass. Use .cf-btn alone for the default. Combine with
+   .cf-btn--icon for icon-only square buttons.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.cf-btn--xs { height: 24px; padding: 0 8px; font-size: 12px; gap: 4px; }
+.cf-btn--sm { height: 28px; padding: 0 10px; font-size: 13px; }
+.cf-btn--lg { height: 40px; padding: 0 18px; font-size: 15px; gap: 8px; }
+.cf-btn--icon { width: 32px; padding: 0; aspect-ratio: 1; }
+.cf-btn--icon.cf-btn--sm { width: 28px; }
+.cf-btn--icon.cf-btn--xs { width: 24px; }
+.cf-btn--icon.cf-btn--lg { width: 40px; }
+.cf-btn--pill { border-radius: var(--cf-radius-pill); padding-left: 16px; padding-right: 16px; }
+
+.cf-btn--danger {
+  background: var(--cf-bg-elevated);
+  border-color: rgba(191, 38, 0, 0.30);
+  color: var(--cf-danger);
+}
+.cf-btn--danger:hover {
+  background: rgba(191, 38, 0, 0.08);
+  border-color: rgba(191, 38, 0, 0.45);
+}
+
+.cf-btn--glass {
+  background: var(--cf-glass-bg);
+  border-color: var(--cf-glass-border);
+  backdrop-filter: var(--cf-glass-blur);
+  -webkit-backdrop-filter: var(--cf-glass-blur);
+}
+@supports not ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0))) {
+  .cf-btn--glass { background: var(--cf-bg-elevated); }
+}
+
+.cf-btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--cf-fg);
+}
+.cf-btn--quiet:hover { background: var(--cf-bg-hover); }
+
+/* Segmented control — iOS-style grouped pills */
+.cf-segmented {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--cf-bg-sunken);
+  border-radius: var(--cf-radius-lg);
+  border: 1px solid var(--cf-border);
+  gap: 2px;
+}
+.cf-segmented__item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--cf-fg-secondary);
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: calc(var(--cf-radius-lg) - 3px);
+  cursor: pointer;
+  transition: background var(--cf-duration-2) var(--cf-ease),
+              color var(--cf-duration-2) var(--cf-ease);
+}
+.cf-segmented__item:hover { color: var(--cf-fg); }
+.cf-segmented__item--active,
+.cf-segmented__item[aria-pressed="true"] {
+  background: var(--cf-bg-elevated);
+  color: var(--cf-fg);
+  box-shadow: 0 1px 1px rgba(9, 30, 66, 0.08);
+}
+
+/* iOS-style switch */
+.cf-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.cf-switch input { opacity: 0; width: 0; height: 0; }
+.cf-switch__track {
+  position: absolute;
+  inset: 0;
+  background: var(--cf-bg-sunken);
+  border: 1px solid var(--cf-border);
+  border-radius: 999px;
+  transition: background var(--cf-duration-2) var(--cf-ease);
+  cursor: pointer;
+}
+.cf-switch__track::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 18px;
+  height: 18px;
+  background: var(--cf-bg-elevated);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(9, 30, 66, 0.18);
+  transition: transform var(--cf-duration-2) var(--cf-ease);
+}
+.cf-switch input:checked + .cf-switch__track { background: var(--cf-accent); border-color: var(--cf-accent); }
+.cf-switch input:checked + .cf-switch__track::after { transform: translateX(14px); }
+.cf-switch input:focus-visible + .cf-switch__track { box-shadow: var(--cf-focus-ring); }
+
+/* Avatar — uses tone palette */
+.cf-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--cf-avatar-1);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px var(--cf-bg-elevated);
+}
+.cf-avatar--sm { width: 22px; height: 22px; font-size: 10px; }
+.cf-avatar--lg { width: 36px; height: 36px; font-size: 13px; }
+.cf-avatar--xl { width: 48px; height: 48px; font-size: 16px; }
+.cf-avatar--1 { background: var(--cf-avatar-1); }
+.cf-avatar--2 { background: var(--cf-avatar-2); }
+.cf-avatar--3 { background: var(--cf-avatar-3); }
+.cf-avatar--4 { background: var(--cf-avatar-4); }
+.cf-avatar--5 { background: var(--cf-avatar-5); }
+.cf-avatar--6 { background: var(--cf-avatar-6); }
+.cf-avatar-stack { display: inline-flex; }
+.cf-avatar-stack > .cf-avatar + .cf-avatar { margin-left: -8px; }
+
+/* KPI tile — large numeric metric paired with kicker + trend */
+.cf-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  background: var(--cf-bg-elevated);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-lg);
+  position: relative;
+  overflow: hidden;
+}
+.cf-kpi__kicker {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cf-fg-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cf-kpi__value {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--cf-fg);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.cf-kpi__sub {
+  font-size: 12px;
+  color: var(--cf-fg-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cf-kpi__trend { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.cf-kpi__trend--up   { color: var(--cf-success); }
+.cf-kpi__trend--down { color: var(--cf-danger); }
+.cf-kpi__trend--flat { color: var(--cf-fg-tertiary); }
+
+/* Tone-tinted accent strip for KPI surfaces */
+.cf-kpi--blue::before,
+.cf-kpi--violet::before,
+.cf-kpi--mint::before,
+.cf-kpi--cyan::before,
+.cf-kpi--amber::before,
+.cf-kpi--pink::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, currentColor 0%, transparent 60%);
+  opacity: 0.06;
+}
+.cf-kpi--blue   { color: var(--cf-blue); }
+.cf-kpi--violet { color: var(--cf-violet); }
+.cf-kpi--mint   { color: var(--cf-mint); }
+.cf-kpi--cyan   { color: var(--cf-cyan); }
+.cf-kpi--amber  { color: var(--cf-amber); }
+.cf-kpi--pink   { color: var(--cf-pink); }
+.cf-kpi > * { color: var(--cf-fg); position: relative; z-index: 1; }
+.cf-kpi__kicker { color: var(--cf-fg-tertiary); }
+
+/* Tonal chip — colored backgrounds for category/label chips, paired with
+   the extended palette. Keeps text accessible by using a dark fg in light
+   mode and a desaturated bg. */
+.cf-chip--tone {
+  background: color-mix(in srgb, currentColor 14%, var(--cf-bg-elevated));
+  color: currentColor;
+  border-color: color-mix(in srgb, currentColor 28%, transparent);
+}
+.cf-chip--blue   { color: var(--cf-blue); }
+.cf-chip--cyan   { color: var(--cf-cyan); }
+.cf-chip--violet { color: var(--cf-violet); }
+.cf-chip--mint   { color: var(--cf-mint); }
+.cf-chip--amber  { color: var(--cf-amber); }
+.cf-chip--pink   { color: var(--cf-pink); }
+.cf-chip--slate  { color: var(--cf-slate); }
+
+/* Toolbar — page-level action row. Compose with .cf-glass-bar for sticky. */
+.cf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-space-2);
+  padding: var(--cf-space-3) var(--cf-space-4);
+  border-bottom: 1px solid var(--cf-border);
+  background: var(--cf-bg-elevated);
+}
+.cf-toolbar__title {
+  font-size: var(--cf-text-md);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--cf-fg);
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--cf-space-2);
+}
+.cf-toolbar__sub {
+  font-size: 13px;
+  color: var(--cf-fg-tertiary);
+  font-weight: 400;
+}
+
+/* Page header — bigger, used at top of content areas. */
+.cf-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--cf-space-4);
+  padding: var(--cf-space-6) var(--cf-space-6) var(--cf-space-4);
+}
+.cf-page-header__title {
+  font-size: var(--cf-text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--cf-fg);
+  margin: 0;
+  line-height: 1.15;
+}
+.cf-page-header__sub {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--cf-fg-secondary);
+  max-width: 60ch;
+}
+.cf-page-header__actions { display: flex; gap: var(--cf-space-2); align-items: center; }
+
+/* Section header — smaller, repeating */
+.cf-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cf-fg-tertiary);
+  margin: 0 0 var(--cf-space-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Soft icon disc — colorful round badge wrapping an SVG icon. */
+.cf-icon-disc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--cf-radius-lg);
+  background: var(--cf-accent-subtle);
+  color: var(--cf-accent);
+  flex-shrink: 0;
+}
+.cf-icon-disc--sm { width: 24px; height: 24px; border-radius: var(--cf-radius-md); }
+.cf-icon-disc--lg { width: 40px; height: 40px; border-radius: var(--cf-radius-xl); }
+.cf-icon-disc--blue   { background: color-mix(in srgb, var(--cf-blue) 14%, transparent);   color: var(--cf-blue); }
+.cf-icon-disc--cyan   { background: color-mix(in srgb, var(--cf-cyan) 16%, transparent);   color: var(--cf-cyan); }
+.cf-icon-disc--violet { background: color-mix(in srgb, var(--cf-violet) 16%, transparent); color: var(--cf-violet); }
+.cf-icon-disc--mint   { background: color-mix(in srgb, var(--cf-mint) 16%, transparent);   color: var(--cf-mint); }
+.cf-icon-disc--amber  { background: color-mix(in srgb, var(--cf-amber) 16%, transparent);  color: var(--cf-amber); }
+.cf-icon-disc--pink   { background: color-mix(in srgb, var(--cf-pink) 16%, transparent);   color: var(--cf-pink); }
+.cf-icon-disc--slate  { background: color-mix(in srgb, var(--cf-slate) 14%, transparent);  color: var(--cf-slate); }
+
+/* Stack utilities — alignment helpers. Prefer over inline styles. */
+.cf-stack    { display: flex; flex-direction: column; }
+.cf-row      { display: flex; flex-direction: row; align-items: center; }
+.cf-row--top { align-items: flex-start; }
+.cf-gap-1 { gap: var(--cf-space-1); }
+.cf-gap-2 { gap: var(--cf-space-2); }
+.cf-gap-3 { gap: var(--cf-space-3); }
+.cf-gap-4 { gap: var(--cf-space-4); }
+.cf-gap-6 { gap: var(--cf-space-6); }
+.cf-grow  { flex: 1 1 auto; min-width: 0; }
+.cf-spacer { flex: 1 1 auto; }
+.cf-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cf-numeric { font-variant-numeric: tabular-nums; }
+
+/* Sidebar polish — iOS-ish active state with soft glow */
+.cf-sidebar__item--active {
+  background: var(--cf-bg-selected);
+}
+.cf-sidebar__item:focus-visible {
+  outline: none;
+  box-shadow: var(--cf-focus-ring);
+}
+
+/* Global focus ring */
+:focus-visible {
+  outline: none;
+}
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  box-shadow: var(--cf-focus-ring);
+  border-radius: var(--cf-radius-md);
+}
+
+/* ----------------------------------------------------------------
+   Cycle budget bar — NOW-W1
+   Thin progress bar showing spent_tokens / planned_tokens for the
+   active cycle on the Plan tab. Turns danger when over budget.
+---------------------------------------------------------------- */
+.cycle-budget-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: var(--cf-bg-sunken);
+  border-radius: var(--cf-radius-sm);
+  overflow: hidden;
+}
+.cycle-budget-fill {
+  height: 100%;
+  background: var(--cf-accent);
+  transition: width 200ms ease;
+}
+.cycle-budget-fill.is-over-budget {
+  background: var(--cf-danger);
+}
+.cycle-budget-label {
+  display: block;
+  margin-top: 4px;
+  font: var(--cf-font-meta, 11px/1.4 system-ui);
+  color: var(--cf-text-muted, currentColor);
+  font-variant-numeric: tabular-nums;
+}
+.plan-cycle-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.plan-cycle-picker label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
