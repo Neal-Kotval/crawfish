@@ -16,10 +16,13 @@ app.use(express.json({ limit: "1mb" }));
 // is unset. Real Clerk JWT verification lands in a follow-up task.
 import { authMiddleware } from "./middleware/auth.js";
 import { healthRouter } from "./routes/health.js";
+import { orgsRouter, meRouter } from "./routes/orgs.js";
 
 app.use(authMiddleware);
 
 app.use("/api/health", healthRouter);
+app.use("/api/orgs", orgsRouter);
+app.use("/api/me", meRouter);
 
 app.listen(port, "127.0.0.1", () => {
   console.log(`crawfish-server: http://127.0.0.1:${port}`);
