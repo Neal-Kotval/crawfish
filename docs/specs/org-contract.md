@@ -12,6 +12,7 @@ Every org lives under `~/.crawfish/orgs/<org_id>/`:
 ~/.crawfish/orgs/<org_id>/
 ├── org.json              # org config (see §2)
 ├── board.jsonl           # append-only task event log (see §3)
+├── cycles.json           # planning cycles + epics (see §5.5)
 ├── crons.json            # scheduled runs (see §5)
 ├── members/              # one .md per agent member (system prompt + tool list)
 │   ├── founder.md
@@ -39,20 +40,24 @@ Every org lives under `~/.crawfish/orgs/<org_id>/`:
     {
       "id": "founder",                 // slug, unique within org
       "kind": "agent",                 // "agent" | "human"
+      "humanity": "agent",             // "agent" | "human" — used by the primary-assignee rule (§3.1)
       "role": "Founder",
       "name": "Casey",                 // display name
       "prompt_file": "members/founder.md",  // relative path; null for humans
       "tools": ["org_fs_*", "board_*", "codebase_*"],  // MCP tool glob patterns; null = all
-      "model": "claude-sonnet-4-6"     // null for humans
+      "model": "claude-sonnet-4-6",    // null for humans
+      "acl": "member"                  // "owner" | "admin" | "member" | "viewer" — see §3.2
     },
     {
       "id": "neal",
       "kind": "human",
+      "humanity": "human",
       "role": "Operator",
       "name": "Neal",
       "prompt_file": null,
       "tools": null,
-      "model": null
+      "model": null,
+      "acl": "owner"
     }
   ]
 }
@@ -60,9 +65,11 @@ Every org lives under `~/.crawfish/orgs/<org_id>/`:
 
 **Validation rules:**
 - `id` matches `/^[a-z0-9_-]{1,32}$/`
-- `kind === "agent"` requires `prompt_file` and `model`
-- `kind === "human"` requires both to be `null`
+- `kind === "agent"` requires `prompt_file` and `model`; `humanity` MUST equal `"agent"`
+- `kind === "human"` requires `prompt_file` and `model` to be `null`; `humanity` MUST equal `"human"`
 - Members are unique by `id`
+- Every org MUST have exactly one member with `acl === "owner"`. Owner cannot be demoted by another member.
+- `humanity` defaults to `kind` if absent (backwards compat); new writes MUST set it explicitly.
 
 ---
 
@@ -95,6 +102,7 @@ type BoardEvent =
         title: string;
         description: string;
         assignee: string | null;
+        contributors: string[];
         status: TaskStatus;
         // Phase 3 additions
         cycle_id: string | null;
@@ -159,7 +167,8 @@ type Task = {
   id: string;
   title: string;
   description: string;
-  assignee: string | null;
+  assignee: string | null;          // PRIMARY assignee — see §3.1
+  contributors: string[];           // secondary participants — see §3.1
   status: TaskStatus;
   created_by: string;
   created_at: string;
@@ -179,6 +188,55 @@ type Task = {
 event projects one entry (e.g. `status_changed`, `assigned`, `labeled`,
 `linked`, `commented`). The Phase 3 `activity` teammate owns the projection
 function; consumers SHOULD treat `activity_log` as read-only.
+
+### 3.1 Primary-assignee + contributor model
+
+A task has at most one **primary assignee** (`assignee`) and any number of
+**contributors** (`contributors: string[]`). The rule resolves who is primary
+when both humans and agents touch a task:
+
+1. **`task_created` with a human assignee is sticky.** If a `task_created`
+   event sets `assignee` to a member whose `humanity === "human"`, that
+   member remains `assignee` until they themselves emit a `task_updated`
+   with a different `assignee`.
+2. **Agents attached afterward land as contributors.** A later
+   `task_updated` patch that would change `assignee` to a member with
+   `humanity === "agent"` while the current `assignee` is a human MUST
+   instead append that agent's `id` to `contributors` (de-duped). Servers
+   reject any client write that tries to overwrite a sticky human assignee
+   with an agent — error code `assignee_locked`.
+3. **No sticky lock for agent → agent or human → human reassignments.**
+   The patch goes through normally; the prior assignee is dropped from
+   `assignee` and is NOT auto-added to `contributors`.
+4. **Sticky lock is releasable.** The human assignee, an `acl === "owner"`,
+   or `acl === "admin"` member may emit a `task_updated` that sets
+   `assignee` to an agent (or `null`). The previous human is added to
+   `contributors` if not already present.
+
+The fold computes `contributors` by replaying these rules; clients SHOULD
+NOT write `contributors` directly except via the documented patches above.
+Projected activity entries on assignment carry payload
+`{ from: string | null, to: string | null, role: "assignee" | "contributor" }`.
+
+### 3.2 Member ACL (`validateActor`)
+
+Every `BoardEvent` write is gated by `validateActor(org, actor_id, event)`
+in `crawfish-lens/src/server/board.ts`. The matrix:
+
+| ACL | Read | Create task | Comment | Update own task | Update any task | Delete task | Edit `org.json` members | Edit cycles |
+|---|---|---|---|---|---|---|---|---|
+| `owner` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `admin` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ (cannot demote owner) | ✓ |
+| `member` | ✓ | ✓ | ✓ | ✓ | ✓ (only if listed in `assignee` / `contributors` / `watchers`, or if no assignee) | ✗ | ✗ | ✗ |
+| `viewer` | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+
+`validateActor` rejects with HTTP `403 acl_denied` and DOES NOT append to
+`board.jsonl`. The rejection itself MAY be journalled to a separate
+`audit.jsonl` (out of scope for NOW-W1; reserved).
+
+Agents inherit the ACL of the human who provisioned them via the org
+template. Default `acl` for newly-instantiated template members is
+`"member"`. Newly-added humans default to `"admin"`.
 
 ---
 
@@ -223,6 +281,48 @@ The cron daemon (`crawfish-lens/src/server/crons.ts`) loads this file, schedules
 
 ---
 
+## 5.5 `cycles.json` schema (NOW-W1)
+
+Planning cycles and epics live in a single file per org. The file is read whole, mutated whole, written whole — concurrent writers MUST `If-Match` on the file's mtime (server returns `412 stale` on conflict).
+
+```jsonc
+{
+  "cycles": [
+    {
+      "id": "2026-w20",                  // slug, unique within org; matches /^[a-z0-9_-]{1,32}$/
+      "name": "Week 20 — RAG cutover",
+      "starts_at": "2026-05-18T00:00:00Z",
+      "ends_at":   "2026-05-24T23:59:59Z",
+      "planned_tokens": 4000000,         // budget for the cycle (sum of intended task budgets); 0 = uncapped
+      "spent_tokens": 1234567,           // running total; updated by activity projector on each task_updated with token_spent
+      "status": "active"                 // "planned" | "active" | "completed"
+    }
+  ],
+  "epics": [
+    {
+      "id": "auth-rewrite",              // slug, unique within org
+      "title": "Auth rewrite",
+      "description": "Replace session-token middleware to satisfy compliance.",
+      "owner": "neal",                   // member id; nullable
+      "color": "#7C3AED",                // optional UI hint; ui/tokens/globals.css class wins if both set
+      "cycle_id": "2026-w20",            // optional — pins epic to a cycle for the swim-lane view
+      "status": "active"                 // "planned" | "active" | "completed" | "abandoned"
+    }
+  ]
+}
+```
+
+**Validation:**
+- At most one `cycle` may have `status === "active"` at a time. Activating another auto-transitions the previous to `"completed"`.
+- `starts_at < ends_at`. Cycles MAY overlap (e.g. quarter cycle spanning week cycles) but the active-cycle rule still applies.
+- `cycle_id` / `epic_id` on a task MUST refer to a row in this file or be `null`. Server rejects writes referencing unknown ids with `404 unknown_cycle` / `404 unknown_epic`.
+- `spent_tokens` is server-derived; clients MUST NOT write it directly. The activity projector recomputes by summing `token_spent` patches per task tagged with the cycle.
+- Deleting a cycle/epic does NOT cascade — referencing tasks have their `cycle_id` / `epic_id` cleared by the server in the same write.
+
+`budget_breach` activity events fire when, after a `task_updated` carrying a `token_spent` patch, `cycle.spent_tokens > cycle.planned_tokens` AND the breach was not already recorded for this cycle. Subsequent over-budget writes do NOT re-fire until the cycle is reset (status → `"planned"` or a new cycle is created).
+
+---
+
 ## 6. `crawfish-orgctl` MCP tool contract
 
 Follows the **crawfish optimizer contract v1.0** (see `crawfish-opt-codebase/README.md`): every response includes `tokens_used`, every tool is idempotent on retry, single token sink (org state).
@@ -238,8 +338,11 @@ All tools require an `org_id` argument so one MCP server can serve multiple orgs
 | `org_fs_list` | `{ org_id, prefix? }` | `{ tokens_used, entries }` |
 | `org_fs_read` | `{ org_id, path }` | `{ tokens_used, content, size, mtime }` |
 | `org_fs_write` | `{ org_id, path, content }` | `{ tokens_used, size, mtime }` |
+| `cycles_list` | `{ org_id }` | `{ tokens_used, cycles, epics }` |
+| `cycles_upsert` | `{ org_id, cycles?, epics?, if_match }` | `{ tokens_used, ok, mtime }` |
+| `activity_list` | `{ org_id, task_id?, cycle_id?, since? }` | `{ tokens_used, entries: ActivityEntry[] }` |
 
-Errors return `{ tokens_used: 0, error: { code, message } }` with codes drawn from `path_escape | too_large | not_found | invalid_member | invalid_status`.
+Errors return `{ tokens_used: 0, error: { code, message } }` with codes drawn from `path_escape | too_large | not_found | invalid_member | invalid_status | acl_denied | assignee_locked | stale | unknown_cycle | unknown_epic`.
 
 ---
 
@@ -258,6 +361,9 @@ Mounted in `crawfish-lens/src/server/index.ts` (lead-only edit).
 | `GET` | `/api/orgs/:id/crons` | returns `crons.json` |
 | `PUT` | `/api/orgs/:id/crons` | replaces `crons.json` |
 | `POST` | `/api/orgs/:id/crons/:cron_id/run` | manual trigger |
+| `GET` | `/api/orgs/:id/cycles` | returns `cycles.json` whole; ETag = file mtime |
+| `PUT` | `/api/orgs/:id/cycles` | replaces `cycles.json`; requires `If-Match: <mtime>` → `412 stale` on mismatch |
+| `GET` | `/api/orgs/:id/activity?task_id=&cycle_id=&since=` | flat stream of `ActivityEntry`s across the org (server-derived from `board.jsonl`); SSE variant at `/api/orgs/:id/activity/stream` |
 | `GET` | `/api/orgs/:id/stats?view=dev\|product` | dual analytics (dev = existing session stats; product = board aggregations) |
 
 Dash `crawfish-dash/src/server/*` proxies these or owns its own routes for template instantiation:
