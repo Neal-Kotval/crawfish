@@ -3,3 +3,11 @@
 .claude/settings.local.json
 .audit/
 node_modules/
+
+# Playwright MCP captures (screenshots, snapshots, console logs)
+.playwright-mcp/
+/marketing-*.png
+/platform-*.png
+/verify-*.png
+/page-*.png
+dev-logs/

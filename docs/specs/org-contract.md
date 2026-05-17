@@ -110,6 +110,8 @@ type BoardEvent =
         labels: string[];
         watchers: string[];
         links: TaskLink[];
+        // NOW-W2: acceptance criteria
+        criteria: Criterion[];
         // Board-UI extensions (rank for drag-to-rank; budget/activity for
         // client-emitted budget-breach / escalation entries).
         rank: number;
@@ -122,6 +124,32 @@ type BoardEvent =
   | { type: "task_deleted"; ts: string; task_id: string; by: string };
 
 type TaskStatus = "backlog" | "in_progress" | "review" | "done";
+
+// NOW-W2 — acceptance criteria (per task, ordered)
+type CriterionKind =
+  | "behavioral"     // "must do X when Y" — user-visible
+  | "test"           // pointer to a test file/case
+  | "metric"         // numeric threshold (e.g. p95 latency ≤ 200ms)
+  | "preflight"      // attested by an agent preflight tool call
+  | "manual";        // human signs off
+
+interface CriterionEvidence {
+  kind: CriterionKind;
+  // Free-form per kind. Examples:
+  // - test:        { path: "test/foo.test.ts", case: "rejects stale If-Match" }
+  // - metric:      { metric: "p95_latency_ms", observed: 142, threshold: 200, source: "grafana://..." }
+  // - preflight:   { event_id: "<ulid>", by: "<agent_id>", at: "<rfc3339>" }
+  // - behavioral:  { url?: string, screenshot?: string, note?: string }
+  // - manual:      { by: "<member_id>", at: "<rfc3339>", note?: string }
+  payload: Record<string, unknown>;
+}
+
+interface Criterion {
+  id: string;                  // slug, unique within task; /^[a-z0-9_-]{1,32}$/
+  statement: string;           // human-readable acceptance statement
+  kind: CriterionKind;
+  evidence?: CriterionEvidence;  // present iff criterion is "met"
+}
 
 // Phase 3 — task-graph + activity primitives
 type TaskLinkKind =
@@ -181,6 +209,10 @@ type Task = {
   labels: string[];
   watchers: string[];
   activity_log: ActivityEntry[];
+  // NOW-W2: acceptance criteria + budget tracking
+  criteria: Criterion[];
+  token_budget: number;        // intended cap for this task; 0 = uncapped
+  token_spent: number;         // accumulated usage; server-derived from task_updated patches
 };
 ```
 
@@ -237,6 +269,38 @@ in `crawfish-lens/src/server/board.ts`. The matrix:
 Agents inherit the ACL of the human who provisioned them via the org
 template. Default `acl` for newly-instantiated template members is
 `"member"`. Newly-added humans default to `"admin"`.
+
+### 3.3 Done-transition guard (NOW-W2)
+
+A `task_updated` patch that transitions `status` to `"done"` MUST be
+rejected by the server unless **every** criterion in `task.criteria` has a
+non-null `evidence` field. Rejection code: `409 criteria_unmet` with
+payload `{ task_id, unmet: [criterion_id, ...] }`. The rejected event MUST
+NOT be appended to `board.jsonl`.
+
+Other status transitions are unrestricted. Tasks with **zero** criteria
+may transition to `done` freely (back-compat with v0.3 tasks). Once a
+criterion's `evidence` is set, it MUST NOT be cleared by a non-owner,
+non-admin, non-assignee actor (returns `acl_denied`).
+
+A task may also carry a per-task `token_budget` (intended cap) and
+`token_spent` (server-recomputed from `task_updated` patches that carry
+`token_spent` deltas). The dash renders a per-task budget bar; when
+`token_spent > token_budget` a `budget_breach` activity entry is
+projected (deduped per task — fires once per breach episode).
+
+### 3.4 Activity event kinds added by NOW-W2
+
+The `ActivityKind` union (§3) gains two values for criteria lifecycle:
+
+- `criterion_met` — payload `{ id, kind, evidence }` projected when a
+  `task_updated` patch sets a criterion's `evidence`.
+- `criterion_cleared` — payload `{ id, by }` projected when an authorised
+  actor clears `evidence`.
+
+Existing `budget_breach` (already in §3) now also covers per-task budget
+breaches, not only per-cycle. Disambiguator: the payload includes
+`{ scope: "task" | "cycle", id }`.
 
 ---
 
@@ -341,8 +405,11 @@ All tools require an `org_id` argument so one MCP server can serve multiple orgs
 | `cycles_list` | `{ org_id }` | `{ tokens_used, cycles, epics }` |
 | `cycles_upsert` | `{ org_id, cycles?, epics?, if_match }` | `{ tokens_used, ok, mtime }` |
 | `activity_list` | `{ org_id, task_id?, cycle_id?, since? }` | `{ tokens_used, entries: ActivityEntry[] }` |
+| `criteria_set` | `{ org_id, task_id, by, criteria: Criterion[] }` | `{ tokens_used, ok }` — replaces the criteria array on a task |
+| `criteria_attest` | `{ org_id, task_id, criterion_id, by, evidence: CriterionEvidence }` | `{ tokens_used, ok }` — sets evidence on a single criterion |
+| `preflight_attest` | `{ org_id, task_id, criterion_id, by, statement, payload? }` | `{ tokens_used, event_id }` — agent-side preflight; see [`preflight-contract.md`](./preflight-contract.md) |
 
-Errors return `{ tokens_used: 0, error: { code, message } }` with codes drawn from `path_escape | too_large | not_found | invalid_member | invalid_status | acl_denied | assignee_locked | stale | unknown_cycle | unknown_epic`.
+Errors return `{ tokens_used: 0, error: { code, message } }` with codes drawn from `path_escape | too_large | not_found | invalid_member | invalid_status | acl_denied | assignee_locked | stale | unknown_cycle | unknown_epic | criteria_unmet | unknown_criterion`.
 
 ---
 

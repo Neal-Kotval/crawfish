@@ -82,6 +82,7 @@ model DeviceLinkCode {
   expiresAt DateTime
   redeemedAt DateTime?
   redeemedByUserId String?
+  authToken String?                          // JWT minted at redeem time; polled by Dash, then deleted
 }
 
 model Invite {

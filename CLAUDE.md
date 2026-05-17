@@ -11,6 +11,69 @@ ownership rules below as binding.
 
 ---
 
+## Skill auto-routing — reach for these without being asked
+
+When a user request matches one of the situations below, invoke the listed skill via the `Skill` tool **proactively, without waiting for the user to type the slash command**. Pick the most specific match. If two match, prefer the one further down (more specific overrides more general). If none match, work directly.
+
+### Frontend / UI work in this repo
+
+- **Building or scaffolding a new component, page, or screen from scratch** → `frontend-design:frontend-design` (production-grade, anti-generic aesthetics). This is the default for "build X UI" / "add a Y page".
+- **Polishing, redesigning, critiquing, or "this looks generic / cheap / AI-ish" on existing UI** → `impeccable` (the 23-command anti-slop kit; entry point covers craft/audit/critique/polish/distill/etc.).
+- **Bug report against one specific element ("the button is misaligned", "the modal overflows")** → `ui-diagnose` agent (already configured). Don't reach for a skill.
+- **Whole-page or whole-flow design QA / accessibility / responsive audit on a running dev server** → `ui-auditor` agent (already configured). Don't reach for a skill.
+- **Retroactive 6-pillar visual audit of code that already shipped** → `gsd-ui-review`.
+- **User wants a *throwaway hi-fi HTML prototype, slide deck, animation, or design-direction exploration*** (not production code) → `huashu-design`.
+- **User asks for a specific look-and-feel (minimalist editorial, industrial brutalist, premium agency, etc.)** → match the taste skill: `minimalist-ui`, `industrial-brutalist-ui`, `high-end-visual-design`, `design-taste-frontend`, or `gpt-taste`. Use one, not several.
+- **Upgrading an existing project's design quality without breaking it** → `redesign-existing-projects`.
+- **Generating reference *images* (not code) for web or mobile screens, or brand boards** → `imagegen-frontend-web`, `imagegen-frontend-mobile`, or `brandkit`.
+- **Image → code (recreate a design from a screenshot)** → `image-to-code`.
+
+### Code quality / review / safety
+
+- **Just finished writing code and want a quality pass before committing** → `simplify` (review changed code for reuse/quality/efficiency, fix issues).
+- **User asks for "code review" of a PR or branch** → `review` (built-in PR reviewer).
+- **User asks for a security check before merging** → `security-review` (scans pending changes).
+- **Building / debugging / tuning code that imports `anthropic` or `@anthropic-ai/sdk`, or touching prompt caching / tool use / thinking budgets** → `claude-api`.
+
+### GSD (Get Shit Done) — only when the user is in a GSD workflow
+
+GSD is opinionated and writes to `.planning/`. **Do not auto-invoke any `gsd-*` skill unless the user is clearly running a GSD workflow already** (i.e., `.planning/` exists in the cwd or the user mentioned GSD / a phase / a milestone). When they are:
+
+- **Brand new project, no `.planning/` yet** → `gsd-new-project`.
+- **Existing repo, want to bootstrap GSD from existing docs** → `gsd-ingest-docs`.
+- **"Explore an idea before committing"** → `gsd-explore`.
+- **Quick map of an unfamiliar codebase** → `gsd-map-codebase`.
+- **In the middle of a phase and lost** → `gsd-resume-work` or `gsd-progress`.
+- **Trivial one-off task inside a GSD repo** → `gsd-fast` or `gsd-quick`.
+
+Outside a GSD workflow, don't mention GSD. Use TaskCreate / Plan instead.
+
+### Memory and context
+
+- **Setting up recurring tasks, polling, or scheduled agents** → `loop` (interval) or `schedule` (cron / remote routine).
+- **User explicitly asks "remember X across sessions" beyond what auto-memory captures** → fall back to auto-memory; don't invoke another memory tool.
+
+### Config / harness changes
+
+- **"Allow X command", "add permission", "set env var", "when claude does X then Y", hook setup, settings.json edits** → `update-config`.
+- **Custom keybindings / chords / rebinding submit key** → `keybindings-help`.
+- **User noticing they get too many permission prompts** → `fewer-permission-prompts`.
+- **Creating a brand-new skill** → `skill-creator` (from the official plugin).
+
+### Superpowers (planning-heavy work)
+
+- **"Brainstorm with me"** → `superpowers:brainstorm`.
+- **"Write a plan for X" before implementing** → `superpowers:write-plan`, then `superpowers:execute-plan` to run it.
+
+### Hard rules
+
+- **Never invoke more than one taste/design skill in the same turn.** They conflict.
+- **Never auto-invoke a skill that writes to disk (`gsd-*`, `skill-creator`, `init`) without first stating in one sentence what you're about to do.** The user can redirect.
+- **If a skill's preconditions aren't met** (e.g., `gsd-execute-phase` with no `PLAN.md`), don't invoke it — say what's missing instead.
+- **A skill invocation does not replace the [Files that two teammates must NEVER edit simultaneously] rules below.** If a skill would touch a registry file, treat it as a lead-only action.
+
+---
+
 ## Multi-repo layout — cheap conflict avoidance
 
 The umbrella holds five sibling submodules. **Each submodule is a natural

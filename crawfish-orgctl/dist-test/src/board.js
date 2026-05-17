@@ -51,6 +51,12 @@ export function foldTasks(events) {
                     created_at: ev.ts,
                     updated_at: ev.ts,
                     comments: [],
+                    cycle_id: ev.cycle_id ?? null,
+                    epic_id: ev.epic_id ?? null,
+                    links: [],
+                    labels: ev.labels ?? [],
+                    watchers: ev.watchers ?? [],
+                    activity_log: [],
                 });
                 break;
             case "task_updated": {
@@ -61,10 +67,48 @@ export function foldTasks(events) {
                     t.title = ev.patch.title;
                 if (ev.patch.description !== undefined)
                     t.description = ev.patch.description;
-                if (ev.patch.assignee !== undefined)
+                if (ev.patch.assignee !== undefined) {
                     t.assignee = ev.patch.assignee;
-                if (ev.patch.status !== undefined)
+                    t.activity_log.push({
+                        by: ev.by,
+                        at: ev.ts,
+                        kind: "assigned",
+                        payload: { to: ev.patch.assignee },
+                    });
+                }
+                if (ev.patch.status !== undefined) {
                     t.status = ev.patch.status;
+                    t.activity_log.push({
+                        by: ev.by,
+                        at: ev.ts,
+                        kind: "status_changed",
+                        payload: { to: ev.patch.status },
+                    });
+                }
+                if (ev.patch.cycle_id !== undefined)
+                    t.cycle_id = ev.patch.cycle_id;
+                if (ev.patch.epic_id !== undefined)
+                    t.epic_id = ev.patch.epic_id;
+                if (ev.patch.labels !== undefined) {
+                    t.labels = ev.patch.labels;
+                    t.activity_log.push({
+                        by: ev.by,
+                        at: ev.ts,
+                        kind: "labeled",
+                        payload: { labels: ev.patch.labels },
+                    });
+                }
+                if (ev.patch.watchers !== undefined)
+                    t.watchers = ev.patch.watchers;
+                if (ev.patch.links !== undefined) {
+                    t.links = ev.patch.links;
+                    t.activity_log.push({
+                        by: ev.by,
+                        at: ev.ts,
+                        kind: "linked",
+                        payload: { links: ev.patch.links },
+                    });
+                }
                 t.updated_at = ev.ts;
                 break;
             }
@@ -73,6 +117,12 @@ export function foldTasks(events) {
                 if (!t)
                     break;
                 t.comments.push({ by: ev.by, body: ev.body, ts: ev.ts });
+                t.activity_log.push({
+                    by: ev.by,
+                    at: ev.ts,
+                    kind: "commented",
+                    payload: { body: ev.body },
+                });
                 t.updated_at = ev.ts;
                 break;
             }

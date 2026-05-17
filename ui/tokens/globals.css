@@ -1,96 +1,145 @@
-/* crawfish design tokens.
-   Aesthetic: professional blue / white / gray. Inspired by the working
-   surfaces of Jira, Monday, and Workday — calm, dense, information-first.
-   One brand accent (--cf-accent, atlassian blue), neutral gray scaffolding,
-   semantic colors reserved for state (success / warning / danger).
+/* Crawfish design tokens — warm-paper system.
+   Aesthetic: warm cream paper, vermillion accent, JetBrains-mono CLI
+   heritage. Locked to the hi-fi designs in /design/. Three typefaces:
+   Geist (body), Space Grotesk (display), JetBrains Mono (eyebrows,
+   tabular numerics, ticket IDs, timestamps).
 
-   --cf-accent-2 is retained as an ALIAS of --cf-accent so legacy refs
-   compile; new code should reference --cf-accent only. */
+   The new vocabulary is --paper / --ink / --accent / etc. The legacy
+   --cf-* namespace is preserved as a SHIM at the bottom of :root so
+   the existing utility classes (.cf-card, .cf-sidebar__item, .cf-pill,
+   etc.) keep compiling. Migrate components off the shim wave-by-wave;
+   the shim block is marked DEPRECATED and will be deleted in Wave 5.
+
+   No dark mode — the brand is warm-paper-only by design. The legacy
+   :root[data-theme="dark"] block has been retired; if data-theme="dark"
+   is set it falls through to the light tokens (same warm paper). */
 
 :root {
-  /* Surfaces — cool neutrals (Atlassian "neutral" scale) */
-  --cf-bg:            #F7F8FA;      /* page background — cool off-white */
-  --cf-bg-elevated:   #FFFFFF;      /* cards, sheets, drawers */
-  --cf-bg-sunken:     #EBECF0;      /* under cards, kanban troughs */
-  --cf-bg-sidebar:    #FFFFFF;      /* sidebar — clean white rail */
-  --cf-bg-hover:      rgba(9, 30, 66, 0.06);
-  --cf-bg-selected:   rgba(0, 82, 204, 0.10);  /* blue-tinted selection */
+  /* ─── Paper & ink ─────────────────────────────────────────────────── */
+  --paper:      #f5f1e8;
+  --paper-2:    #ede7d6;
+  --surface:    #fbf8f1;
+  --surface-2:  #ffffff;
+  --surface-3:  #fdfaf2;
 
-  /* Foregrounds — Atlassian navy ink. Tuned for ≥7:1 fg-on-bg and ≥4.5:1
-     secondary-on-bg against #F7F8FA (WCAG AAA / AA). */
-  --cf-fg:            #172B4D;       /* primary text — deep navy */
-  --cf-fg-secondary:  #42526E;       /* meta, labels */
-  --cf-fg-tertiary:   #5E6C84;       /* eyebrows, captions */
-  --cf-fg-muted:      #8993A4;       /* placeholder / disabled only */
+  --ink:        #1a1a18;
+  --ink-soft:   #3a3a35;
+  --ink-mute:   #6f6b62;
+  --ink-faint:  #a09b8f;
 
-  /* Borders — cool neutral, then darker stroke */
-  --cf-border:        #DFE1E6;
-  --cf-border-strong: #C1C7D0;
+  --rule:       rgba(26, 26, 24, 0.10);
+  --rule-2:     rgba(26, 26, 24, 0.06);
+  --rule-3:     rgba(26, 26, 24, 0.18);
 
-  /* Shadows — soft elevation, no offset hue. Crisp and professional. */
-  --cf-shadow-sm: 0 1px 1px rgba(9, 30, 66, 0.08), 0 0 1px rgba(9, 30, 66, 0.10);
-  --cf-shadow-md: 0 3px 5px rgba(9, 30, 66, 0.12), 0 0 1px rgba(9, 30, 66, 0.12);
-  --cf-shadow-lg: 0 8px 16px -4px rgba(9, 30, 66, 0.18), 0 0 1px rgba(9, 30, 66, 0.14);
+  /* ─── Accent (vermillion) ─────────────────────────────────────────── */
+  --accent:        #c8442b;
+  --accent-hover:  #a83723;
+  --accent-soft:   #f3d6cb;
+  --accent-tint:   #fae8e0;
 
-  /* Primary accent — Atlassian blue. Single brand pop, used sparingly for
-     primary buttons, brand links, active route, "in progress" status.
-     ~6.7:1 on bg; --cf-accent-fg keeps white ink on blue at ~7:1. */
-  --cf-accent:        #0052CC;
-  --cf-accent-hover:  #0747A6;
-  --cf-accent-subtle: rgba(0, 82, 204, 0.12);
-  --cf-accent-fg:     #FFFFFF;
+  /* ─── Semantic state ──────────────────────────────────────────────── */
+  --good:    #2f7a4d;
+  --good-bg: #d8e8de;
+  --warn:    #b8862c;
+  --warn-bg: #f3e6c4;
+  --danger:  #b53224;
 
-  /* Secondary accent — alias of --cf-accent. */
-  --cf-accent-2:        #0052CC;
-  --cf-accent-2-hover:  #0747A6;
-  --cf-accent-2-subtle: rgba(0, 82, 204, 0.12);
-  --cf-accent-2-fg:     #FFFFFF;
+  /* ─── Surface chrome (shadows, radii) ─────────────────────────────── */
+  --shadow-sm:  0 1px 0 rgba(26,26,24,0.04), 0 1px 2px rgba(26,26,24,0.04);
+  --shadow-md:  0 1px 0 rgba(26,26,24,0.04), 0 4px 12px rgba(26,26,24,0.06);
+  --shadow-lg:  0 1px 0 rgba(26,26,24,0.04), 0 12px 32px rgba(26,26,24,0.08);
 
-  /* Status — workflow palette. `progress` reuses accent (blue);
-     `review` is violet; `done` is teal-blue (neutral-cool, not green);
-     `todo` is cool gray. */
-  --cf-status-todo-bg:        #DFE1E6;
-  --cf-status-todo-fg:        #42526E;
-  --cf-status-progress-bg:    rgba(0, 82, 204, 0.14);
-  --cf-status-progress-fg:    #0747A6;
-  --cf-status-review-bg:      #EAE6FF;
-  --cf-status-review-fg:      #403294;
-  --cf-status-done-bg:        #DEEBFF;
-  --cf-status-done-fg:        #0747A6;
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
 
-  /* Semantic — reserved strictly for state. Success is muted teal-green
-     (not vivid leaf green); warning is muted amber; danger is desaturated
-     red. None of these participate in the brand palette. */
-  --cf-success: #006644;
-  --cf-warning: #974F0C;
-  --cf-danger:  #BF2600;
+  /* ─── Type stack ──────────────────────────────────────────────────── */
+  --ff-sans:    "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --ff-display: "Space Grotesk", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --ff-mono:    "JetBrains Mono", ui-monospace, "SF Mono", "Geist Mono", Menlo, Consolas, monospace;
 
-  /* Token-bucket colors — cool blue ramp so the four buckets read as
-     a single hue family in token bars and stacked graphs. */
-  --cf-color-bucket-input:       #0052CC;   /* primary blue */
-  --cf-color-bucket-output:      #4C9AFF;   /* mid blue */
-  --cf-color-bucket-cache-read:  #B3D4FF;   /* pale blue */
-  --cf-color-bucket-cache-write: #7A869A;   /* cool gray */
+  /* ───────────────────────────────────────────────────────────────────
+     DEPRECATED — legacy --cf-* shim. Maps every retired Atlassian-era
+     variable to its closest warm-paper equivalent so the 3000 lines
+     of utility classes below keep compiling. Migrate components to the
+     new tokens above, then this entire block goes away in Wave 5.
+     ─────────────────────────────────────────────────────────────────── */
 
-  /* Avatar palette — cool blues + violet + gray. No green/orange. */
-  --cf-avatar-1: #0052CC;   /* blue */
-  --cf-avatar-2: #00B8D9;   /* cyan */
-  --cf-avatar-3: #6554C0;   /* violet */
-  --cf-avatar-4: #5243AA;   /* indigo */
-  --cf-avatar-5: #4C9AFF;   /* sky */
-  --cf-avatar-6: #5E6C84;   /* slate */
+  /* Surfaces */
+  --cf-bg:            var(--paper);
+  --cf-bg-elevated:   var(--surface-2);
+  --cf-bg-sunken:     var(--paper-2);
+  --cf-bg-sidebar:    var(--surface-3);
+  --cf-bg-hover:      rgba(26, 26, 24, 0.05);
+  --cf-bg-selected:   var(--accent-tint);
 
-  /* Radii — Jira-tight. Crisp rectangular surfaces; chips and inputs round
-     just enough to read as interactive, not as marketing balloons. The
-     `--cf-radius-pill` is reserved for iOS-style fully-rounded controls. */
-  --cf-radius-sm:   3px;
-  --cf-radius-md:   4px;
-  --cf-radius-lg:   6px;
-  --cf-radius-xl:   8px;
-  --cf-radius-2xl:  12px;
+  /* Foregrounds */
+  --cf-fg:            var(--ink);
+  --cf-fg-secondary:  var(--ink-soft);
+  --cf-fg-tertiary:   var(--ink-mute);
+  --cf-fg-muted:      var(--ink-faint);
+
+  /* Borders */
+  --cf-border:        var(--rule);
+  --cf-border-strong: var(--rule-3);
+
+  /* Shadows */
+  --cf-shadow-sm: var(--shadow-sm);
+  --cf-shadow-md: var(--shadow-md);
+  --cf-shadow-lg: var(--shadow-lg);
+
+  /* Primary accent (vermillion now) */
+  --cf-accent:        var(--accent);
+  --cf-accent-hover:  var(--accent-hover);
+  --cf-accent-subtle: var(--accent-tint);
+  --cf-accent-fg:     #ffffff;
+
+  /* Secondary accent — same vermillion */
+  --cf-accent-2:        var(--accent);
+  --cf-accent-2-hover:  var(--accent-hover);
+  --cf-accent-2-subtle: var(--accent-tint);
+  --cf-accent-2-fg:     #ffffff;
+
+  /* Status pills — warm-paper remap */
+  --cf-status-todo-bg:     var(--paper-2);
+  --cf-status-todo-fg:     var(--ink-mute);
+  --cf-status-progress-bg: var(--accent-tint);
+  --cf-status-progress-fg: var(--accent);
+  --cf-status-review-bg:   var(--warn-bg);
+  --cf-status-review-fg:   var(--warn);
+  --cf-status-done-bg:     var(--good-bg);
+  --cf-status-done-fg:     var(--good);
+
+  /* Semantic */
+  --cf-success: var(--good);
+  --cf-warning: var(--warn);
+  --cf-danger:  var(--danger);
+
+  /* Token-bucket — warm ramp (accent → muted) */
+  --cf-color-bucket-input:       var(--accent);
+  --cf-color-bucket-output:      #d97b5e;
+  --cf-color-bucket-cache-read:  var(--accent-soft);
+  --cf-color-bucket-cache-write: var(--ink-mute);
+
+  /* Avatar palette — warm-paper-friendly hues */
+  --cf-avatar-1: var(--accent);
+  --cf-avatar-2: var(--good);
+  --cf-avatar-3: var(--warn);
+  --cf-avatar-4: var(--ink-soft);
+  --cf-avatar-5: #c87d4e;
+  --cf-avatar-6: var(--ink-mute);
+
+  /* Radii */
+  --cf-radius-sm:   var(--r-xs);
+  --cf-radius-md:   var(--r-sm);
+  --cf-radius-lg:   var(--r-md);
+  --cf-radius-xl:   var(--r-lg);
+  --cf-radius-2xl:  var(--r-xl);
   --cf-radius-pill: 999px;
 
-  /* Spacing — 4px grid, exposed for inline use when a class doesn't fit. */
+  /* Spacing — unchanged */
   --cf-space-1:  4px;
   --cf-space-2:  8px;
   --cf-space-3: 12px;
@@ -101,7 +150,7 @@
   --cf-space-10: 40px;
   --cf-space-12: 48px;
 
-  /* Type scale — Inter, 4-step modular. */
+  /* Type scale — unchanged */
   --cf-text-xs:   11px;
   --cf-text-sm:   12px;
   --cf-text-base: 14px;
@@ -112,185 +161,107 @@
   --cf-text-3xl:  34px;
 
   /* Motion */
-  --cf-ease:        cubic-bezier(0.2, 0, 0, 1);    /* iOS standard */
-  --cf-ease-out:    cubic-bezier(0.16, 1, 0.3, 1); /* gentle settle */
+  --cf-ease:        cubic-bezier(0.2, 0, 0, 1);
+  --cf-ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
   --cf-duration-1:   90ms;
   --cf-duration-2:  140ms;
   --cf-duration-3:  220ms;
 
-  /* Extended palette — secondary hues for charts, status pills, avatars.
-     Always paired with blue as the dominant brand color; never the
-     primary surface. */
-  --cf-blue:    #0052CC;
-  --cf-sky:     #4C9AFF;
-  --cf-cyan:    #00B8D9;
-  --cf-mint:    #36B37E;
-  --cf-violet:  #6554C0;
-  --cf-indigo:  #5243AA;
-  --cf-pink:    #FF5C8A;
-  --cf-amber:   #FFAB00;
-  --cf-slate:   #5E6C84;
+  /* Extended palette — warm-paper remap (no blue family) */
+  --cf-blue:    var(--accent);
+  --cf-sky:     #d97b5e;
+  --cf-cyan:    var(--good);
+  --cf-mint:    var(--good);
+  --cf-violet:  var(--warn);
+  --cf-indigo:  var(--ink-soft);
+  --cf-pink:    var(--accent);
+  --cf-amber:   var(--warn);
+  --cf-slate:   var(--ink-mute);
 
-  /* Chart palette — 8 hues in a deliberate order. Cycle in this order
-     when graphing N series. */
-  --cf-chart-1: #0052CC;
-  --cf-chart-2: #00B8D9;
-  --cf-chart-3: #6554C0;
-  --cf-chart-4: #36B37E;
-  --cf-chart-5: #FFAB00;
-  --cf-chart-6: #FF5C8A;
-  --cf-chart-7: #4C9AFF;
-  --cf-chart-8: #7A869A;
+  /* Chart palette — warm ramp */
+  --cf-chart-1: var(--accent);
+  --cf-chart-2: #d97b5e;
+  --cf-chart-3: var(--warn);
+  --cf-chart-4: var(--good);
+  --cf-chart-5: var(--ink-soft);
+  --cf-chart-6: var(--accent-soft);
+  --cf-chart-7: var(--good-bg);
+  --cf-chart-8: var(--ink-faint);
 
-  /* Glass — iOS-style frosted surfaces. Use sparingly: sticky headers,
-     command bars, floating toolbars, modal chrome. */
-  --cf-glass-bg:       rgba(255, 255, 255, 0.72);
-  --cf-glass-bg-soft:  rgba(255, 255, 255, 0.55);
-  --cf-glass-border:   rgba(9, 30, 66, 0.08);
-  --cf-glass-shadow:   0 1px 0 rgba(255, 255, 255, 0.8) inset,
-                        0 1px 1px rgba(9, 30, 66, 0.06),
-                        0 12px 24px -8px rgba(9, 30, 66, 0.14);
-  --cf-glass-blur:     saturate(140%) blur(20px);
+  /* Glass — retired. Aliased to plain surface-2 cards so .cf-glass
+     renders as a solid warm card. No more frost. */
+  --cf-glass-bg:       var(--surface-2);
+  --cf-glass-bg-soft:  var(--surface);
+  --cf-glass-border:   var(--rule);
+  --cf-glass-shadow:   var(--shadow-md);
+  --cf-glass-blur:     none;
 
-  /* Focus ring — same in light and dark; uses accent + bg as the inner halo */
-  --cf-focus-ring: 0 0 0 2px var(--cf-bg-elevated), 0 0 0 4px var(--cf-accent);
+  /* Focus ring — vermillion */
+  --cf-focus-ring: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--accent);
 
-  /* Type — Geist for body + display. A geometric grotesk with subtly
-     humanist details; reads as professional but distinctive (not the
-     default system look). Geist Mono for tabular numerics and code.
-     Instrument Serif used very sparingly for editorial-style display
-     accents (page-header italic phrases, empty-state titles). */
-  --cf-font:         "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
-                     "Helvetica Neue", system-ui, sans-serif;
-  --cf-font-display: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
-                     system-ui, sans-serif;
-  --cf-font-mono:    "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono",
-                     "JetBrains Mono", Menlo, Consolas, monospace;
-  --cf-font-serif:   "Instrument Serif", "Iowan Old Style", Georgia,
-                     "Times New Roman", serif;
+  /* Type families — point at new --ff-* */
+  --cf-font:         var(--ff-sans);
+  --cf-font-display: var(--ff-display);
+  --cf-font-mono:    var(--ff-mono);
+  --cf-font-serif:   var(--ff-display); /* retired Instrument Serif → Space Grotesk */
 }
 
-:root[data-theme="dark"] {
-    /* Surfaces — Atlassian dark neutrals. Deep navy-leaning gray, no green. */
-    --cf-bg:            #0D1424;
-    --cf-bg-elevated:   #1B2638;
-    --cf-bg-sunken:     #0A1020;
-    --cf-bg-sidebar:    #0D1424;
-    --cf-bg-hover:      rgba(255, 255, 255, 0.06);
-    --cf-bg-selected:   rgba(76, 154, 255, 0.18);   /* blue-tinted selection */
-
-    /* Foregrounds — cool off-white. Tuned for ≥10:1 fg-on-bg and ≥4.5:1
-       secondary-on-bg against #0D1424. */
-    --cf-fg:            #E6E8EC;
-    --cf-fg-secondary:  #B3BAC5;
-    --cf-fg-tertiary:   #8C97A8;
-    --cf-fg-muted:      #6B7588;
-
-    --cf-border:        #2C3654;
-    --cf-border-strong: #44506E;
-
-    --cf-shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.45), 0 0 1px rgba(0, 0, 0, 0.55);
-    --cf-shadow-md: 0 3px 6px rgba(0, 0, 0, 0.55), 0 0 1px rgba(0, 0, 0, 0.6);
-    --cf-shadow-lg: 0 10px 20px -6px rgba(0, 0, 0, 0.7), 0 0 1px rgba(0, 0, 0, 0.6);
-
-    /* Primary accent — bright Atlassian blue. */
-    --cf-accent:        #4C9AFF;
-    --cf-accent-hover:  #B3D4FF;
-    --cf-accent-subtle: rgba(76, 154, 255, 0.22);
-    --cf-accent-fg:     #0A1020;
-
-    --cf-accent-2:        #4C9AFF;
-    --cf-accent-2-hover:  #B3D4FF;
-    --cf-accent-2-subtle: rgba(76, 154, 255, 0.22);
-    --cf-accent-2-fg:     #0A1020;
-
-    --cf-status-todo-bg:     #2C3654;
-    --cf-status-todo-fg:     #B3BAC5;
-    --cf-status-progress-bg: rgba(76, 154, 255, 0.22);
-    --cf-status-progress-fg: #B3D4FF;
-    --cf-status-review-bg:   #2C2256;
-    --cf-status-review-fg:   #C0B6F2;
-    --cf-status-done-bg:     #0E2A52;
-    --cf-status-done-fg:     #B3D4FF;
-
-    /* Dark semantic — muted, accessible on deep navy. */
-    --cf-success: #57D9A3;
-    --cf-warning: #FFC400;
-    --cf-danger:  #FF7452;
-
-    --cf-color-bucket-input:       #4C9AFF;
-    --cf-color-bucket-output:      #B3D4FF;
-    --cf-color-bucket-cache-read:  #2684FF;
-    --cf-color-bucket-cache-write: #7A869A;
-
-    /* Extended palette — dark-mode tuned (brighter, slightly desaturated) */
-    --cf-blue:   #4C9AFF;
-    --cf-sky:    #B3D4FF;
-    --cf-cyan:   #5BD3E8;
-    --cf-mint:   #57D9A3;
-    --cf-violet: #998DD9;
-    --cf-indigo: #8777D9;
-    --cf-pink:   #FF8FA3;
-    --cf-amber:  #FFC400;
-    --cf-slate:  #97A0AF;
-
-    --cf-chart-1: #4C9AFF;
-    --cf-chart-2: #5BD3E8;
-    --cf-chart-3: #998DD9;
-    --cf-chart-4: #57D9A3;
-    --cf-chart-5: #FFC400;
-    --cf-chart-6: #FF8FA3;
-    --cf-chart-7: #B3D4FF;
-    --cf-chart-8: #97A0AF;
-
-    /* Glass — dark frosted */
-    --cf-glass-bg:       rgba(27, 38, 56, 0.66);
-    --cf-glass-bg-soft:  rgba(27, 38, 56, 0.48);
-    --cf-glass-border:   rgba(255, 255, 255, 0.08);
-    --cf-glass-shadow:   0 1px 0 rgba(255, 255, 255, 0.04) inset,
-                          0 1px 1px rgba(0, 0, 0, 0.5),
-                          0 14px 26px -8px rgba(0, 0, 0, 0.6);
-    --cf-glass-blur:     saturate(160%) blur(20px);
-
-    --cf-focus-ring: 0 0 0 2px var(--cf-bg-elevated), 0 0 0 4px var(--cf-accent);
-}
+/* Dark mode retired. data-theme="dark" inherits light tokens. */
+:root[data-theme="dark"] { /* intentionally empty */ }
 
 * { box-sizing: border-box; }
 
 html, body, #root {
-  height: 100%;
+  min-height: 100%;
   overscroll-behavior: none;
-  overflow: hidden;
+}
+/* Lock scrolling only when the dash shell mounts (Tauri window doesn't
+ * scroll). Browser surfaces (marketing, platform) keep natural scroll. */
+body:has(> #root > .cfp-shell), html:has(> body > #root > .cfp-shell) {
+  height: 100%; overflow: hidden;
 }
 
 body {
   margin: 0;
-  font-family: var(--cf-font);
+  font-family: var(--ff-sans);
   font-size: 14px;
   line-height: 1.5;
   font-weight: 400;
-  color: var(--cf-fg);
-  background-color: var(--cf-bg);
-  /* Faint cool wash — almost imperceptible, gives depth without "blob" */
-  background-image:
-    radial-gradient(1200px 600px at 80% -10%, color-mix(in srgb, var(--cf-accent) 4%, transparent), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, color-mix(in srgb, var(--cf-violet) 4%, transparent), transparent 60%);
-  background-attachment: fixed;
+  color: var(--ink);
+  background-color: var(--paper);
+  /* Warm paper — no gradient wash. The hi-fi designs use solid paper. */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   font-feature-settings: "ss01", "cv11", "tnum", "kern";
   overscroll-behavior: none;
   letter-spacing: -0.005em;
 }
 
-/* Serif display accent — pair with sans copy; use rarely (page headers,
-   empty-state heroes). The italic variant adds editorial warmth. */
-.cf-serif        { font-family: var(--cf-font-serif); font-weight: 400; letter-spacing: -0.012em; }
-.cf-serif--italic { font-family: var(--cf-font-serif); font-style: italic; font-weight: 400; letter-spacing: -0.012em; }
-
-:root[data-theme="dark"] body {
-  background-image: none;
+/* ─── New tokens.css base utilities ─────────────────────────────────── */
+.cf, .cf * { box-sizing: border-box; }
+.cf {
+  font-family: var(--ff-sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "cv11";
 }
+.cf-mono { font-family: var(--ff-mono); font-feature-settings: "tnum", "zero"; }
+.cf-num  { font-variant-numeric: tabular-nums; }
+.cf-divider { height: 1px; background: var(--rule); }
+.cf-eyebrow {
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+
+/* Legacy serif aliases — now Space Grotesk display, kept so old refs render */
+.cf-serif        { font-family: var(--ff-display); font-weight: 500; letter-spacing: -0.018em; }
+.cf-serif--italic { font-family: var(--ff-display); font-style: italic; font-weight: 500; letter-spacing: -0.018em; }
 
 /* Display headings — same Inter family at heavier weight, tighter tracking. */
 .cf-display, h1.cf-h1, h2.cf-h2 {
@@ -3190,3 +3161,276 @@ textarea:focus-visible {
   align-items: center;
   gap: 6px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   WARM-PAPER PRIMITIVES — new component classes referenced by the
+   typed React components in ui/components/. These use the new --paper
+   / --ink / --accent vocabulary directly (not the --cf-* shim).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Pill ───────────────────────────────────────────────────────────── */
+.cfp-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--ff-mono);
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: var(--paper-2); color: var(--ink-mute);
+  white-space: nowrap;
+}
+.cfp-pill--accent { background: var(--accent-tint); color: var(--accent); border-color: var(--accent-soft); }
+.cfp-pill--good   { background: var(--good-bg); color: var(--good); border-color: rgba(47,122,77,0.3); }
+.cfp-pill--warn   { background: var(--warn-bg); color: var(--warn); border-color: rgba(184,134,44,0.3); }
+.cfp-pill--danger { background: rgba(181,50,36,0.10); color: var(--danger); border-color: rgba(181,50,36,0.30); }
+.cfp-pill--ink    { background: var(--ink); color: #f7f3ea; border-color: var(--ink); }
+.cfp-pill--live::before {
+  content: "●"; color: currentColor; margin-right: 2px;
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────────── */
+.cfp-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--rule); }
+.cfp-tab {
+  appearance: none; background: transparent; border: none; cursor: pointer;
+  font-family: var(--ff-sans); font-size: 13px; font-weight: 500;
+  color: var(--ink-mute); padding: 10px 0;
+  border-bottom: 1.5px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 8px;
+  letter-spacing: -0.005em;
+}
+.cfp-tab:hover { color: var(--ink-soft); }
+.cfp-tab--active { color: var(--ink); border-bottom-color: var(--ink); }
+.cfp-tab__count {
+  font-family: var(--ff-mono); font-size: 10px;
+  padding: 1px 6px; border-radius: 999px;
+  background: var(--paper-2); color: var(--ink-mute);
+  border: 1px solid var(--rule);
+}
+
+/* ── SideItem ───────────────────────────────────────────────────────── */
+.cfp-side {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: var(--r-sm);
+  color: var(--ink-soft); background: transparent;
+  font-size: 13px; font-weight: 400; cursor: pointer;
+  letter-spacing: -0.005em; text-decoration: none;
+  border: none; width: 100%; text-align: left;
+}
+.cfp-side:hover { background: rgba(26,26,24,0.04); color: var(--ink); }
+.cfp-side--active, .cfp-side--active:hover {
+  background: var(--paper-2); color: var(--ink); font-weight: 500;
+}
+.cfp-side--sub { padding: 6px 10px 6px 30px; font-size: 12.5px; }
+.cfp-side__icon { display: inline-flex; color: var(--ink-mute); }
+.cfp-side--active .cfp-side__icon { color: var(--ink); }
+.cfp-side__label { flex: 1; }
+.cfp-side__badge {
+  font-family: var(--ff-mono); font-size: 10px;
+  padding: 1px 6px; border-radius: 999px;
+  background: var(--paper-2); color: var(--ink-mute);
+  border: 1px solid var(--rule);
+}
+
+/* ── StatCard (new) ─────────────────────────────────────────────────── */
+.cfp-stat { display: flex; flex-direction: column; gap: 4px; }
+.cfp-stat__row {
+  display: flex; align-items: baseline; gap: 6px; margin-top: 4px;
+}
+.cfp-stat__num {
+  font-family: var(--ff-mono); font-variant-numeric: tabular-nums;
+  font-size: 18px; font-weight: 500; color: var(--ink);
+}
+.cfp-stat__sub {
+  font-family: var(--ff-mono); font-size: 11px; color: var(--ink-mute);
+}
+.cfp-stat__bar {
+  height: 5px; background: var(--paper-2); border-radius: 999px;
+  margin-top: 6px; overflow: hidden;
+}
+.cfp-stat__fill { height: 100%; background: var(--accent); transition: width 320ms ease; }
+.cfp-stat__fill--good { background: var(--good); }
+
+/* ── TaskRow ────────────────────────────────────────────────────────── */
+.cfp-task {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface-2); border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+}
+.cfp-task__dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink-faint); flex-shrink: 0;
+}
+.cfp-task__dot--live { background: var(--accent); }
+.cfp-task__dot--good { background: var(--good); }
+.cfp-task__dot--warn { background: var(--warn); }
+.cfp-task__body { flex: 1; min-width: 0; }
+.cfp-task__title {
+  font-size: 13.5px; font-weight: 500; color: var(--ink);
+  letter-spacing: -0.005em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cfp-task__meta {
+  font-family: var(--ff-mono); font-size: 11px; color: var(--ink-mute);
+  margin-top: 2px;
+}
+.cfp-task__cost {
+  font-family: var(--ff-mono); font-variant-numeric: tabular-nums;
+  font-size: 11.5px; color: var(--ink-soft);
+}
+
+/* ── Node (canvas) ──────────────────────────────────────────────────── */
+.cfp-node {
+  position: absolute;
+  background: var(--surface-2); color: var(--ink);
+  border: 1px solid var(--rule-3); border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  padding: 10px 12px;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.cfp-node--accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cfp-node--you    { background: var(--ink); color: #f7f3ea; border-color: var(--ink); }
+.cfp-node--idle   { opacity: 0.7; }
+.cfp-node--selected {
+  outline: 1.5px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md);
+}
+.cfp-node__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cfp-node__name { font-size: 13.5px; font-weight: 600; letter-spacing: -0.008em; }
+.cfp-node__foot { display: flex; align-items: center; justify-content: space-between; }
+.cfp-node__role { font-size: 11px; opacity: 0.75; }
+.cfp-node__rt {
+  font-family: var(--ff-mono); font-variant-numeric: tabular-nums;
+  font-size: 10.5px; opacity: 0.7;
+}
+.cfp-node__avatar {
+  width: 22px; height: 22px; border-radius: 50%;
+  font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--paper-2); border: 1px solid var(--rule-3);
+}
+.cfp-node--accent .cfp-node__avatar { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.3); }
+.cfp-node--you .cfp-node__avatar { background: rgba(247,243,234,0.16); border-color: rgba(247,243,234,0.18); }
+
+/* ── TitleBar ───────────────────────────────────────────────────────── */
+.cfp-titlebar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 14px; height: 52px;
+  background: var(--surface-3); border-bottom: 1px solid var(--rule);
+  -webkit-app-region: drag;
+}
+.cfp-titlebar__lights { display: flex; gap: 6px; }
+.cfp-titlebar__light {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.18);
+}
+.cfp-titlebar__light--r { background: #e35a4a; }
+.cfp-titlebar__light--y { background: #e0b54a; }
+.cfp-titlebar__light--g { background: #5ac26b; }
+.cfp-titlebar__org {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px 4px 6px; border-radius: var(--r-sm);
+  border: 1px solid var(--rule); background: var(--surface);
+  font-size: 13px; -webkit-app-region: no-drag; cursor: pointer;
+}
+.cfp-titlebar__brand {
+  width: 20px; height: 20px; border-radius: 5px;
+  background: var(--ink); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--ff-display); font-size: 11px; font-weight: 700; letter-spacing: -0.04em;
+}
+.cfp-titlebar__center { flex: 1; display: flex; justify-content: center; }
+.cfp-titlebar__search {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 12px; background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 999px; width: 360px;
+  color: var(--ink-mute); font-size: 12.5px;
+  -webkit-app-region: no-drag; cursor: pointer;
+}
+.cfp-titlebar__kbd {
+  margin-left: auto; font-family: var(--ff-mono); font-size: 10px;
+  padding: 1px 5px; border: 1px solid var(--rule); border-radius: 3px;
+  color: var(--ink-mute);
+}
+.cfp-titlebar__right { display: flex; align-items: center; gap: 10px; -webkit-app-region: no-drag; }
+.cfp-titlebar__meter {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--rule);
+  font-family: var(--ff-mono); font-size: 11.5px; color: var(--ink-soft);
+}
+.cfp-titlebar__bell {
+  appearance: none; background: transparent; border: none; cursor: pointer;
+  width: 28px; height: 28px; border-radius: var(--r-sm);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink-soft);
+}
+.cfp-titlebar__avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent-tint); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 12px;
+}
+
+/* ── Button (new) ───────────────────────────────────────────────────── */
+.cfp-btn {
+  appearance: none; cursor: pointer;
+  font-family: var(--ff-sans); font-size: 13px; font-weight: 500;
+  padding: 7px 12px; border-radius: var(--r-sm);
+  background: var(--surface-2); color: var(--ink);
+  border: 1px solid var(--rule-3);
+  display: inline-flex; align-items: center; gap: 6px;
+  letter-spacing: -0.005em;
+}
+.cfp-btn:hover { background: var(--surface); }
+.cfp-btn--primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cfp-btn--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.cfp-btn--ink { background: var(--ink); color: #f7f3ea; border-color: var(--ink); }
+.cfp-btn--ink:hover { background: #000; }
+.cfp-btn--danger { color: var(--danger); }
+.cfp-btn--ghost { background: transparent; border-color: transparent; }
+.cfp-btn--sm { padding: 5px 10px; font-size: 12px; }
+.cfp-btn--lg { padding: 9px 16px; font-size: 14px; }
+
+/* ── DiagnosisCard ──────────────────────────────────────────────────── */
+.cfp-diag {
+  padding: 10px 12px; border-radius: var(--r-md);
+  background: var(--accent-tint); border: 1px solid var(--accent-soft);
+  color: var(--ink);
+}
+.cfp-diag__body { font-size: 12.5px; line-height: 1.4; margin-top: 2px; }
+
+/* ── App shell layout ───────────────────────────────────────────────── */
+.cfp-shell {
+  display: grid;
+  grid-template-columns: 232px 1fr 304px;
+  grid-template-rows: 52px 1fr;
+  height: 100vh;
+  background: var(--paper);
+  overflow: hidden;
+}
+.cfp-shell--no-rail { grid-template-columns: 232px 1fr; }
+.cfp-shell__titlebar { grid-column: 1 / -1; }
+.cfp-shell__sidebar {
+  border-right: 1px solid var(--rule); background: var(--surface-3);
+  padding: 16px 12px; display: flex; flex-direction: column; gap: 18px;
+  overflow: hidden;
+}
+.cfp-shell__main { position: relative; overflow: auto; background: var(--paper); }
+.cfp-shell__rail {
+  border-left: 1px solid var(--rule); background: var(--surface-3);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ── Canvas dotted background ───────────────────────────────────────── */
+.cfp-canvas-dots {
+  background-image: radial-gradient(circle, rgba(26,26,24,0.16) 0.7px, transparent 0.7px);
+  background-size: 18px 18px;
+}
+
+/* ── Marching-ants animation for active canvas edges ────────────────── */
+@keyframes cfp-march { to { stroke-dashoffset: -200; } }
+.cfp-edge--active { stroke-dasharray: 6 4; animation: cfp-march 2.4s linear infinite; }
+
+/* ── Blink cursor for live trace ────────────────────────────────────── */
+@keyframes cfp-blink { 50% { opacity: 0; } }
+.cfp-blink { animation: cfp-blink 1s steps(1) infinite; }

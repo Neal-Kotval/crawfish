@@ -123,6 +123,79 @@ orgsRouter.get("/:id", async (req, res) => {
   return res.json(full);
 });
 
+// PUT /api/orgs/:id/agents — sync the full agent list for this org.
+// Dash sends the full agent list on each change; we replace.
+const SyncAgentsSchema = z.object({
+  agents: z.array(
+    z.object({
+      name: z.string().min(1).max(64),
+      role: z.string().min(1).max(280),
+      runtime: z.string().min(1).max(64),
+    }),
+  ),
+});
+orgsRouter.put("/:id/agents", async (req, res) => {
+  const userId = requireUser(req);
+  if (!userId) return httpError(res, 401, "unauthenticated", "Missing user.");
+
+  const { id } = req.params;
+  const org = await db.org.findFirst({
+    where: { OR: [{ id }, { name: id }] },
+    select: { id: true },
+  });
+  if (!org) return httpError(res, 404, "not_found", "Org not found.");
+
+  const membership = await db.orgMember.findUnique({
+    where: { orgId_userId: { orgId: org.id, userId } },
+  });
+  if (!membership) return httpError(res, 403, "forbidden", "Not a member of this org.");
+  if (membership.role !== "founder" && membership.role !== "contributor") {
+    return httpError(res, 403, "forbidden", "Need contributor or founder to sync agents.");
+  }
+
+  const parsed = SyncAgentsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return httpError(
+      res,
+      400,
+      "invalid_body",
+      parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+    );
+  }
+
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.agentMeta.deleteMany({ where: { orgId: org.id } });
+      if (parsed.data.agents.length > 0) {
+        await tx.agentMeta.createMany({
+          data: parsed.data.agents.map((a) => ({
+            orgId: org.id,
+            name: a.name,
+            role: a.role,
+            runtime: a.runtime,
+          })),
+        });
+      }
+    });
+    const after = await db.agentMeta.findMany({
+      where: { orgId: org.id },
+      orderBy: { hiredAt: "asc" },
+      select: { name: true, role: true, runtime: true, hiredAt: true },
+    });
+    return res.json({
+      ok: true,
+      agents: after.map((a) => ({
+        name: a.name,
+        role: a.role,
+        runtime: a.runtime,
+        hiredAt: a.hiredAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    return httpError(res, 500, "server_error", String(err));
+  }
+});
+
 // GET /api/me/orgs — orgs the current user is a member of, with counts.
 meRouter.get("/orgs", async (req, res) => {
   const userId = requireUser(req);

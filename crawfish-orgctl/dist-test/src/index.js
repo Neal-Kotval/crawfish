@@ -21,6 +21,7 @@ import { OrgError } from "./orgs.js";
 import { listTasks, createTask, updateTask, commentTask, } from "./board.js";
 import { listFiles, readFile, writeFile } from "./files.js";
 import { tokensOf } from "./tokens.js";
+import { ACTIVITY_TOOL_DEFS, dispatchActivity } from "./tools/activity.js";
 const server = new Server({ name: "crawfish-orgctl", version: "0.1.0" }, { capabilities: { tools: {} } });
 const TOOL_DEFS = [
     {
@@ -130,6 +131,8 @@ const TOOL_DEFS = [
             required: ["org_id", "path", "content"],
         },
     },
+    // Phase 3 — activity / comments / mentions
+    ...ACTIVITY_TOOL_DEFS,
 ];
 async function dispatch(name, args) {
     switch (name) {
@@ -178,6 +181,9 @@ async function dispatch(name, args) {
             return r;
         }
         default:
+            if (name.startsWith("activity_")) {
+                return dispatchActivity(name, args);
+            }
             throw new OrgError("not_found", `unknown tool: ${name}`);
     }
 }

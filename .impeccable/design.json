@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-17T00:00:00.000Z",
+  "title": "Design System: Crawfish",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Atlassian Blue",
+        "canonical": "#0052CC",
+        "tonalRamp": ["#091E42", "#0747A6", "#0052CC", "#0065FF", "#2684FF", "#4C9AFF", "#B3D4FF", "#DEEBFF"]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Cool Off-White",
+        "canonical": "#F7F8FA",
+        "tonalRamp": ["#091E42", "#172B4D", "#42526E", "#5E6C84", "#8993A4", "#C1C7D0", "#DFE1E6", "#F7F8FA"]
+      },
+      "bg-elevated": {
+        "role": "neutral",
+        "displayName": "Elevated Surface",
+        "canonical": "#FFFFFF",
+        "tonalRamp": ["#091E42", "#172B4D", "#42526E", "#5E6C84", "#8993A4", "#C1C7D0", "#EBECF0", "#FFFFFF"]
+      },
+      "fg": {
+        "role": "neutral",
+        "displayName": "Navy Ink",
+        "canonical": "#172B4D",
+        "tonalRamp": ["#091E42", "#172B4D", "#253858", "#42526E", "#5E6C84", "#8993A4", "#B3BAC5", "#DFE1E6"]
+      },
+      "blue": {
+        "role": "secondary",
+        "displayName": "Sky Companion",
+        "canonical": "#0052CC",
+        "tonalRamp": ["#091E42", "#0747A6", "#0052CC", "#0065FF", "#2684FF", "#4C9AFF", "#B3D4FF", "#DEEBFF"]
+      },
+      "cyan": {
+        "role": "secondary",
+        "displayName": "Cyan",
+        "canonical": "#00B8D9",
+        "tonalRamp": ["#003E4D", "#005566", "#007A8C", "#00A3BF", "#00B8D9", "#5BD3E8", "#B3F0FF", "#E6FCFF"]
+      },
+      "violet": {
+        "role": "secondary",
+        "displayName": "Violet",
+        "canonical": "#6554C0",
+        "tonalRamp": ["#1F1B40", "#2D2670", "#403294", "#5243AA", "#6554C0", "#998DD9", "#C0B6F2", "#EAE6FF"]
+      },
+      "mint": {
+        "role": "secondary",
+        "displayName": "Mint (decorative)",
+        "canonical": "#36B37E",
+        "tonalRamp": ["#0F3D2B", "#1F6041", "#2E8259", "#36B37E", "#57D9A3", "#9CECCF", "#C4F5E0", "#E3FCEF"]
+      },
+      "amber": {
+        "role": "secondary",
+        "displayName": "Amber (decorative)",
+        "canonical": "#FFAB00",
+        "tonalRamp": ["#3D2900", "#704D00", "#A37000", "#D69400", "#FFAB00", "#FFC400", "#FFE380", "#FFF7D6"]
+      },
+      "pink": {
+        "role": "secondary",
+        "displayName": "Pink",
+        "canonical": "#FF5C8A",
+        "tonalRamp": ["#3D162A", "#702647", "#A33765", "#D64983", "#FF5C8A", "#FF8FA3", "#FFC2CF", "#FFE6EC"]
+      },
+      "slate": {
+        "role": "neutral",
+        "displayName": "Slate",
+        "canonical": "#5E6C84",
+        "tonalRamp": ["#172B4D", "#253858", "#42526E", "#5E6C84", "#7A869A", "#97A0AF", "#B3BAC5", "#DFE1E6"]
+      },
+      "success": {
+        "role": "semantic",
+        "displayName": "Muted Teal-Green",
+        "canonical": "#006644",
+        "tonalRamp": ["#003D29", "#00553A", "#006644", "#00875A", "#36B37E", "#57D9A3", "#ABF5D1", "#E3FCEF"]
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Muted Amber",
+        "canonical": "#974F0C",
+        "tonalRamp": ["#3D1F00", "#5E3000", "#7A3F00", "#974F0C", "#B36E00", "#FFAB00", "#FFE380", "#FFF7D6"]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Desaturated Red",
+        "canonical": "#BF2600",
+        "tonalRamp": ["#3D0E00", "#691B00", "#8C2400", "#BF2600", "#DE350B", "#FF7452", "#FFBDAD", "#FFEBE6"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "KPI values, hero counters." },
+      "headline": { "displayName": "Headline", "purpose": "Page header titles, large section headers." },
+      "title": { "displayName": "Title", "purpose": "Card titles, dialog headers." },
+      "body": { "displayName": "Body", "purpose": "Default running copy at 14px." },
+      "label": { "displayName": "Label", "purpose": "Uppercase eyebrows, KPI kickers, status chips." },
+      "serif": { "displayName": "Editorial Serif", "purpose": "Italic accent inside page headers — sparingly." },
+      "mono": { "displayName": "Mono", "purpose": "Tabular numerics, inline code, transcript bodies." }
+    },
+    "shadows": [
+      { "name": "shadow-sm", "value": "0 1px 1px rgba(9, 30, 66, 0.08), 0 0 1px rgba(9, 30, 66, 0.10)", "purpose": "Default card resting elevation." },
+      { "name": "shadow-md", "value": "0 3px 5px rgba(9, 30, 66, 0.12), 0 0 1px rgba(9, 30, 66, 0.12)", "purpose": "Card hover lift." },
+      { "name": "shadow-lg", "value": "0 8px 16px -4px rgba(9, 30, 66, 0.18), 0 0 1px rgba(9, 30, 66, 0.14)", "purpose": "Drawers, modals, coachmarks." },
+      { "name": "glass-shadow", "value": "0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 1px rgba(9,30,66,0.06), 0 12px 24px -8px rgba(9,30,66,0.14)", "purpose": "iOS-style floating chrome composite." }
+    ],
+    "motion": [
+      { "name": "ease", "value": "cubic-bezier(0.2, 0, 0, 1)", "purpose": "iOS standard curve — state flips, hover/press." },
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Gentle settle — panel reveal, drawer rise." },
+      { "name": "duration-1", "value": "90ms", "purpose": "Instant state flip." },
+      { "name": "duration-2", "value": "140ms", "purpose": "Hover, press, segmented thumb glide." },
+      { "name": "duration-3", "value": "220ms", "purpose": "Panel reveal, drawer entrance." }
+    ],
+    "breakpoints": [
+      { "name": "content-max", "value": "1440px" },
+      { "name": "card-min", "value": "360px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one blue button per surface. Used for the primary action.",
+      "html": "<button class=\"ds-btn-primary\"><span>Add member</span></button>",
+      "css": ".ds-btn-primary { appearance: none; border: 1px solid #0052CC; background: #0052CC; color: #FFFFFF; padding: 6px 14px; height: 32px; border-radius: 4px; font-family: 'Geist', -apple-system, system-ui, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: -0.003em; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease; } .ds-btn-primary:hover { background: #0747A6; border-color: #0747A6; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #0052CC; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Default for any non-primary action. Bordered neutral.",
+      "html": "<button class=\"ds-btn-secondary\"><span>Cancel</span></button>",
+      "css": ".ds-btn-secondary { appearance: none; border: 1px solid #DFE1E6; background: #FFFFFF; color: #172B4D; padding: 6px 14px; height: 32px; border-radius: 4px; font-family: 'Geist', -apple-system, system-ui, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: -0.003em; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; transition: background 120ms ease, border-color 120ms ease; } .ds-btn-secondary:hover { background: rgba(9, 30, 66, 0.06); border-color: #C1C7D0; } .ds-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #0052CC; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Transparent button for tertiary actions inside toolbars.",
+      "html": "<button class=\"ds-btn-ghost\"><span>Filter</span></button>",
+      "css": ".ds-btn-ghost { appearance: none; border: 1px solid transparent; background: transparent; color: #42526E; padding: 6px 14px; height: 32px; border-radius: 4px; font-family: 'Geist', -apple-system, system-ui, sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 120ms ease, color 120ms ease; } .ds-btn-ghost:hover { background: rgba(9, 30, 66, 0.06); color: #172B4D; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Crisp opaque content surface. Lifts on hover. Never frosted.",
+      "html": "<article class=\"ds-card\"><h3 class=\"ds-card__title\">Engineering</h3><p class=\"ds-card__sub\">Today's spend, in-flight work, and what's slipping.</p></article>",
+      "css": ".ds-card { background: #FFFFFF; border: 1px solid #DFE1E6; border-radius: 8px; padding: 24px 26px; box-shadow: 0 1px 1px rgba(9, 30, 66, 0.08), 0 0 1px rgba(9, 30, 66, 0.10); transition: border-color 120ms ease, box-shadow 120ms ease; display: flex; flex-direction: column; gap: 12px; font-family: 'Geist', -apple-system, system-ui, sans-serif; } .ds-card:hover { border-color: #C1C7D0; box-shadow: 0 3px 5px rgba(9, 30, 66, 0.12), 0 0 1px rgba(9, 30, 66, 0.12); } .ds-card__title { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.005em; color: #172B4D; } .ds-card__sub { margin: 0; font-size: 13px; line-height: 1.5; color: #42526E; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Text input with accent halo focus.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Search agents\" />",
+      "css": ".ds-input { font-family: 'Geist', -apple-system, system-ui, sans-serif; font-size: 14px; padding: 7px 10px; border-radius: 4px; border: 1px solid #C1C7D0; background: #FFFFFF; color: #172B4D; outline: none; transition: border-color 100ms ease, box-shadow 100ms ease; width: 100%; } .ds-input::placeholder { color: #8993A4; } .ds-input:focus { border-color: #0052CC; box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.12); }"
+    },
+    {
+      "name": "Status Chip — In Progress",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Workflow status chip. Blue tint reuses the brand accent for the in-progress state.",
+      "html": "<span class=\"ds-status ds-status--progress\">In progress</span>",
+      "css": ".ds-status { font-family: 'Geist', -apple-system, system-ui, sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 3px; display: inline-flex; align-items: center; gap: 4px; } .ds-status--progress { background: rgba(0, 82, 204, 0.12); color: #0747A6; }"
+    },
+    {
+      "name": "KPI Tile",
+      "kind": "custom",
+      "refersTo": "kpi",
+      "description": "Signature numeric metric tile. Tonal accent strip tints the surface without competing with the value typography.",
+      "html": "<div class=\"ds-kpi ds-kpi--blue\"><span class=\"ds-kpi__kicker\">Tokens today</span><span class=\"ds-kpi__value\">128,402</span><span class=\"ds-kpi__sub\"><span class=\"ds-kpi__trend ds-kpi__trend--up\">↑ 12%</span> vs. last week</span></div>",
+      "css": ".ds-kpi { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; background: #FFFFFF; border: 1px solid #DFE1E6; border-radius: 6px; position: relative; overflow: hidden; font-family: 'Geist', -apple-system, system-ui, sans-serif; color: #0052CC; } .ds-kpi--blue::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(135deg, currentColor 0%, transparent 60%); opacity: 0.06; } .ds-kpi > * { position: relative; z-index: 1; color: #172B4D; } .ds-kpi__kicker { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #5E6C84; } .ds-kpi__value { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; } .ds-kpi__sub { font-size: 12px; color: #42526E; display: flex; align-items: center; gap: 6px; } .ds-kpi__trend--up { color: #006644; font-weight: 600; }"
+    },
+    {
+      "name": "Sidebar Item (Active)",
+      "kind": "nav",
+      "refersTo": "sidebar-item-active",
+      "description": "Active sidebar route. Blue-tinted wash plus a 3px inset accent rail on the left edge.",
+      "html": "<a class=\"ds-nav-item ds-nav-item--active\" href=\"#\"><span class=\"ds-nav-item__icon\" aria-hidden=\"true\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"/></svg></span><span>Dashboard</span></a>",
+      "css": ".ds-nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 4px; font-family: 'Geist', -apple-system, system-ui, sans-serif; font-size: 14px; color: #42526E; cursor: pointer; text-decoration: none; position: relative; transition: background 120ms ease, color 120ms ease; } .ds-nav-item:hover { background: rgba(9, 30, 66, 0.06); color: #172B4D; } .ds-nav-item--active { background: rgba(0, 82, 204, 0.10); color: #0747A6; font-weight: 600; } .ds-nav-item--active::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; border-radius: 999px; background: #0052CC; }"
+    },
+    {
+      "name": "Glass Bar",
+      "kind": "custom",
+      "refersTo": "glass-bar",
+      "description": "Sticky frosted header strip that floats over scrolling content. The signature iOS look.",
+      "html": "<header class=\"ds-glass-bar\"><span class=\"ds-glass-bar__title\">Engineering</span><button class=\"ds-glass-bar__cta\">New task</button></header>",
+      "css": ".ds-glass-bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: rgba(255, 255, 255, 0.72); border-bottom: 1px solid rgba(9, 30, 66, 0.08); backdrop-filter: saturate(140%) blur(20px); -webkit-backdrop-filter: saturate(140%) blur(20px); box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 1px 1px rgba(9,30,66,0.06), 0 12px 24px -8px rgba(9,30,66,0.14); font-family: 'Geist', -apple-system, system-ui, sans-serif; } .ds-glass-bar__title { font-size: 16px; font-weight: 600; letter-spacing: -0.012em; color: #172B4D; margin-right: auto; } .ds-glass-bar__cta { appearance: none; border: 1px solid #0052CC; background: #0052CC; color: #FFFFFF; padding: 4px 10px; height: 28px; border-radius: 4px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 120ms ease; } .ds-glass-bar__cta:hover { background: #0747A6; } @supports not ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0))) { .ds-glass-bar { background: #FFFFFF; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Working Surface",
+    "overview": "Crawfish sits at the intersection of Jira's task density, Workday's calm neutrality, and iOS's frosted depth — and looks like none of them individually. It is the workplace for an organization where agents are first-class employees, so it reads as a working tool, not a marketing site. Information density is generous; chrome is quiet; the single brand blue carries identity without fighting for attention. The system is built on four ideas, applied in order: a single blue plus calibrated color, glass for chrome and opaque for content, typography with a point of view (Geist + Geist Mono + Instrument Serif), and 4px rhythm ruthlessly.",
+    "keyCharacteristics": [
+      "Dense but calm. Information-first; chrome never competes with content.",
+      "One blue, used sparingly. Secondary hues never become surfaces.",
+      "Glass floats over content. Opaque surfaces hold content.",
+      "iOS settles, not Material bounces. Functional motion only.",
+      "Geist + Geist Mono + Instrument Serif. Closed set — no third family."
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "One primary action per surface, ever. The Atlassian blue is the loudest color on the page; if a second blue button appears, one of them is wrong.", "section": "colors" },
+      { "name": "The Brand-vs-State Rule", "body": "The extended palette (sky / cyan / violet / mint / amber / pink / slate) decorates. The semantic palette (success / warning / danger) communicates state. Mint is never the success color; amber is never the warning color. Status carries text in addition to color.", "section": "colors" },
+      { "name": "The Workflow Cools Rule", "body": "Workflow positions (\"done\", \"in review\") use cool status palette entries (sky-blue for done, violet for review) — never green or red. Green and red are reserved for state semantics.", "section": "colors" },
+      { "name": "The Closed-Set Rule", "body": "Three families: Geist, Geist Mono, Instrument Serif. A fourth family is forbidden.", "section": "typography" },
+      { "name": "The Tabular Numerics Rule", "body": "Every numeric column in tables, every KPI value, every token-bucket count uses font-variant-numeric: tabular-nums. Misaligned digits are forbidden.", "section": "typography" },
+      { "name": "The Serif-Sparingly Rule", "body": "Instrument Serif appears at most once per page, in italic, as an editorial accent inside a sans page header. Never as running copy. Never upright.", "section": "typography" },
+      { "name": "The Glass-Is-Chrome Rule", "body": "Frosted glass applies only to floating chrome — sticky route headers, command palettes, modal headers, drawers, tooltips. Content surfaces are crisp opaque. Glass is never stacked on glass.", "section": "elevation" },
+      { "name": "The Soft-Settle Rule", "body": "Card hover lifts shadow sm → md over 120ms. No bounces, no elastic easings on functional controls. iOS settle curves only.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use a single blue (#0052CC light / #4C9AFF dark) for the one primary action per surface.",
+      "Do route every color, spacing, radius, and shadow through a --cf-* token. Reference variables by name, never raw hex.",
+      "Do float chrome on glass (.cf-glass, .cf-glass-bar). Keep content cards crisp opaque.",
+      "Do ship a @supports not (backdrop-filter) fallback for every glass surface.",
+      "Do use tabular numerics on every numeric column, KPI value, and token-bucket display.",
+      "Do keep buttons within a cluster at the same height.",
+      "Do truncate user-supplied strings with .cf-truncate — never wrap a multi-line title in a list item.",
+      "Do carry the active-state signal in two channels: background wash plus a 3px inset rail on sidebar items. Color is never the only signal.",
+      "Do import shared primitives from @crawfish/ui — never copy a component into a submodule."
+    ],
+    "donts": [
+      "Don't apply backdrop-filter to a content card. Glass is for chrome only.",
+      "Don't stack glass on glass. One frosted layer at a time.",
+      "Don't use purple-to-blue marketing gradients, animated blobs, or glassmorphism as decoration.",
+      "Don't use the hero-metric SaaS template.",
+      "Don't introduce a fourth font family. Geist + Geist Mono + Instrument Serif is the closed set.",
+      "Don't use Instrument Serif as running copy, upright, or more than once per page.",
+      "Don't use green as a workflow color. Workflow positions use cool palette entries.",
+      "Don't use mint as the success color or amber as the warning color.",
+      "Don't add a new color outside the extended palette without writing it in DESIGN.md first.",
+      "Don't hand-roll a button. Use <Button> / <IconButton>.",
+      "Don't use magic numbers for spacing, radius, or shadow. 18, 22, 26 are forbidden — not on the 4px grid.",
+      "Don't use bouncing or elastic cubic-bezier on functional controls. iOS settles only.",
+      "Don't animate CSS layout properties.",
+      "Don't use emoji in product icons. Use the inline SVG <Icon> set.",
+      "Don't import from crawfish-dash into crawfish-lens or vice versa.",
+      "Don't use a border-left greater than 1px as a colored accent stripe.",
+      "Don't use gradient text. Solid color, with emphasis through weight and size.",
+      "Don't use an em dash in product copy."
+    ]
+  }
+}

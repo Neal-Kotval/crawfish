@@ -25,6 +25,7 @@ import { Auth } from "./pages/Auth";
 import { OrgPicker } from "./pages/OrgPicker";
 import { OnboardingFlow } from "./onboarding/OnboardingFlow";
 import { OrgRoute } from "./pages/OrgRoute";
+import { LinkRedeem } from "./pages/Link";
 import { CLERK_ENABLED, CLERK_KEY } from "./lib/clerk";
 import { RequireAuth } from "./lib/useAuth";
 import "@crawfish/ui/tokens/globals.css";
@@ -37,6 +38,8 @@ const tree = (
 
       <Route path="/onboarding"        element={<OnboardingFlow />} />
       <Route path="/onboarding/:step"  element={<OnboardingFlow />} />
+
+      <Route path="/link/:code" element={<RequireAuth><LinkRedeem /></RequireAuth>} />
 
       <Route element={<RequireAuth><Shell /></RequireAuth>}>
         <Route path="/" element={<OrgPicker />} />
