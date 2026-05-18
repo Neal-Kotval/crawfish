@@ -139,42 +139,47 @@ export function Shell() {
         ) : (
           <>
             <div>
-              {orgs.length > 0 && (
-                <Eyebrow style={{ padding: "0 6px", marginBottom: 6 }}>Your orgs</Eyebrow>
+              {/* Per 2026-05-18 brainstorm: one user, one workspace. We only
+                  render the multi-org list when the user is a legacy account
+                  with >1 org. New users see a clean sidebar — their projects
+                  live on the Dashboard at /, not behind an org picker. */}
+              {orgs.length > 1 && (
+                <>
+                  <Eyebrow style={{ padding: "0 6px", marginBottom: 6 }}>Your workspaces</Eyebrow>
+                  {orgs.map((o) => {
+                    const isActive = inOrg && org === o.name;
+                    return (
+                      <SideItem
+                        key={o.id}
+                        label={
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                            {isActive && (
+                              <span
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: "50%",
+                                  background: "var(--accent)",
+                                  flexShrink: 0,
+                                }}
+                              />
+                            )}
+                            {o.name}
+                          </span>
+                        }
+                        active={isActive}
+                        onClick={() => navigate(`/orgs/${o.name}/canvas`)}
+                      />
+                    );
+                  })}
+                </>
               )}
-              {orgs.length > 0 && orgs.map((o) => {
-                const isActive = inOrg && org === o.name;
-                return (
-                  <SideItem
-                    key={o.id}
-                    label={
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                        {isActive && (
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: "50%",
-                              background: "var(--accent)",
-                              flexShrink: 0,
-                            }}
-                          />
-                        )}
-                        {o.name}
-                      </span>
-                    }
-                    active={isActive}
-                    onClick={() => navigate(`/orgs/${o.name}/canvas`)}
-                  />
-                );
-              })}
-              <div style={{ marginTop: 6 }}>
+              {orgs.length === 1 && inOrg && (
                 <SideItem
-                  icon={Icons.plus}
-                  label="New org"
-                  onClick={() => navigate("/onboarding")}
+                  label="← Dashboard"
+                  onClick={() => navigate("/")}
                 />
-              </div>
+              )}
             </div>
 
             <div style={{ marginTop: "auto" }}>

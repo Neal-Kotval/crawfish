@@ -22,7 +22,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { Shell } from "./Shell";
 import { Auth } from "./pages/Auth";
-import { OrgPicker } from "./pages/OrgPicker";
+import { Dashboard } from "./pages/Dashboard";
 import { OnboardingFlow } from "./onboarding/OnboardingFlow";
 import { OrgRoute } from "./pages/OrgRoute";
 import { LinkRedeem } from "./pages/Link";
@@ -46,7 +46,7 @@ const tree = (
       <Route path="/invites/:code" element={<InviteAccept />} />
 
       <Route element={<RequireAuth><Shell /></RequireAuth>}>
-        <Route path="/" element={<OrgPicker />} />
+        <Route path="/" element={<Dashboard />} />
         <Route path="/orgs/:org/:tab" element={<OrgRoute />} />
         <Route path="/orgs/:org"      element={<Navigate to="canvas" replace />} />
       </Route>
