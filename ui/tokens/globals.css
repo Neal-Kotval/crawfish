@@ -1746,6 +1746,14 @@ code, pre, kbd, samp {
   gap: 12px;
   align-items: start;
 }
+/* Below 960px the shell narrows and 4×260=1040px columns force horizontal
+   scroll. Fall back to auto-fit so columns wrap (2-up on tablet, 1-up on
+   phone). */
+@media (max-width: 960px) {
+  .cf-board {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
 .cf-kanban-column {
   background: var(--cf-bg-sunken);
   border-radius: var(--cf-radius-lg);
@@ -3617,7 +3625,15 @@ textarea:focus-visible {
   padding: 16px 12px; display: flex; flex-direction: column; gap: 18px;
   overflow: hidden;
 }
-.cfp-shell__main { position: relative; overflow: auto; background: var(--paper); }
+.cfp-shell__main { position: relative; overflow: auto; background: var(--paper); min-width: 0; min-height: 0; }
+/* App-provided padded wrapper for routes that don't manage their own layout
+   (everything except Canvas/AgentCanvas, which render the full main+rail
+   themselves). Padding lives here, not on each route, so the shell stays
+   consistent and routes can return Fragments or plain divs. */
+.cfp-shell__main--padded { padding: 28px; }
+@media (max-width: 768px) {
+  .cfp-shell__main--padded { padding: 16px; }
+}
 .cfp-shell__rail {
   border-left: 1px solid var(--rule); background: var(--surface-3);
   display: flex; flex-direction: column; overflow: hidden;
