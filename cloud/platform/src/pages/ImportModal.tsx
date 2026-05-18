@@ -62,7 +62,7 @@ export function ImportModal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.45)",
+        background: "rgba(26,26,24,0.45)",
         zIndex: 1000,
         display: "flex",
         alignItems: "flex-start",
@@ -78,7 +78,7 @@ export function ImportModal({
           background: "var(--paper)",
           border: "1px solid var(--rule-3)",
           borderRadius: "var(--r-lg)",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.25)",
+          boxShadow: "var(--shadow-lg)",
           display: "flex",
           flexDirection: "column",
           maxHeight: "80vh",
