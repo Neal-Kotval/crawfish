@@ -1,16 +1,17 @@
 /**
  * JWT helpers for device-link tokens.
  *
- * - JWT_SECRET comes from env. If absent in dev, we generate a 64-byte hex
- *   secret and *append* it to .env so subsequent restarts use the same key.
- * - Tokens have a 90-day TTL and carry `{ sub: userId, orgId }`.
+ * JWT_SECRET MUST be set in prod (boot fails otherwise). In dev, if missing
+ * we generate an in-memory secret and log it once. We never write to .env.
+ *
+ * Tokens carry `{ sub: userId, orgId, aud: "dash-sync" }` and TTL 30 days.
+ * Verifiers MUST check `aud` so dash-sync tokens can only authorize the
+ * dash-sync surface, not arbitrary user routes.
  */
 import jwt from "jsonwebtoken";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, appendFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
 
-const ENV_PATH = resolve(process.cwd(), ".env");
+const TOKEN_AUDIENCE = "dash-sync";
 let cachedSecret: string | null = null;
 
 export function getOrCreateJwtSecret(): string {
@@ -20,29 +21,19 @@ export function getOrCreateJwtSecret(): string {
     cachedSecret = fromEnv;
     return cachedSecret;
   }
-  // Generate, persist to .env (so next boot reuses it), and warn once.
-  const generated = randomBytes(64).toString("hex");
-  try {
-    if (existsSync(ENV_PATH)) {
-      const raw = readFileSync(ENV_PATH, "utf8");
-      if (!/^JWT_SECRET=/m.test(raw)) {
-        const sep = raw.endsWith("\n") ? "" : "\n";
-        appendFileSync(ENV_PATH, `${sep}JWT_SECRET="${generated}"\n`, "utf8");
-      }
-    } else {
-      writeFileSync(ENV_PATH, `JWT_SECRET="${generated}"\n`, "utf8");
-    }
-    // eslint-disable-next-line no-console
-    console.warn(
-      "[jwt] JWT_SECRET was missing; generated a new one and wrote it to .env. " +
-        "Restart the server to load it from env on next boot.",
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "JWT_SECRET is required in production (>= 32 chars). Set it in the deployment environment.",
     );
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn("[jwt] Could not persist generated JWT_SECRET to .env:", err);
   }
+  const generated = randomBytes(64).toString("hex");
   process.env.JWT_SECRET = generated;
   cachedSecret = generated;
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[jwt] JWT_SECRET missing in dev; generated an in-memory secret. " +
+      "Set JWT_SECRET in your .env to persist tokens across restarts.",
+  );
   return cachedSecret;
 }
 
@@ -53,12 +44,15 @@ export interface OrgTokenPayload {
 
 export function signOrgToken(userId: string, orgId: string): string {
   const secret = getOrCreateJwtSecret();
-  return jwt.sign({ sub: userId, orgId }, secret, { expiresIn: "90d" });
+  return jwt.sign({ sub: userId, orgId }, secret, {
+    audience: TOKEN_AUDIENCE,
+    expiresIn: "30d",
+  });
 }
 
 export function verifyOrgToken(token: string): OrgTokenPayload {
   const secret = getOrCreateJwtSecret();
-  const decoded = jwt.verify(token, secret) as jwt.JwtPayload;
+  const decoded = jwt.verify(token, secret, { audience: TOKEN_AUDIENCE }) as jwt.JwtPayload;
   if (typeof decoded.sub !== "string" || typeof decoded.orgId !== "string") {
     throw new Error("invalid token payload");
   }

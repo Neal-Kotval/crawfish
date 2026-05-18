@@ -88,10 +88,12 @@ invitesRouter.post("/", async (req, res) => {
 
     const link = `${PLATFORM_URL}/invites/${code}`;
     const subject = `You're invited to ${check.org.name} on Crawfish`;
-    // eslint-disable-next-line no-console
-    console.log(
-      `[mock-email] To: ${email}\n[mock-email] Subject: ${subject}\n[mock-email] Link: ${link}`,
-    );
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[mock-email] To: ${email}\n[mock-email] Subject: ${subject}\n[mock-email] Link: ${link}`,
+      );
+    }
 
     return res.status(201).json({
       id: invite.id,
@@ -189,8 +191,11 @@ publicInvitesRouter.get("/:code", async (req, res) => {
   });
 });
 
-// POST /api/invites/:code/accept — auth required
-publicInvitesRouter.post("/:code/accept", async (req, res) => {
+// POST /api/invites/:code/accept — auth required.
+// publicInvitesRouter is mounted before the global authMiddleware (so GET
+// remains anonymous), so the accept route applies auth inline.
+import { authMiddleware as _acceptAuth } from "../middleware/auth.js";
+publicInvitesRouter.post("/:code/accept", _acceptAuth, async (req, res) => {
   const userId = requireUser(req);
   if (!userId) return httpError(res, 401, "unauthenticated", "Sign in to accept this invite.");
 

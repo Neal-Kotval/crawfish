@@ -13,7 +13,7 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { customAlphabet } from "nanoid/non-secure";
+import { customAlphabet } from "nanoid";
 import { db } from "../index.js";
 import { httpError } from "../lib/errors.js";
 import { signOrgToken } from "../lib/jwt.js";
@@ -21,7 +21,8 @@ import { signOrgToken } from "../lib/jwt.js";
 export const deviceLinkRouter = Router();
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // drops I/L/O/0/1
-const newCode = customAlphabet(CODE_ALPHABET, 6);
+// 10 chars from a 32-letter alphabet -> 50 bits, generated from the CSPRNG.
+const newCode = customAlphabet(CODE_ALPHABET, 10);
 
 const TEN_MIN_MS = 10 * 60 * 1000;
 
@@ -65,24 +66,27 @@ deviceLinkRouter.post("/", async (req, res) => {
     const expiresAt = new Date(Date.now() + TEN_MIN_MS);
 
     await db.$transaction(async (tx) => {
-      // Find-or-create the Org by name. Note: if the name is taken by a
-      // different founder, we still create the code — redemption will
-      // fail-safe via the OrgMember upsert (founder-owned orgs reject
-      // strangers because the create step would re-use the row).
-      const org = await tx.org.upsert({
+      // If the name is already claimed by an org that has a founder, refuse
+      // anonymous mutation. Otherwise the squatter scenario (H1/H2) lets a
+      // stranger pre-claim a name and silently attach to a real user's data.
+      const existing = await tx.org.findUnique({
         where: { name: localOrg.name },
-        update: {
-          project: localOrg.project ?? undefined,
-          teamSize: localOrg.teamSize ?? undefined,
-          primaryClient: localOrg.primaryClient ?? undefined,
-        },
-        create: {
-          name: localOrg.name,
-          project: localOrg.project ?? null,
-          teamSize: localOrg.teamSize ?? null,
-          primaryClient: localOrg.primaryClient ?? null,
-        },
+        include: { members: { where: { role: "founder" }, select: { id: true } } },
       });
+      if (existing && existing.members.length > 0) {
+        throw new Error("name_unavailable");
+      }
+
+      const org = existing
+        ? existing
+        : await tx.org.create({
+            data: {
+              name: localOrg.name,
+              project: localOrg.project ?? null,
+              teamSize: localOrg.teamSize ?? null,
+              primaryClient: localOrg.primaryClient ?? null,
+            },
+          });
 
       // Sync-style: Dash is the source of truth on first link. Replace.
       await tx.agentMeta.deleteMany({ where: { orgId: org.id } });
@@ -108,6 +112,9 @@ deviceLinkRouter.post("/", async (req, res) => {
       verifyUrl: `${PLATFORM_BASE_URL}/link/${code}`,
     });
   } catch (err) {
+    if (err instanceof Error && err.message === "name_unavailable") {
+      return httpError(res, 409, "name_unavailable", "That org name is not available.");
+    }
     return httpError(res, 500, "server_error", String(err));
   }
 });
@@ -138,7 +145,10 @@ deviceLinkRouter.get("/:code", async (req, res) => {
 });
 
 // POST /api/device-link/:code/redeem — auth required (signed-in user).
-deviceLinkRouter.post("/:code/redeem", async (req, res) => {
+// Note: deviceLinkRouter is mounted BEFORE authMiddleware in index.ts, so we
+// run authMiddleware inline here.
+import { authMiddleware as _redeemAuth } from "../middleware/auth.js";
+deviceLinkRouter.post("/:code/redeem", _redeemAuth, async (req, res) => {
   const userId = req.userId;
   if (!userId) return httpError(res, 401, "unauthenticated", "Sign in to confirm a device.");
 
@@ -160,21 +170,33 @@ deviceLinkRouter.post("/:code/redeem", async (req, res) => {
     });
     if (!org) return httpError(res, 404, "not_found", "Org no longer exists.");
 
-    // Upsert membership: if the user is already a member, only upgrade to
-    // founder (don't downgrade existing founders or owners).
+    // Membership rules: only allow founder-self-promotion if the org has no
+    // founder yet. Otherwise add as contributor (or keep existing role).
+    // This blocks the H2 path where a pre-existing member auto-becomes
+    // founder simply by redeeming.
+    const existingFounder = await db.orgMember.findFirst({
+      where: { orgId: org.id, role: "founder" },
+      select: { userId: true },
+    });
     const existing = await db.orgMember.findUnique({
       where: { orgId_userId: { orgId: org.id, userId } },
     });
+    const canBeFounder = !existingFounder || existingFounder.userId === userId;
     if (existing) {
-      if (existing.role !== "founder") {
+      if (canBeFounder && existing.role !== "founder") {
         await db.orgMember.update({
           where: { orgId_userId: { orgId: org.id, userId } },
           data: { role: "founder" },
         });
       }
+      // else: keep existing role; don't silently change it.
     } else {
       await db.orgMember.create({
-        data: { orgId: org.id, userId, role: "founder" },
+        data: {
+          orgId: org.id,
+          userId,
+          role: canBeFounder ? "founder" : "contributor",
+        },
       });
     }
 

@@ -13,6 +13,7 @@ import { loadOrgWithRelations } from "../lib/orgs.js";
 
 export const orgsRouter = Router();
 export const meRouter = Router();
+export const dashAgentsRouter = Router();
 
 const DEFAULT_AGENTS = [
   { name: "eng-bot", role: "engineer", runtime: "claude-code" },
@@ -92,7 +93,7 @@ orgsRouter.post("/", async (req, res) => {
     return res.status(201).json(full);
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      return httpError(res, 409, "name_taken", `Org name ${body.name} already exists`);
+      return httpError(res, 409, "name_unavailable", "That org name is not available.");
     }
     return httpError(res, 500, "server_error", String(err));
   }
@@ -111,12 +112,13 @@ orgsRouter.get("/:id", async (req, res) => {
     where: { OR: [{ id }, { name: id }] },
     select: { id: true },
   });
+  // Collapse 403 into 404 for non-members so the route does not leak org
+  // existence to outsiders.
   if (!org) return httpError(res, 404, "not_found", "Org not found.");
-
   const membership = await db.orgMember.findUnique({
     where: { orgId_userId: { orgId: org.id, userId } },
   });
-  if (!membership) return httpError(res, 403, "forbidden", "Not a member of this org.");
+  if (!membership) return httpError(res, 404, "not_found", "Org not found.");
 
   const full = await loadOrgWithRelations(org.id);
   if (!full) return httpError(res, 404, "not_found", "Org not found.");
@@ -148,7 +150,7 @@ orgsRouter.put("/:id/agents", async (req, res) => {
   const membership = await db.orgMember.findUnique({
     where: { orgId_userId: { orgId: org.id, userId } },
   });
-  if (!membership) return httpError(res, 403, "forbidden", "Not a member of this org.");
+  if (!membership) return httpError(res, 404, "not_found", "Org not found.");
   if (membership.role !== "founder" && membership.role !== "contributor") {
     return httpError(res, 403, "forbidden", "Need contributor or founder to sync agents.");
   }
@@ -191,6 +193,64 @@ orgsRouter.put("/:id/agents", async (req, res) => {
         hiredAt: a.hiredAt.toISOString(),
       })),
     });
+  } catch (err) {
+    return httpError(res, 500, "server_error", String(err));
+  }
+});
+
+// PUT /api/dash/orgs/:id/agents — dash-sync endpoint. Authenticated by
+// X-Crawfish-Token (dashSyncMiddleware sets req.userId + req.dashOrgId).
+// The token's `orgId` claim must match the URL :id — a token issued for
+// one org cannot mutate another.
+dashAgentsRouter.put("/orgs/:id/agents", async (req, res) => {
+  const userId = req.userId;
+  const dashOrgId = (req as Request & { dashOrgId?: string }).dashOrgId;
+  if (!userId || !dashOrgId) {
+    return httpError(res, 401, "unauthenticated", "Dash-sync token required.");
+  }
+
+  const { id } = req.params;
+  const org = await db.org.findFirst({
+    where: { OR: [{ id }, { name: id }] },
+    select: { id: true },
+  });
+  if (!org) return httpError(res, 404, "not_found", "Org not found.");
+  if (org.id !== dashOrgId) {
+    return httpError(res, 403, "forbidden", "Token does not authorize this org.");
+  }
+
+  // The signer must still be an OrgMember (defense-in-depth in case a token
+  // outlives the membership).
+  const membership = await db.orgMember.findUnique({
+    where: { orgId_userId: { orgId: org.id, userId } },
+  });
+  if (!membership) return httpError(res, 404, "not_found", "Org not found.");
+
+  const parsed = SyncAgentsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return httpError(
+      res,
+      400,
+      "invalid_body",
+      parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+    );
+  }
+
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.agentMeta.deleteMany({ where: { orgId: org.id } });
+      if (parsed.data.agents.length > 0) {
+        await tx.agentMeta.createMany({
+          data: parsed.data.agents.map((a) => ({
+            orgId: org.id,
+            name: a.name,
+            role: a.role,
+            runtime: a.runtime,
+          })),
+        });
+      }
+    });
+    return res.json({ ok: true });
   } catch (err) {
     return httpError(res, 500, "server_error", String(err));
   }

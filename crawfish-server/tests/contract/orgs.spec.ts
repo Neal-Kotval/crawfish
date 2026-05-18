@@ -20,7 +20,7 @@ describe("POST /api/orgs", () => {
     expect(res.body.agents.length).toBe(4);
   });
 
-  it("returns 409 name_taken when the org name is reused", async () => {
+  it("returns 409 name_unavailable when the org name is reused", async () => {
     const res = await asUser(client().post("/api/orgs"), "alice").send({
       name: "alpha-org",
       project: ALPHA_PROJECT,
@@ -28,7 +28,7 @@ describe("POST /api/orgs", () => {
       teamSize: "Just me",
     });
     expect(res.status).toBe(409);
-    expect(res.body.error?.code).toBe("name_taken");
+    expect(res.body.error?.code).toBe("name_unavailable");
   });
 
   it("rejects an invalid name with 400 invalid_body", async () => {
@@ -84,10 +84,10 @@ describe("GET /api/me/orgs and /api/orgs/:id", () => {
     expect(res.body.name).toBe("alpha-org");
   });
 
-  it("returns 403 to a non-member", async () => {
+  it("returns 404 to a non-member (collapsed from 403 to avoid existence oracle)", async () => {
     const res = await asUser(client().get("/api/orgs/alpha-org"), "mallory");
-    expect(res.status).toBe(403);
-    expect(res.body.error?.code).toBe("forbidden");
+    expect(res.status).toBe(404);
+    expect(res.body.error?.code).toBe("not_found");
   });
 
   it("returns 404 for a non-existent org", async () => {
