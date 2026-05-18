@@ -269,3 +269,24 @@ The six P1 blockers from `2026-05-18-org-workspace.md` were marked resolved in c
 | Hardcoded SVG edges | Confirmed resolved — no edges rendered (topology is empty, correctly) |
 
 All six P1s from the org-workspace audit are clear. No regression observed.
+
+---
+
+## Fix-pass 2026-05-18
+
+**Teammate:** fix-dash · **Commits (dash submodule):**
+
+| Commit | Finding closed | Change |
+|---|---|---|
+| `f5bc5ae` | Major 4 — Canvas "Hire agent" / "Invite human" non-functional | Both buttons now disabled when no org loaded; Hire agent permanently `disabled title="Coming soon"` |
+| `f5bc5ae` | Major 7 — Appearance dark mode broken promise | Removed the interactive Dark option; Dark shown as disabled "Coming soon"; Light remains selected and honest |
+| `f5bc5ae` | Major 8 — `var(--bad, #b1452f)` hex fallback in App.tsx OnlineLink | Removed hex fallback; now `var(--bad)` only |
+| `f5bc5ae` | Major — Analytics ProductPane bar color | Bar fill changed from `var(--cf-fg)` to `var(--accent)` |
+
+**Type-check:** `npx tsc --noEmit -p tsconfig.json` — 0 errors.
+
+**Not fixed here (scope or deferred):**
+- Major 6 — Settings/Policies mobile layout (`@media (max-width: 700px)` rule) requires `ui/tokens/globals.css` — lead-only file. Lead to add `.cf-settings { grid-template-columns: 1fr }` breakpoint.
+- Minor 9 — Home `<h2>` vs `<h1>`: low impact; deferred.
+- Minor 10–13 — icons, legacy tokens, `div[role=button]`: deferred to Wave 5 sweep.
+- Polish items: no code change required per brief.

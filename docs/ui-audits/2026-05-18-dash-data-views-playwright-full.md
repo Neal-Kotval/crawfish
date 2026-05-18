@@ -344,3 +344,27 @@ This shifts the cluster from a pattern of "navigate → hit error → no escape"
 | `/settings/appearance` | `/Users/nealkotval/crawfish/.audit/userflow/settings-appearance/` — same set |
 | Retired routes (redirect confirm) | `/Users/nealkotval/crawfish/.audit/userflow/retired-*/desktop-light.png` |
 | Findings JSON | `/Users/nealkotval/crawfish/.audit/data-views-findings.json` |
+
+---
+
+## Fix-pass 2026-05-18
+
+**Teammate:** fix-dash · **Commits (dash submodule):**
+
+| Commit | Finding closed | Change |
+|---|---|---|
+| `8cae2ae` | B1 — `/knowledge` dead end (no CTA) | Added primary "Go to Canvas" button navigating to `/`; error state now uses `formatApiError` + Retry CTA |
+| `80a605f` | B2 — `/diagnoses` double-message when lens offline | Detects HTTP 500 as lens-offline; shows only architectural explanation + Reload CTA; stops polling interval on offline (fixes Mi3 5× ERR_ABORTED too) |
+| `b5fae62` | B3 — Raw HTTP strings in Settings tabs | `policies.tsx`, `runtimes.tsx`, `integrations.tsx` now use `formatApiError`; all have Retry CTAs. `agents.tsx` and `optimizers.tsx` already used `friendlyError` — unchanged |
+| `f5bc5ae` | M1 — Projects no-org dead end | Added "Go to Canvas" primary CTA; error state uses `formatApiError` + Retry |
+| `f5bc5ae` | M2 — Settings shell no `<main>` landmark | `cf-settings__panel` div promoted to `<main>` |
+| `f5bc5ae` | M4 — `var(--bad, #b1452f)` hex fallback in App.tsx | Removed hex fallback |
+| `f5bc5ae` | M5 — Appearance Dark option broken promise | Removed interactive Dark option; shown disabled with "Coming soon"; copy updated to be honest |
+| `f5bc5ae` | Major — Analytics bar color | Bar fill `var(--cf-fg)` → `var(--accent)` |
+
+**Type-check:** `npx tsc --noEmit -p tsconfig.json` — 0 errors.
+
+**Not fixed here (scope or deferred):**
+- M3 — Settings mobile layout requires `ui/tokens/globals.css` (@media breakpoint) — lead-only file. Recommended fix: `@media (max-width: 700px) { .cf-settings { grid-template-columns: 1fr; } .cf-settings__nav { border-right: none; border-bottom: 1px solid var(--rule); } }`.
+- Mi5 — "2 live" Sessions badge hardcoded: lives in `App.tsx` WORKSPACE_NAV — lead already stripped it per commit a09ff95; verify at runtime.
+- Minor + Polish items: deferred per brief.
