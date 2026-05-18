@@ -560,8 +560,35 @@ function Hired({ org, answers }: { org: Org | null; answers: Answers }) {
   );
 }
 
+const MARKETING_URL = (import.meta.env.VITE_MARKETING_URL as string | undefined) ?? "http://localhost:5173";
+
 function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
   const name = org?.name ?? answers.name ?? "your-org";
+  const navigate = useNavigate();
+  const [dashLikelyMissing, setDashLikelyMissing] = useState(false);
+
+  // Custom-scheme links fail silently in browsers when no app is registered.
+  // Heuristic: after clicking, if the window doesn't lose focus within 1.5s
+  // the protocol wasn't handled. Surface a download fallback inline.
+  function tryOpenDash(e: React.MouseEvent<HTMLAnchorElement>) {
+    e.preventDefault();
+    const href = `crawfish-dash://link?org=${encodeURIComponent(name)}`;
+    const startedAt = Date.now();
+    const onHide = () => {
+      if (document.hidden) {
+        window.removeEventListener("visibilitychange", onHide);
+      }
+    };
+    window.addEventListener("visibilitychange", onHide);
+    window.location.href = href;
+    window.setTimeout(() => {
+      window.removeEventListener("visibilitychange", onHide);
+      if (!document.hidden && Date.now() - startedAt < 2000) {
+        setDashLikelyMissing(true);
+      }
+    }, 1500);
+  }
+
   return (
     <>
       <Eyebrow>Pick your client</Eyebrow>
@@ -581,6 +608,7 @@ function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <a
           href={`crawfish-dash://link?org=${encodeURIComponent(name)}`}
+          onClick={tryOpenDash}
           style={{
             background: "var(--ink)",
             color: "#f7f3ea",
@@ -628,6 +656,48 @@ function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
           </div>
         </Link>
       </div>
+
+      {dashLikelyMissing ? (
+        <div
+          style={{
+            marginTop: 16,
+            padding: "14px 16px",
+            border: "1px dashed var(--rule-3)",
+            borderRadius: "var(--r-md)",
+            background: "var(--surface-2)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13, color: "var(--ink)" }}>
+              Dash didn't open. Looks like the desktop app isn't installed yet.
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-mute)", marginTop: 2 }}>
+              Grab it from the marketing site, then come back and click Open in Dash.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <a
+              className="cfp-btn cfp-btn--sm"
+              href={MARKETING_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Download Dash
+            </a>
+            <button
+              type="button"
+              className="cfp-btn cfp-btn--sm"
+              onClick={() => navigate(`/orgs/${encodeURIComponent(name)}/canvas`)}
+            >
+              Stay in browser
+            </button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
