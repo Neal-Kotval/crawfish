@@ -77,6 +77,12 @@ start dash-web      crawfish-dash      "npm run web:dev" 7881
 start marketing     crawfish-web       "npm run dev"     5173
 start platform      crawfish-platform  "npm run dev"     5174
 
+# Give Vite a moment to actually bind to 5174 before launching the browser.
+PORTAL_URL="${PORTAL_URL:-http://localhost:5174}"
+if [ "${NO_OPEN:-0}" != "1" ] && command -v open >/dev/null 2>&1; then
+  ( sleep 3 && open "$PORTAL_URL" 2>/dev/null || true ) &
+fi
+
 cat <<EOF
 
 ────────────────────────────────────────────────────────────────────
@@ -92,6 +98,9 @@ cat <<EOF
   Logs:       tail -f dev-logs/<name>.log
   Stop:       Ctrl-C
 ────────────────────────────────────────────────────────────────────
+
+  Opening $PORTAL_URL in your browser. Set NO_OPEN=1 to skip.
+
 EOF
 
 # Wait on all background PIDs so Ctrl-C reaches us.
