@@ -52,6 +52,10 @@ function postAsFounder(path: string) {
   return request(app).post(path).set("X-User-Id", "acme-founder");
 }
 
+function getAsFounder(path: string) {
+  return request(app).get(path).set("X-User-Id", "acme-founder");
+}
+
 describe("POST /api/orgs/:orgId/projects (clone path)", () => {
   it("creates a project in pending status", async () => {
     const res = await postAsFounder(`/api/orgs/${orgId}/projects`).send({ githubRepoId: 12345 });
@@ -104,5 +108,47 @@ describe("POST /api/orgs/:orgId/projects (adopt-local path)", () => {
     expect(res.body.cloneStatus).toBe("cloned");
     expect(res.body.githubRepo).toBe("octo/hello");
     expect(res.body.localPath).toBe("/Users/me/code/myrepo");
+  });
+});
+
+describe("GET /api/orgs/:orgId/projects", () => {
+  it("lists projects for org members, newest first", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    await db.project.create({
+      data: {
+        orgId,
+        name: "p1",
+        cloneStatus: "pending",
+        createdById: founder!.id,
+        createdAt: new Date("2026-05-01T00:00:00Z"),
+      },
+    });
+    await db.project.create({
+      data: {
+        orgId,
+        name: "p2",
+        cloneStatus: "local_only",
+        createdById: founder!.id,
+        createdAt: new Date("2026-05-02T00:00:00Z"),
+      },
+    });
+    const res = await getAsFounder(`/api/orgs/${orgId}/projects`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0].name).toBe("p2");
+    expect(res.body[1].name).toBe("p1");
+  });
+
+  it("returns empty list when org has no projects", async () => {
+    const res = await getAsFounder(`/api/orgs/${orgId}/projects`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it("rejects non-members with 404", async () => {
+    const res = await request(app)
+      .get(`/api/orgs/${orgId}/projects`)
+      .set("X-User-Id", "outsider");
+    expect(res.status).toBe(404);
   });
 });

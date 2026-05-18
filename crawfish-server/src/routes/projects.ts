@@ -42,6 +42,16 @@ async function requireMember(req: Request, orgIdParam: string): Promise<RequireM
   return { ok: true, orgId: org.id, userId };
 }
 
+projectsRouter.get("/", async (req, res) => {
+  const ctx = await requireMember(req, (req.params as { orgId: string }).orgId);
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+  const projects = await db.project.findMany({
+    where: { orgId: ctx.orgId },
+    orderBy: { createdAt: "desc" },
+  });
+  return res.json(projects);
+});
+
 projectsRouter.post("/", async (req, res) => {
   const ctx = await requireMember(req, (req.params as { orgId: string }).orgId);
   if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
