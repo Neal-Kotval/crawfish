@@ -14,6 +14,7 @@ import { Node } from "@crawfish/ui/components/Node";
 import { Avatar, AvatarStack } from "@crawfish/ui/components/Avatar";
 import { fetchOrg, type Org, type ApiError } from "../lib/api";
 import { useCurrentUser } from "../lib/useAuth";
+import { OrgMembers } from "./OrgMembers";
 
 function Surface({ title, eyebrow, body }: { title: string; eyebrow: string; body: string }) {
   return (
@@ -53,7 +54,7 @@ export function OrgRoute() {
     case "diagnoses":
       return <Surface eyebrow={`${org} · diagnoses`} title="Diagnoses" body="Org-wide findings across agents — token bloat, retry storms, librarian misses." />;
     case "team":
-      return <Surface eyebrow={`${org} · team`} title="Team & invites" body="Invite humans, assign roles, manage ACL groups, see who's online." />;
+      return <OrgMembers orgSlug={org} />;
     case "billing":
       return <Surface eyebrow={`${org} · billing`} title="Billing" body="Monthly usage, per-agent budgets, plan, payment methods." />;
     case "settings":

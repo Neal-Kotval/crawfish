@@ -112,3 +112,76 @@ export async function fetchOrg(id: string): Promise<Org> {
   const res = await apiFetch(`/api/orgs/${encodeURIComponent(id)}`);
   return unwrap<Org>(res);
 }
+
+// ─── Invites ──────────────────────────────────────────────────────────────
+
+export type InviteRole = "owner" | "contributor";
+
+export type Invite = {
+  id: string;
+  email: string;
+  role: InviteRole;
+  createdAt: string;
+  expiresAt: string;
+  code?: string;
+};
+
+export type MockEmail = { to: string; subject: string; link: string };
+
+export type CreateInviteResponse = {
+  id: string;
+  email: string;
+  role: InviteRole;
+  code: string;
+  expiresAt: string;
+  mockEmail: MockEmail;
+};
+
+export type InvitePreview = {
+  org: { id: string; name: string };
+  email: string;
+  role: InviteRole;
+  expiresAt: string;
+};
+
+export async function createInvite(
+  orgId: string,
+  body: { email: string; role?: InviteRole },
+): Promise<CreateInviteResponse> {
+  const res = await apiFetch(`/api/orgs/${encodeURIComponent(orgId)}/invites`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return unwrap<CreateInviteResponse>(res);
+}
+
+export async function listInvites(orgId: string): Promise<Invite[]> {
+  const res = await apiFetch(`/api/orgs/${encodeURIComponent(orgId)}/invites`);
+  return unwrap<Invite[]>(res);
+}
+
+export async function revokeInvite(orgId: string, inviteId: string): Promise<void> {
+  const res = await apiFetch(
+    `/api/orgs/${encodeURIComponent(orgId)}/invites/${encodeURIComponent(inviteId)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok && res.status !== 204) {
+    await unwrap<unknown>(res); // throws ApiError
+  }
+}
+
+export async function getInvite(code: string): Promise<InvitePreview> {
+  // Public endpoint — apiFetch will still attach dev/Clerk headers, which is harmless.
+  const res = await apiFetch(`/api/invites/${encodeURIComponent(code)}`);
+  return unwrap<InvitePreview>(res);
+}
+
+export async function acceptInvite(
+  code: string,
+): Promise<{ org: { id: string; slug: string; name: string } }> {
+  const res = await apiFetch(`/api/invites/${encodeURIComponent(code)}/accept`, {
+    method: "POST",
+  });
+  return unwrap<{ org: { id: string; slug: string; name: string } }>(res);
+}

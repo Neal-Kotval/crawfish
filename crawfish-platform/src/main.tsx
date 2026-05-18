@@ -26,6 +26,7 @@ import { OrgPicker } from "./pages/OrgPicker";
 import { OnboardingFlow } from "./onboarding/OnboardingFlow";
 import { OrgRoute } from "./pages/OrgRoute";
 import { LinkRedeem } from "./pages/Link";
+import { InviteAccept } from "./pages/InviteAccept";
 import { CLERK_ENABLED, CLERK_KEY } from "./lib/clerk";
 import { RequireAuth } from "./lib/useAuth";
 import "@crawfish/ui/tokens/globals.css";
@@ -40,6 +41,9 @@ const tree = (
       <Route path="/onboarding/:step"  element={<OnboardingFlow />} />
 
       <Route path="/link/:code" element={<RequireAuth><LinkRedeem /></RequireAuth>} />
+
+      {/* Invites: rendered OUTSIDE RequireAuth so unsigned visitors can preview. */}
+      <Route path="/invites/:code" element={<InviteAccept />} />
 
       <Route element={<RequireAuth><Shell /></RequireAuth>}>
         <Route path="/" element={<OrgPicker />} />
