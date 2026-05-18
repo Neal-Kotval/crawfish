@@ -4,7 +4,8 @@
   "description": "Local platform for visualizing and reducing token burn in multi-agent setups (Claude Code today; LangGraph / OpenClaw later). Boots lens + dash with one command.",
   "type": "module",
   "bin": {
-    "crawfish": "./bin/crawfish.js"
+    "crawfish": "./bin/crawfish.js",
+    "craw": "./bin/craw.js"
   },
   "scripts": {
     "build": "cd crawfish-lens && npm run build && cd ../crawfish-dash && npm run build",
