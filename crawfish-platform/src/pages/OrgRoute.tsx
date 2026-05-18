@@ -16,6 +16,7 @@ import { fetchOrg, type Org, type ApiError } from "../lib/api";
 import { useCurrentUser } from "../lib/useAuth";
 import { buildDashLink, dashLinkTarget, isDevDashEnabled } from "../lib/dashUrl";
 import { OrgMembers } from "./OrgMembers";
+import { Projects } from "./Projects";
 
 function Surface({ title, eyebrow, body }: { title: string; eyebrow: string; body: string }) {
   return (
@@ -46,6 +47,8 @@ export function OrgRoute() {
   switch (tab) {
     case "canvas":
       return <CanvasSurface org={org} />;
+    case "projects":
+      return <ProjectsSurface org={org} />;
     case "board":
       return <Surface eyebrow={`${org} · board`} title="Board" body="Shared kanban board for human + agent tickets." />;
     case "sessions":
@@ -302,5 +305,24 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
         )}
       </div>
     </main>
+  );
+}
+
+// ─── Projects tab ──────────────────────────────────────────────────────────
+//
+// Thin wrapper that owns the import-modal open state. The org slug is passed
+// through as `orgId` because the server's projects router accepts either the
+// org id or its slug. The ImportModal component lands in Task 13 — for now
+// we render `null` so the open button is wired but no modal appears yet.
+
+function ProjectsSurface({ org }: { org: string }) {
+  const [importOpen, setImportOpen] = useState(false);
+  // ImportModal lands in Task 13. The `importOpen` state is wired so the
+  // open-trigger works today; until the modal exists we render `null`.
+  return (
+    <>
+      <Projects orgId={org} openImport={() => setImportOpen(true)} />
+      {importOpen && null}
+    </>
   );
 }
