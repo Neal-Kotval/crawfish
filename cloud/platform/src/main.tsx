@@ -23,6 +23,7 @@ import { ClerkProvider } from "@clerk/clerk-react";
 import { Shell } from "./Shell";
 import { Auth } from "./pages/Auth";
 import { Dashboard } from "./pages/Dashboard";
+import { LinkDash } from "./pages/LinkDash";
 import { OnboardingFlow } from "./onboarding/OnboardingFlow";
 import { OrgRoute } from "./pages/OrgRoute";
 import { LinkRedeem } from "./pages/Link";
@@ -41,6 +42,7 @@ const tree = (
       <Route path="/onboarding/:step"  element={<OnboardingFlow />} />
 
       <Route path="/link/:code" element={<RequireAuth><LinkRedeem /></RequireAuth>} />
+      <Route path="/link-dash" element={<RequireAuth><LinkDash /></RequireAuth>} />
 
       {/* Invites: rendered OUTSIDE RequireAuth so unsigned visitors can preview. */}
       <Route path="/invites/:code" element={<InviteAccept />} />

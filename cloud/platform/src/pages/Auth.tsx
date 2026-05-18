@@ -3,7 +3,7 @@
  * when it isn't. The façade still works in dev: "Continue with GitHub"
  * stamps localStorage.cf_dev_user and routes to /.
  */
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { SignIn, SignUp } from "@clerk/clerk-react";
 import { CLERK_ENABLED, clerkAppearance } from "../lib/clerk";
 
@@ -28,6 +28,12 @@ const githubOnlyAppearance = {
 export function Auth({ mode }: { mode: "signin" | "signup" }) {
   const isSignup = mode === "signup";
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // When the dash sends a user here via /signin?return-to=dash, bounce them
+  // to /link-dash after sign-in so we can deep-link them back to dash with
+  // their identity baked into the URL.
+  const returnTo = searchParams.get("return-to");
+  const afterAuthUrl = returnTo === "dash" ? "/link-dash" : "/";
 
   return (
     <div
@@ -80,7 +86,7 @@ export function Auth({ mode }: { mode: "signin" | "signup" }) {
               routing="path"
               path="/signup"
               signInUrl="/signin"
-              afterSignUpUrl="/"
+              afterSignUpUrl={afterAuthUrl}
               appearance={githubOnlyAppearance}
             />
           ) : (
@@ -88,14 +94,14 @@ export function Auth({ mode }: { mode: "signin" | "signup" }) {
               routing="path"
               path="/signin"
               signUpUrl="/signup"
-              afterSignInUrl="/"
+              afterSignInUrl={afterAuthUrl}
               appearance={githubOnlyAppearance}
             />
           )
         ) : (
           <DevFacade isSignup={isSignup} onContinue={() => {
             localStorage.setItem("cf_dev_user", "dev@local");
-            navigate("/");
+            navigate(afterAuthUrl);
           }} />
         )}
       </div>
