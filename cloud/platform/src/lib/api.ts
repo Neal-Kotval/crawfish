@@ -108,6 +108,27 @@ export async function listMyOrgs(): Promise<OrgSummary[]> {
   return unwrap<OrgSummary[]>(res);
 }
 
+export type ProjectSummary = {
+  id: string;
+  orgId: string;
+  name: string;
+  githubRepo: string | null;
+  githubRepoId: number | null;
+  defaultBranch: string | null;
+  isPrivate: boolean;
+  cloneStatus: "local_only" | "cloning" | "cloned" | "error";
+  cloneError: string | null;
+  localPath: string | null;
+  deviceId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function listProjects(orgId: string): Promise<ProjectSummary[]> {
+  const res = await apiFetch(`/api/orgs/${encodeURIComponent(orgId)}/projects`);
+  return unwrap<ProjectSummary[]>(res);
+}
+
 export async function fetchOrg(id: string): Promise<Org> {
   const res = await apiFetch(`/api/orgs/${encodeURIComponent(id)}`);
   return unwrap<Org>(res);

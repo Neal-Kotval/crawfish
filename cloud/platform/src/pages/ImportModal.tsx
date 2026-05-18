@@ -15,6 +15,7 @@
  */
 import { useEffect, useState } from "react";
 import { Pill } from "@crawfish/ui/components/Pill";
+import { useCurrentUser } from "../lib/useAuth";
 
 type Repo = {
   id: number;
@@ -31,18 +32,22 @@ type ListState =
   | { kind: "error"; message: string }
   | { kind: "ok"; repos: Repo[] };
 
-type Tab = "github" | "local";
+type Tab = "create" | "local" | "github";
 
 export function ImportModal({
   orgId,
+  orgName,
   onClose,
   onCreated,
+  defaultTab = "github",
 }: {
   orgId: string;
+  orgName?: string;
   onClose: () => void;
   onCreated?: () => void;
+  defaultTab?: Tab;
 }) {
-  const [tab, setTab] = useState<Tab>("github");
+  const [tab, setTab] = useState<Tab>(defaultTab);
 
   // Close on Escape.
   useEffect(() => {
@@ -142,21 +147,24 @@ export function ImportModal({
             borderBottom: "1px solid var(--rule)",
           }}
         >
-          <TabButton active={tab === "github"} onClick={() => setTab("github")}>
-            From GitHub
+          <TabButton active={tab === "create"} onClick={() => setTab("create")}>
+            Create locally
           </TabButton>
           <TabButton active={tab === "local"} onClick={() => setTab("local")}>
-            From local folder
+            Import locally
+          </TabButton>
+          <TabButton active={tab === "github"} onClick={() => setTab("github")}>
+            Import from GitHub
           </TabButton>
         </div>
 
         {/* Body */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {tab === "github" ? (
+          {tab === "github" && (
             <GithubTab orgId={orgId} onClose={onClose} onCreated={onCreated} />
-          ) : (
-            <LocalTab />
           )}
+          {tab === "local" && <LocalTab orgName={orgName} />}
+          {tab === "create" && <CreateTab orgName={orgName} />}
         </div>
       </div>
     </div>
@@ -488,7 +496,9 @@ function RepoList({
 
 // ─── Local-folder tab (stub for Task 16) ───────────────────────────────────
 
-function LocalTab() {
+function LocalTab({ orgName }: { orgName?: string }) {
+  const user = useCurrentUser();
+  const dashUrl = buildDashUrl(orgName, "import-local", user.email, user.name);
   return (
     <div
       style={{
@@ -500,11 +510,111 @@ function LocalTab() {
         color: "var(--ink-soft)",
         fontSize: 14,
         lineHeight: 1.6,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 14,
       }}
     >
-      Open the Crawfish desktop app to import a local folder.
+      <div>
+        Local folders need filesystem access — that lives in the desktop app.
+        Open Dash and we'll pick up the import there.
+      </div>
+      <a
+        href={dashUrl}
+        className="cf-touch-target"
+        style={{
+          appearance: "none",
+          cursor: "pointer",
+          fontFamily: "var(--ff-sans)",
+          fontSize: 13,
+          fontWeight: 500,
+          padding: "10px 14px",
+          borderRadius: "var(--r-sm)",
+          background: "var(--accent)",
+          color: "#fff",
+          border: "1px solid var(--accent)",
+          textDecoration: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        Open Dash →
+      </a>
     </div>
   );
+}
+
+function CreateTab({ orgName }: { orgName?: string }) {
+  const user = useCurrentUser();
+  const dashUrl = buildDashUrl(orgName, "create-local", user.email, user.name);
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          padding: 16,
+          border: "1px solid var(--rule)",
+          borderRadius: "var(--r-md)",
+          background: "var(--surface)",
+          color: "var(--ink-soft)",
+          fontSize: 13,
+          lineHeight: 1.55,
+        }}
+      >
+        Spin up a fresh project on disk (Dash creates the folder, runs{" "}
+        <span className="cf-mono">craw init</span>, and registers it with this
+        org). Continue in the desktop app to choose where it lives.
+      </div>
+      <a
+        href={dashUrl}
+        className="cf-touch-target"
+        style={{
+          appearance: "none",
+          cursor: "pointer",
+          fontFamily: "var(--ff-sans)",
+          fontSize: 13,
+          fontWeight: 500,
+          padding: "10px 14px",
+          borderRadius: "var(--r-sm)",
+          background: "var(--accent)",
+          color: "#fff",
+          border: "1px solid var(--accent)",
+          textDecoration: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          alignSelf: "flex-start",
+        }}
+      >
+        Create in Dash →
+      </a>
+    </div>
+  );
+}
+
+function buildDashUrl(
+  orgName: string | undefined,
+  intent: "create-local" | "import-local",
+  userEmail?: string,
+  userName?: string,
+): string {
+  const base = (import.meta.env.VITE_DASH_URL as string | undefined) ?? "http://localhost:7881";
+  const params = new URLSearchParams();
+  if (orgName) params.set("org", orgName);
+  params.set("intent", intent);
+  // Carry the identity over so dash's <OnlineLink autoLink> fires (App.tsx:141
+  // gates autoLink on Boolean(searchParams.get("user"))).
+  if (userEmail) params.set("user", userEmail);
+  if (userName) params.set("name", userName);
+  return `${base}/projects?${params.toString()}`;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

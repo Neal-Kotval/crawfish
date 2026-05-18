@@ -2253,6 +2253,161 @@ code, pre, kbd, samp {
 .cf-kanban-column__header--over-limit { color: var(--cf-danger); }
 
 /* ════════════════════════════════════════════════════════════════════════
+   Board — column color identity, hashed labels, type tints
+   ─────────────────────────────────────────────────────────────────────────
+   Default kanban looked flat: four identical sunken-paper columns, all
+   labels as outline badges, no priority cue. Jira/Linear users scan by
+   column color and label color first, then read. This block adds:
+     • per-column accent (top stripe + colored count + tinted background)
+     • a 6-tone label palette hashed by label name (warm-paper-friendly)
+     • stronger issue-type chips
+     • empty-column ghost + drop hint
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Brand-compatible accent hues — dusty / warm to stay on the paper palette. */
+:root {
+  --cf-plum:       #8a5d7a;   /* warm purple */
+  --cf-plum-bg:    #ece1e7;
+  --cf-terracotta: #c87d4e;
+  --cf-terracotta-bg: #f4dcc8;
+  --cf-sage:       #6e8a6a;
+  --cf-sage-bg:    #dde6d6;
+  --cf-slate:      #5e6b75;
+  --cf-slate-bg:   #dbe0e3;
+
+  /* Column tones */
+  --cf-col-todo-accent:     var(--cf-slate);
+  --cf-col-todo-bg:         color-mix(in srgb, var(--cf-slate) 5%, var(--cf-bg-sunken));
+  --cf-col-progress-accent: var(--cf-accent);
+  --cf-col-progress-bg:     color-mix(in srgb, var(--cf-accent) 6%, var(--cf-bg-sunken));
+  --cf-col-review-accent:   var(--cf-warning);
+  --cf-col-review-bg:       color-mix(in srgb, var(--cf-warning) 7%, var(--cf-bg-sunken));
+  --cf-col-done-accent:     var(--cf-success);
+  --cf-col-done-bg:         color-mix(in srgb, var(--cf-success) 6%, var(--cf-bg-sunken));
+}
+
+.cf-kanban-column {
+  position: relative;
+  border: 1px solid var(--cf-border);
+  border-top-width: 2px;
+  border-top-color: var(--cf-border-strong);
+  transition: border-top-color 120ms ease, background 120ms ease,
+              box-shadow 120ms ease;
+}
+.cf-kanban-column--todo     { background: var(--cf-col-todo-bg);     border-top-color: var(--cf-col-todo-accent); }
+.cf-kanban-column--progress { background: var(--cf-col-progress-bg); border-top-color: var(--cf-col-progress-accent); }
+.cf-kanban-column--review   { background: var(--cf-col-review-bg);   border-top-color: var(--cf-col-review-accent); }
+.cf-kanban-column--done     { background: var(--cf-col-done-bg);     border-top-color: var(--cf-col-done-accent); }
+
+/* Column header title gets a small leading dot in the column tone. */
+.cf-kanban-column__title::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--cf-fg-tertiary);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.cf-kanban-column--todo     .cf-kanban-column__title::before { background: var(--cf-col-todo-accent); }
+.cf-kanban-column--progress .cf-kanban-column__title::before { background: var(--cf-col-progress-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cf-col-progress-accent) 22%, transparent); }
+.cf-kanban-column--review   .cf-kanban-column__title::before { background: var(--cf-col-review-accent); }
+.cf-kanban-column--done     .cf-kanban-column__title::before { background: var(--cf-col-done-accent); }
+
+/* Colored count chip — adopts column tone instead of plain elevated bg. */
+.cf-kanban-column--todo     .cf-kanban-column__count { background: color-mix(in srgb, var(--cf-col-todo-accent)     14%, transparent); color: var(--cf-col-todo-accent);     border-color: color-mix(in srgb, var(--cf-col-todo-accent)     28%, transparent); }
+.cf-kanban-column--progress .cf-kanban-column__count { background: color-mix(in srgb, var(--cf-col-progress-accent) 14%, transparent); color: var(--cf-col-progress-accent); border-color: color-mix(in srgb, var(--cf-col-progress-accent) 28%, transparent); }
+.cf-kanban-column--review   .cf-kanban-column__count { background: color-mix(in srgb, var(--cf-col-review-accent)   18%, transparent); color: var(--cf-col-review-accent);   border-color: color-mix(in srgb, var(--cf-col-review-accent)   32%, transparent); }
+.cf-kanban-column--done     .cf-kanban-column__count { background: color-mix(in srgb, var(--cf-col-done-accent)     14%, transparent); color: var(--cf-col-done-accent);     border-color: color-mix(in srgb, var(--cf-col-done-accent)     28%, transparent); }
+
+/* Drop-target glow while dragging. */
+.cf-kanban-column--drop-active {
+  box-shadow: inset 0 0 0 2px var(--cf-accent),
+              0 0 0 2px color-mix(in srgb, var(--cf-accent) 18%, transparent);
+}
+
+/* Empty column ghost — dashed placeholder so the column doesn't look broken. */
+.cf-kanban-column__empty {
+  margin: 4px 2px;
+  padding: 18px 12px;
+  border: 1px dashed var(--cf-border-strong);
+  border-radius: var(--cf-radius-md);
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--cf-fg-tertiary);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  background: color-mix(in srgb, var(--cf-bg) 50%, transparent);
+}
+
+/* Done column: subtle title fade — finished work shouldn't shout. */
+.cf-kanban-column--done .cf-task-card__title {
+  color: var(--cf-fg-secondary);
+}
+
+/* ─── Labels: hashed color pills ───
+   Replaces the bland outline badge. Six warm-paper-friendly tones; the
+   hash in TaskCard.tsx picks one per label name so identical labels are
+   instantly recognizable across cards. */
+.cf-label {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: var(--cf-radius-sm);
+  font-family: var(--cf-font);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.cf-label--vermillion { background: var(--cf-accent-tint); color: var(--cf-accent);     border-color: color-mix(in srgb, var(--cf-accent) 22%, transparent); }
+.cf-label--amber      { background: var(--warn-bg);        color: var(--cf-warning);    border-color: color-mix(in srgb, var(--cf-warning) 24%, transparent); }
+.cf-label--sage       { background: var(--cf-sage-bg);     color: var(--cf-sage);       border-color: color-mix(in srgb, var(--cf-sage) 28%, transparent); }
+.cf-label--terracotta { background: var(--cf-terracotta-bg); color: var(--cf-terracotta); border-color: color-mix(in srgb, var(--cf-terracotta) 26%, transparent); }
+.cf-label--plum       { background: var(--cf-plum-bg);     color: var(--cf-plum);       border-color: color-mix(in srgb, var(--cf-plum) 26%, transparent); }
+.cf-label--slate      { background: var(--cf-slate-bg);    color: var(--cf-slate);      border-color: color-mix(in srgb, var(--cf-slate) 26%, transparent); }
+
+/* Issue-type chip — louder than a default Badge so Bug/Task/Story/Design read at a glance. */
+.cf-issue-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 7px 0 6px;
+  border-radius: var(--cf-radius-sm);
+  font-family: var(--cf-font);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.cf-issue-type::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.cf-issue-type--bug    { background: color-mix(in srgb, var(--cf-danger)  12%, transparent); color: var(--cf-danger); }
+.cf-issue-type--bug::before    { background: var(--cf-danger); }
+.cf-issue-type--task   { background: color-mix(in srgb, var(--cf-accent)  12%, transparent); color: var(--cf-accent); }
+.cf-issue-type--task::before   { background: var(--cf-accent); }
+.cf-issue-type--story  { background: color-mix(in srgb, var(--cf-success) 14%, transparent); color: var(--cf-success); }
+.cf-issue-type--story::before  { background: var(--cf-success); }
+.cf-issue-type--design { background: color-mix(in srgb, var(--cf-plum)    14%, transparent); color: var(--cf-plum); }
+.cf-issue-type--design::before { background: var(--cf-plum); }
+
+/* Card hover lifts subtly — Jira/Linear feel. */
+.cf-task-card { transition: transform 120ms var(--cf-ease-out), box-shadow 120ms ease, border-color 120ms ease; }
+.cf-task-card:hover { transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) {
+  .cf-task-card:hover { transform: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    Warm mode — onboarding, empty states, welcome surfaces
    ─────────────────────────────────────────────────────────────────────────
    The default Crawfish skin is dense (13px, tight letter-spacing, single
