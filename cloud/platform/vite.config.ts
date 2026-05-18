@@ -9,5 +9,10 @@ export default defineConfig({
       "@crawfish/ui": path.resolve(__dirname, "../../ui"),
     },
   },
-  server: { port: 5174 },
+  server: {
+    port: 5174,
+    proxy: {
+      "/api": "http://127.0.0.1:7878",
+    },
+  },
 });
