@@ -7,6 +7,24 @@ import { Link, useNavigate } from "react-router-dom";
 import { SignIn, SignUp } from "@clerk/clerk-react";
 import { CLERK_ENABLED, clerkAppearance } from "../lib/clerk";
 
+// GitHub-only lock: hide email/password form, divider, footer, and all
+// social buttons except GitHub. Merges atop the shared clerkAppearance.
+const githubOnlyAppearance = {
+  ...clerkAppearance,
+  elements: {
+    ...(clerkAppearance as { elements?: Record<string, unknown> }).elements,
+    formContainer: { display: "none" },
+    formFieldRow: { display: "none" },
+    formButtonPrimary: { display: "none" },
+    dividerRow: { display: "none" },
+    dividerText: { display: "none" },
+    footer: { display: "none" },
+    footerAction: { display: "none" },
+    socialButtonsBlockButton: { display: "none" },
+    socialButtonsBlockButton__github: { display: "flex" },
+  },
+} as const;
+
 export function Auth({ mode }: { mode: "signin" | "signup" }) {
   const isSignup = mode === "signup";
   const navigate = useNavigate();
@@ -62,7 +80,7 @@ export function Auth({ mode }: { mode: "signin" | "signup" }) {
               path="/signup"
               signInUrl="/signin"
               afterSignUpUrl="/"
-              appearance={clerkAppearance}
+              appearance={githubOnlyAppearance}
             />
           ) : (
             <SignIn
@@ -70,7 +88,7 @@ export function Auth({ mode }: { mode: "signin" | "signup" }) {
               path="/signin"
               signUpUrl="/signup"
               afterSignInUrl="/"
-              appearance={clerkAppearance}
+              appearance={githubOnlyAppearance}
             />
           )
         ) : (
