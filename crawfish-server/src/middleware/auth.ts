@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
+import { verifyToken } from "@clerk/backend";
 import { db } from "../index.js";
 import { verifyOrgToken } from "../lib/jwt.js";
+import { getClerkClient } from "../lib/github.js";
 
 const DEV_USER_ID_HEADER = "x-user-id";
 const DEV_USER_EMAIL_HEADER = "x-user-email";
@@ -57,18 +59,61 @@ export async function authMiddleware(
       return next();
     }
 
-    // Prod path. Clerk verification is not yet implemented; until it is, fail
-    // closed — do NOT fall through to the dev shim.
+    // Prod path. Verify a Clerk Bearer token and resolve to a User row by
+    // clerkId. Fails closed — no fall-through to the dev shim.
     if (process.env.CLERK_SECRET_KEY) {
-      // TODO(P1): verify the Clerk Bearer token from Authorization header,
-      // resolve to a User row by clerkId. Until then, refuse.
-      res.status(501).json({
-        error: {
-          code: "auth_not_implemented",
-          message: "Clerk verification not yet wired; this build cannot authenticate user requests in production.",
-        },
-      });
-      return;
+      const authHeader = req.header("authorization") ?? "";
+      const m = /^Bearer\s+(.+)$/i.exec(authHeader);
+      if (!m) {
+        res.status(401).json({
+          error: { code: "invalid_token", message: "Missing Bearer token." },
+        });
+        return;
+      }
+      const token = m[1];
+      let clerkUserId: string;
+      try {
+        const payload = await verifyToken(token, {
+          secretKey: process.env.CLERK_SECRET_KEY,
+        });
+        if (typeof payload.sub !== "string" || !payload.sub) {
+          throw new Error("missing sub");
+        }
+        clerkUserId = payload.sub;
+      } catch (err) {
+        res.status(401).json({
+          error: { code: "invalid_token", message: String(err) },
+        });
+        return;
+      }
+
+      // Try to find an existing user by clerkId first; if missing, fetch the
+      // primary email from Clerk and upsert. Email is unique on User, so if a
+      // row already exists for that email (e.g. created in dev), link it.
+      let user = await db.user.findUnique({ where: { clerkId: clerkUserId } });
+      if (!user) {
+        let email: string;
+        try {
+          const clerkUser = await getClerkClient().users.getUser(clerkUserId);
+          const primaryId = clerkUser.primaryEmailAddressId;
+          const primary = clerkUser.emailAddresses.find((e) => e.id === primaryId)
+            ?? clerkUser.emailAddresses[0];
+          if (!primary?.emailAddress) throw new Error("no primary email");
+          email = primary.emailAddress.toLowerCase().trim();
+        } catch (err) {
+          res.status(401).json({
+            error: { code: "invalid_token", message: `clerk user lookup failed: ${String(err)}` },
+          });
+          return;
+        }
+        user = await db.user.upsert({
+          where: { email },
+          update: { clerkId: clerkUserId },
+          create: { clerkId: clerkUserId, email },
+        });
+      }
+      req.userId = user.id;
+      return next();
     }
 
     res.status(401).json({

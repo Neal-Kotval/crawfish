@@ -14,6 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@clerk/backend": "^3.4.9",
     "@prisma/client": "^5.22.0",
     "cors": "^2.8.5",
     "express": "^4.21.1",
