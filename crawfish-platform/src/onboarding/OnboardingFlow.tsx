@@ -46,6 +46,19 @@ const DEFAULT_ANSWERS: Answers = {
   primaryClient: "Dash",
 };
 
+const ANSWERS_KEY = "cf-onboarding-answers";
+
+function loadAnswers(): Answers {
+  try {
+    const raw = sessionStorage.getItem(ANSWERS_KEY);
+    if (!raw) return DEFAULT_ANSWERS;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_ANSWERS, ...parsed } as Answers;
+  } catch {
+    return DEFAULT_ANSWERS;
+  }
+}
+
 export function OnboardingFlow() {
   const { step } = useParams<{ step?: string }>();
   const navigate = useNavigate();
@@ -54,21 +67,34 @@ export function OnboardingFlow() {
   const next = STAGES[idx + 1];
   const prev = STAGES[idx - 1];
 
-  const [answers, setAnswers] = useState<Answers>(DEFAULT_ANSWERS);
+  const [answers, setAnswers] = useState<Answers>(loadAnswers);
   const [createdOrg, setCreatedOrg] = useState<Org | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showResumeNotice, setShowResumeNotice] = useState(false);
+
+  // Persist answers across reloads and back/forward navigation so deep links
+  // to /install, /hired, /handoff work after a refresh.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
+    } catch {
+      /* ignore */
+    }
+  }, [answers]);
 
   const go = (s: Stage | undefined) => (s ? navigate(`/onboarding/${s}`) : navigate("/"));
 
-  // Guard: any stage after welcome requires answers.name. Otherwise a deep
-  // link or browser back/forward lands on a screen with "your-org" / blank
-  // labels and silently POSTs name:"" -> server 400.
+  // Guard: any stage after welcome requires answers.name AND project. If a
+  // user deep-links past welcome with no state at all (cleared session,
+  // private window, first visit), redirect to welcome and surface a
+  // one-line "Pick up where you left off?" banner explaining why.
   useEffect(() => {
-    if (idx > 0 && !answers.name.trim()) {
+    if (idx > 0 && (!answers.name.trim() || !answers.project.trim())) {
+      setShowResumeNotice(true);
       navigate("/onboarding/welcome", { replace: true });
     }
-  }, [idx, answers.name, navigate]);
+  }, [idx, answers.name, answers.project, navigate]);
 
   const canContinueFromWelcome = answers.name.trim().length > 0;
 
@@ -206,6 +232,36 @@ export function OnboardingFlow() {
       </div>
 
       <main style={{ padding: "64px 56px", maxWidth: 920, margin: "0 auto" }}>
+        {showResumeNotice && stage === "welcome" ? (
+          <div
+            role="status"
+            style={{
+              marginBottom: 32,
+              padding: "10px 14px",
+              border: "1px dashed var(--rule-3)",
+              borderRadius: "var(--r-sm)",
+              background: "var(--surface-2)",
+              fontSize: 13,
+              color: "var(--ink-soft)",
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "center",
+            }}
+          >
+            <span>
+              Your earlier answers expired. Pick up from the start, the rest of the flow will follow.
+            </span>
+            <button
+              type="button"
+              className="cfp-btn cfp-btn--sm"
+              onClick={() => setShowResumeNotice(false)}
+              style={{ background: "transparent" }}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
         {stage === "welcome" && (
           <Welcome answers={answers} setAnswers={setAnswers} error={error} />
         )}

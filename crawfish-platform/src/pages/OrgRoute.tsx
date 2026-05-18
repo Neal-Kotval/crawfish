@@ -108,8 +108,10 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
   }
 
   if (state.kind === "error") {
-    const isForbidden = state.status === 403;
-    const isNotFound = state.status === 404;
+    // Server collapses non-member to 404 (see crawfish-server/src/routes/orgs.ts)
+    // to avoid leaking org existence. So 403 never reaches us in practice;
+    // treat any not-found/forbidden as the same "we couldn't show you this".
+    const isMissing = state.status === 404 || state.status === 403;
     return (
       <main className="cfp-shell__main" style={{ padding: 28 }}>
         <Eyebrow>{orgSlug} · canvas</Eyebrow>
@@ -122,14 +124,12 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
             margin: "6px 0 12px",
           }}
         >
-          {isForbidden ? "This org isn't yours" : isNotFound ? "Org not found" : "Couldn't load this org"}
+          {isMissing ? "We couldn't open this org" : "Couldn't load this org"}
         </h1>
         <p style={{ color: "var(--ink-soft)", fontSize: 14, maxWidth: 640 }}>
-          {isForbidden
-            ? "You're signed in, but you're not a member of this org. Ask the founder for an invite."
-            : isNotFound
-              ? `No org named "${orgSlug}" on this server.`
-              : state.message}
+          {isMissing
+            ? `No org named "${orgSlug}" is visible to your account. It may not exist, or you may not be a member yet. Ask the founder for an invite.`
+            : state.message}
         </p>
         <Link
           to="/"
@@ -173,7 +173,7 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
           Install Dash to give agents tasks and contribute live.
         </span>
         <a
-          href="https://crawfish.dev"
+          href={(import.meta.env.VITE_MARKETING_URL as string | undefined) ?? "https://crawfish.dev"}
           target="_blank"
           rel="noreferrer"
           style={{
@@ -242,7 +242,8 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
         </div>
       </div>
 
-      {/* Dotted canvas surface */}
+      {/* Dotted canvas surface — agents flow in a wrap container so they
+          reflow on mobile instead of clipping off-screen at pixel x=816. */}
       <div
         style={{
           position: "relative",
@@ -252,6 +253,7 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
             "radial-gradient(circle, var(--rule) 1px, transparent 1px) 0 0 / 18px 18px",
           backgroundColor: "var(--paper)",
           overflow: "auto",
+          padding: "32px 24px",
         }}
       >
         {agentCount === 0 ? (
@@ -265,22 +267,32 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
             No agents in this org yet.
           </div>
         ) : (
-          org.agents.map((agent, i) => {
-            const x = DEFAULT_GRID_XS[i] ?? 84 + (i - DEFAULT_GRID_XS.length) * 244;
-            const y = DEFAULT_GRID_Y + Math.floor(i / DEFAULT_GRID_XS.length) * 140;
-            return (
-              <Node
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 20,
+              alignItems: "flex-start",
+              justifyContent: "flex-start",
+            }}
+          >
+            {org.agents.map((agent, i) => (
+              <div
                 key={agent.name}
-                x={x}
-                y={y}
-                name={agent.name}
-                role={agent.role}
-                runtime={agent.runtime}
-                status="ready"
-                variant={i === 0 ? "accent" : "neutral"}
-              />
-            );
-          })
+                style={{ position: "relative", width: 188, height: 86 }}
+              >
+                <Node
+                  x={0}
+                  y={0}
+                  name={agent.name}
+                  role={agent.role}
+                  runtime={agent.runtime}
+                  status="ready"
+                  variant={i === 0 ? "accent" : "neutral"}
+                />
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </main>

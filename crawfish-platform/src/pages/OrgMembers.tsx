@@ -228,11 +228,20 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
           <button
             type="submit"
             disabled={submitting || !emailDraft.trim()}
-            className="cfp-btn cfp-btn--primary"
-            style={{
-              opacity: submitting || !emailDraft.trim() ? 0.6 : 1,
-              cursor: submitting ? "wait" : undefined,
-            }}
+            className={
+              "cfp-btn " +
+              (submitting || !emailDraft.trim() ? "" : "cfp-btn--primary")
+            }
+            style={
+              submitting || !emailDraft.trim()
+                ? {
+                    background: "transparent",
+                    color: "var(--ink-mute)",
+                    border: "1px solid var(--rule-3)",
+                    cursor: submitting ? "wait" : "not-allowed",
+                  }
+                : { cursor: "pointer" }
+            }
           >
             {submitting ? "Sending…" : "Send invite"}
           </button>
@@ -349,11 +358,33 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
                     style={{ fontSize: 11, color: "var(--ink-mute)" }}
                   >
                     expires {new Date(inv.expiresAt).toLocaleDateString()}
-                    {inv.code ? ` · /invites/${inv.code}` : ""}
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <Pill tone="ink">{inv.role}</Pill>
+                  {inv.code ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = `${window.location.origin}/invites/${inv.code}`;
+                        navigator.clipboard?.writeText(url).catch(() => undefined);
+                      }}
+                      title="Copy invite link to clipboard"
+                      style={{
+                        height: 28,
+                        padding: "0 10px",
+                        background: "transparent",
+                        border: "1px solid var(--rule-3)",
+                        borderRadius: "var(--r-sm)",
+                        color: "var(--ink-soft)",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontFamily: "var(--ff-mono)",
+                      }}
+                    >
+                      Copy link
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => onRevoke(inv)}
