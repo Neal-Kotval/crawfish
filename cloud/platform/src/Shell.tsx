@@ -162,7 +162,7 @@ export function Shell() {
                     onClick={() => navigate(`/orgs/${o.name}/canvas`)}
                   />
                 ))
-              )}
+              }
               <div style={{ marginTop: 6 }}>
                 <SideItem
                   icon={Icons.plus}
