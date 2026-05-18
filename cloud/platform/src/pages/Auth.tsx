@@ -130,51 +130,6 @@ function DevFacade({ isSignup, onContinue }: { isSignup: boolean; onContinue: ()
         Continue with GitHub →
       </button>
 
-      <div
-        className="cf-mono"
-        style={{
-          textAlign: "center",
-          fontSize: 11,
-          color: "var(--ink-faint)",
-          margin: "18px 0",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <span style={{ flex: 1, height: 1, background: "var(--rule)" }} />
-        OR
-        <span style={{ flex: 1, height: 1, background: "var(--rule)" }} />
-      </div>
-
-      <input
-        type="email"
-        placeholder="you@company.com"
-        style={{
-          width: "100%",
-          padding: "10px 12px",
-          border: "1px solid var(--rule-3)",
-          borderRadius: "var(--r-sm)",
-          fontFamily: "var(--ff-sans)",
-          fontSize: 14,
-          background: "var(--surface)",
-          color: "var(--ink)",
-        }}
-      />
-      <button
-        type="button"
-        className="cfp-btn cfp-btn--primary"
-        style={{
-          width: "100%",
-          justifyContent: "center",
-          padding: "10px 14px",
-          marginTop: 10,
-        }}
-        onClick={onContinue}
-      >
-        {isSignup ? "Send sign-up link" : "Send magic link"}
-      </button>
-
       <p style={{ color: "var(--ink-mute)", fontSize: 12, marginTop: 18, textAlign: "center" }}>
         {isSignup ? (
           <>
