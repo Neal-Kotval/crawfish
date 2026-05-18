@@ -503,7 +503,7 @@ ${DEFAULT_AGENTS.map(
 └── crawfish.toml`}</pre>
 
       <p style={{ color: "var(--ink-mute)", fontSize: 13, marginTop: 16 }}>
-        You can rename anything, swap runtimes, or skip an agent on the next screen.
+        You can rename agents and swap runtimes from the canvas once you're in.
       </p>
 
       {error && (
