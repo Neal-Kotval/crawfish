@@ -15,6 +15,15 @@ ownership rules below as binding.
 
 When a user request matches one of the situations below, invoke the listed skill via the `Skill` tool **proactively, without waiting for the user to type the slash command**. Pick the most specific match. If two match, prefer the one further down (more specific overrides more general). If none match, work directly.
 
+### Visual audits on the web platform — dev auth bypass
+
+If you're running `ui-auditor`, `ui-diagnose`, or any Playwright walk against
+`cloud/platform` (`http://localhost:5174`) and Clerk is bouncing you to
+`/signin`, read **`cloud/platform/DEV-AUTH.md`** *before* trying to OAuth or
+asking the user for credentials. The codebase ships a first-class dev
+bypass (blank `VITE_CLERK_PUBLISHABLE_KEY` in `.env.local` → fake
+`dev@local` user → backend honors `X-User-Id` shim). Use it.
+
 ### Frontend / UI work in this repo
 
 - **Building or scaffolding a new component, page, or screen from scratch** → `frontend-design:frontend-design` (production-grade, anti-generic aesthetics). This is the default for "build X UI" / "add a Y page".

@@ -6,10 +6,12 @@ import { join } from "node:path";
 import { init } from "../../src/verbs/init.js";
 import { refresh } from "../../src/verbs/refresh.js";
 
+process.env.CRAWFISH_SKIP_DASH_REGISTER = "1";
+
 test("re-renders roadmap.md when ROADMAP.md changes", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cfp-"));
   writeFileSync(join(dir, "ROADMAP.md"), "# Roadmap v1\n\nA");
-  init(dir);
+  await init(dir);
   const r1 = await refresh(dir, { debounceMs: 0 });
   assert.ok(r1.refreshed.includes("roadmap.md"));
   const md1 = readFileSync(join(dir, ".crawfish/roadmap.md"), "utf8");
@@ -30,7 +32,7 @@ test("re-renders roadmap.md when ROADMAP.md changes", async () => {
 
 test("debounce returns early when lock is fresh", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cfp-"));
-  init(dir);
+  await init(dir);
   await refresh(dir, { debounceMs: 60_000 });
   const r2 = await refresh(dir, { debounceMs: 60_000 });
   assert.equal(r2.debounced, true);

@@ -23,7 +23,7 @@ export async function dispatch(name: string, args: Record<string, unknown>): Pro
   const root = String(args.repo_root);
   switch (name) {
     case "project_init":
-      return { result: init(root) };
+      return { result: await init(root) };
     case "project_refresh":
       return await refresh(root, { only: args.files as string[] | undefined });
     case "project_status":

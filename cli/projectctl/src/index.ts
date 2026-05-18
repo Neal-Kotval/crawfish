@@ -17,8 +17,8 @@ function root(): string {
   return (program.opts() as { cwd: string }).cwd;
 }
 
-program.command("init").description("scaffold .crawfish/").action(() => {
-  console.log(init(root()));
+program.command("init").description("scaffold .crawfish/").action(async () => {
+  console.log(await init(root()));
 });
 
 program.command("refresh [files...]")

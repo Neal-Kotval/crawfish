@@ -19,6 +19,14 @@ import {
 
 const ALL_PLATFORMS: Exclude<Platform, "unknown">[] = ["mac-arm", "mac-intel", "linux", "windows"];
 
+// Resolves to localhost:5174 in dev, https://app.crawfish.dev in prod.
+// Override at build time with VITE_PLATFORM_URL=<url> in your env.
+const PLATFORM_URL =
+  ((import.meta as { env?: Record<string, string> }).env?.VITE_PLATFORM_URL as string | undefined) ??
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:5174"
+    : "https://app.crawfish.dev");
+
 export function Index() {
   const detected = detectPlatform();
   const { release } = useLatestRelease();
@@ -69,7 +77,7 @@ export function Index() {
         </div>
         <nav aria-label="Main navigation" style={{ display: "flex", alignItems: "center", gap: 28 }}>
           <NavLink href="https://github.com/crawfish" aria-label="Crawfish on GitHub">Github</NavLink>
-          <PlatBtn primary href="https://app.crawfish.dev/signin">Sign in →</PlatBtn>
+          <PlatBtn primary href={`${PLATFORM_URL}/signin`}>Sign in →</PlatBtn>
         </nav>
       </header>
 
@@ -227,7 +235,7 @@ export function Index() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <span style={{ fontSize: 13, color: "var(--ink-mute)" }}>or invite the rest of your team</span>
-            <a href="https://app.crawfish.dev/onboarding/team" style={{
+            <a href={`${PLATFORM_URL}/onboarding/team`} style={{
               fontFamily: "var(--ff-sans)", fontSize: 13, fontWeight: 500,
               padding: "6px 12px", borderRadius: "var(--r-sm)",
               background: "transparent", border: "1px solid var(--ink)",
