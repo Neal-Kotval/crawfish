@@ -3,6 +3,7 @@ import { verifyToken } from "@clerk/backend";
 import { db } from "../index.js";
 import { verifyOrgToken } from "../lib/jwt.js";
 import { getClerkClient } from "../lib/github.js";
+import { ensureUserHasWorkspace } from "../lib/workspace.js";
 
 const DEV_USER_ID_HEADER = "x-user-id";
 const DEV_USER_EMAIL_HEADER = "x-user-email";
@@ -31,6 +32,9 @@ async function ensureDevUser(externalId: string, emailOverride?: string): Promis
       name: externalId === DEV_FALLBACK_USER ? "dev" : externalId,
     },
   });
+  // 2026-05-18 product brainstorm: every user has exactly one workspace,
+  // auto-created on first sign-in. Idempotent and cached in-process.
+  await ensureUserHasWorkspace(user.id, user.email);
   return user.id;
 }
 
@@ -112,6 +116,8 @@ export async function authMiddleware(
           create: { clerkId: clerkUserId, email },
         });
       }
+      // 2026-05-18 brainstorm: ensure the user has a workspace org. Idempotent.
+      await ensureUserHasWorkspace(user.id, user.email);
       req.userId = user.id;
       return next();
     }
