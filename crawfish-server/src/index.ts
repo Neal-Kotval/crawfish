@@ -18,13 +18,16 @@ import { authMiddleware } from "./middleware/auth.js";
 import { healthRouter } from "./routes/health.js";
 import { orgsRouter, meRouter } from "./routes/orgs.js";
 import { deviceLinkRouter } from "./routes/deviceLink.js";
+import { invitesRouter, publicInvitesRouter } from "./routes/invites.js";
 
 app.use(authMiddleware);
 
 app.use("/api/health", healthRouter);
+app.use("/api/orgs/:orgId/invites", invitesRouter);
 app.use("/api/orgs", orgsRouter);
 app.use("/api/me", meRouter);
 app.use("/api/device-link", deviceLinkRouter);
+app.use("/api/invites", publicInvitesRouter);
 
 app.listen(port, "127.0.0.1", () => {
   console.log(`crawfish-server: http://127.0.0.1:${port}`);

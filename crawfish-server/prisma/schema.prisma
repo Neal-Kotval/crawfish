@@ -14,7 +14,8 @@ model User {
   name       String?
   createdAt  DateTime @default(now())
   orgs       OrgMember[]
-  invitesSent Invite[] @relation("InvitesSentByUser")
+  invitesCreated Invite[] @relation("InvitesCreatedByUser")
+  invitesRedeemed Invite[] @relation("InvitesRedeemedByUser")
 }
 
 model Org {
@@ -90,10 +91,13 @@ model Invite {
   org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   orgId     String
   email     String
-  token     String   @unique
-  sentBy    User     @relation("InvitesSentByUser", fields: [sentByUserId], references: [id])
-  sentByUserId String
-  acceptedAt DateTime?
-  expiresAt DateTime
+  role      String   @default("contributor")   // owner | contributor
+  code      String   @unique
+  createdBy User     @relation("InvitesCreatedByUser", fields: [createdById], references: [id])
+  createdById String
   createdAt DateTime @default(now())
+  expiresAt DateTime
+  redeemedAt DateTime?
+  redeemedBy User?   @relation("InvitesRedeemedByUser", fields: [redeemedById], references: [id])
+  redeemedById String?
 }
