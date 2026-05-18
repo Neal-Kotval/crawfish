@@ -3,7 +3,7 @@
  * Port of /design/designs/WebInstall.jsx, refactored to use the
  * @crawfish/ui marketing primitives.
  */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink } from "@crawfish/ui/components/marketing/NavLink";
 import { InstallCard } from "@crawfish/ui/components/marketing/InstallCard";
 import { PlatBtn } from "@crawfish/ui/components/marketing/PlatBtn";
@@ -24,6 +24,17 @@ export function Index() {
   const primaryPlatform: Exclude<Platform, "unknown"> = detected === "unknown" ? "mac-arm" : detected;
   const secondaryPlatforms = ALL_PLATFORMS.filter((p) => p !== primaryPlatform);
   const urlFor = (p: Platform): string => (release ? assetUrlFor(release, p) : RELEASES_FALLBACK_URL);
+
+  const [narrow, setNarrow] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 1100 : false
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1099px)");
+    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
+    setNarrow(mq.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   return (
     <div className="cf" style={{
@@ -57,10 +68,16 @@ export function Index() {
       </header>
 
       {/* hero */}
-      <section style={{
-        padding: "64px 56px 28px",
-        display: "grid", gridTemplateColumns: "1.05fr 0.95fr", gap: 64, alignItems: "flex-end",
-      }}>
+      <section
+        data-layout={narrow ? "single" : "split"}
+        style={{
+          padding: narrow ? "48px 24px 28px" : "64px 56px 28px",
+          display: "grid",
+          gridTemplateColumns: narrow ? "1fr" : "1.05fr 0.95fr",
+          gap: narrow ? 32 : 64,
+          alignItems: "flex-end",
+        }}
+      >
         <div>
           <div className="cf-eyebrow" style={{ marginBottom: 18 }}>
             <span style={{ color: "var(--accent)", marginRight: 8 }}>●</span>
@@ -110,7 +127,7 @@ export function Index() {
       </section>
 
       {/* install picker */}
-      <section style={{ padding: "40px 56px 0", display: "flex", flexDirection: "column", gap: 20 }}>
+      <section style={{ padding: narrow ? "40px 24px 0" : "40px 56px 0", display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
           <div>
             <div className="cf-eyebrow" style={{ marginBottom: 8 }}>Pick your client</div>
@@ -124,7 +141,14 @@ export function Index() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.05fr 1fr 1fr", gap: 16 }}>
+        <div
+          data-layout={narrow ? "single" : "three-col"}
+          style={{
+            display: "grid",
+            gridTemplateColumns: narrow ? "1fr" : "1.05fr 1fr 1fr",
+            gap: 16,
+          }}
+        >
           <InstallCard
             highlight
             tag="recommended"
