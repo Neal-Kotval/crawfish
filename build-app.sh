@@ -33,7 +33,7 @@ fi
 cd "$APP_DIR"
 
 echo "▶ building Tauri bundle (this takes a minute…)"
-npm run tauri build
+npm run build
 
 case "${1:-}" in
   --install)
