@@ -209,3 +209,39 @@ describe("PATCH /api/orgs/:orgId/projects/:pid", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("DELETE /api/orgs/:orgId/projects/:pid", () => {
+  it("removes the project bookmark for an org member", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: { orgId, name: "p1", cloneStatus: "pending", createdById: founder!.id },
+    });
+    const res = await request(app)
+      .delete(`/api/orgs/${orgId}/projects/${p.id}`)
+      .set("X-User-Id", "acme-founder");
+    expect(res.status).toBe(204);
+    const after = await db.project.findUnique({ where: { id: p.id } });
+    expect(after).toBeNull();
+  });
+
+  it("rejects non-members with 404", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: { orgId, name: "p1", cloneStatus: "pending", createdById: founder!.id },
+    });
+    const res = await request(app)
+      .delete(`/api/orgs/${orgId}/projects/${p.id}`)
+      .set("X-User-Id", "outsider");
+    expect(res.status).toBe(404);
+    const after = await db.project.findUnique({ where: { id: p.id } });
+    expect(after).not.toBeNull();
+  });
+
+  it("returns 404 when project does not belong to the org", async () => {
+    const res = await request(app)
+      .delete(`/api/orgs/${orgId}/projects/nonexistent`)
+      .set("X-User-Id", "acme-founder");
+    expect(res.status).toBe(404);
+  });
+
+});

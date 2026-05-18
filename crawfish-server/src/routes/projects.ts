@@ -156,3 +156,15 @@ projectsRouter.patch("/:pid", async (req, res) => {
   });
   return res.json(updated);
 });
+
+projectsRouter.delete("/:pid", async (req, res) => {
+  const params = req.params as { orgId: string; pid: string };
+  const ctx = await requireMember(req, params.orgId);
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+
+  const project = await db.project.findFirst({ where: { id: params.pid, orgId: ctx.orgId } });
+  if (!project) return httpError(res, 404, "not_found", "");
+
+  await db.project.delete({ where: { id: project.id } });
+  return res.status(204).send();
+});
