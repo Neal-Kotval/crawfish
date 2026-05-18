@@ -78,3 +78,31 @@ describe("POST /api/orgs/:orgId/projects (clone path)", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("POST /api/orgs/:orgId/projects (adopt-local path)", () => {
+  it("creates local_only when no githubRepoId", async () => {
+    const res = await postAsFounder(`/api/orgs/${orgId}/projects`).send({
+      name: "myrepo",
+      localPath: "/Users/me/code/myrepo",
+      deviceId: "dev_abc",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.cloneStatus).toBe("local_only");
+    expect(res.body.localPath).toBe("/Users/me/code/myrepo");
+    expect(res.body.name).toBe("myrepo");
+    expect(res.body.githubRepo).toBeNull();
+  });
+
+  it("creates cloned when githubRepoId is provided and accessible", async () => {
+    const res = await postAsFounder(`/api/orgs/${orgId}/projects`).send({
+      name: "myrepo",
+      localPath: "/Users/me/code/myrepo",
+      deviceId: "dev_abc",
+      githubRepoId: 12345,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.cloneStatus).toBe("cloned");
+    expect(res.body.githubRepo).toBe("octo/hello");
+    expect(res.body.localPath).toBe("/Users/me/code/myrepo");
+  });
+});
