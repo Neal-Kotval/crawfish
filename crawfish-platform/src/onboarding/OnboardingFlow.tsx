@@ -17,6 +17,7 @@ import { Eyebrow } from "@crawfish/ui/components/Eyebrow";
 import { Pill } from "@crawfish/ui/components/Pill";
 import { createOrg, type Org, type ApiError } from "../lib/api";
 import { useCurrentUser } from "../lib/useAuth";
+import { buildDashLink, dashLinkTarget, isDevDashEnabled } from "../lib/dashUrl";
 
 type Stage = "welcome" | "propose" | "install" | "hired" | "handoff";
 const STAGES: Stage[] = ["welcome", "propose", "install", "hired", "handoff"];
@@ -571,13 +572,15 @@ function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
 
   // Custom-scheme links fail silently in browsers when no app is registered.
   // Heuristic: after clicking, if the window doesn't lose focus within 1.5s
-  // the protocol wasn't handled. Surface a download fallback inline.
+  // the protocol wasn't handled. Surface a download fallback inline. In dev
+  // mode the link points at the web dash so this fallback never fires.
   function tryOpenDash(e: React.MouseEvent<HTMLAnchorElement>) {
+    const href = buildDashLink({ org: name, user: me.email, name: me.name });
+    if (isDevDashEnabled()) {
+      // Web dash: let the anchor navigate naturally (target="_blank").
+      return;
+    }
     e.preventDefault();
-    const params = new URLSearchParams({ org: name });
-    if (me.email) params.set("user", me.email);
-    if (me.name) params.set("name", me.name);
-    const href = `crawfish-dash://link?${params.toString()}`;
     const startedAt = Date.now();
     const onHide = () => {
       if (document.hidden) {
@@ -612,7 +615,9 @@ function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <a
-          href={`crawfish-dash://link?org=${encodeURIComponent(name)}${me.email ? `&user=${encodeURIComponent(me.email)}` : ""}${me.name ? `&name=${encodeURIComponent(me.name)}` : ""}`}
+          href={buildDashLink({ org: name, user: me.email, name: me.name })}
+          target={dashLinkTarget()}
+          rel={dashLinkTarget() ? "noopener noreferrer" : undefined}
           onClick={tryOpenDash}
           style={{
             background: "var(--ink)",

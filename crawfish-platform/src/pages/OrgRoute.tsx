@@ -14,6 +14,7 @@ import { Node } from "@crawfish/ui/components/Node";
 import { Avatar, AvatarStack } from "@crawfish/ui/components/Avatar";
 import { fetchOrg, type Org, type ApiError } from "../lib/api";
 import { useCurrentUser } from "../lib/useAuth";
+import { buildDashLink, dashLinkTarget, isDevDashEnabled } from "../lib/dashUrl";
 import { OrgMembers } from "./OrgMembers";
 
 function Surface({ title, eyebrow, body }: { title: string; eyebrow: string; body: string }) {
@@ -216,9 +217,15 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <a
-              href={`crawfish-dash://link?org=${encodeURIComponent(org.name)}${me.email ? `&user=${encodeURIComponent(me.email)}` : ""}${me.name ? `&name=${encodeURIComponent(me.name)}` : ""}`}
+              href={buildDashLink({ org: org.name, user: me.email, name: me.name })}
+              target={dashLinkTarget()}
+              rel={dashLinkTarget() ? "noopener noreferrer" : undefined}
               className="cfp-btn cfp-btn--sm"
-              title="Open this org in the Crawfish desktop app. Requires Dash to be installed."
+              title={
+                isDevDashEnabled()
+                  ? "Open the dev dash web build (no Tauri install needed)."
+                  : "Open this org in the Crawfish desktop app. Requires Dash to be installed."
+              }
               style={{
                 background: "var(--ink)",
                 color: "#f7f3ea",

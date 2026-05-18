@@ -136,11 +136,18 @@ deviceLinkRouter.get("/:code", async (req, res) => {
   }
   // Single-use: after handing back the token, drop the row.
   const authToken = row.authToken;
+  const redeemer = row.redeemedByUserId
+    ? await db.user.findUnique({
+        where: { id: row.redeemedByUserId },
+        select: { email: true, name: true },
+      })
+    : null;
   await db.deviceLinkCode.delete({ where: { code } }).catch(() => {});
   return res.json({
     redeemedAt: row.redeemedAt.toISOString(),
     authToken,
     org: { id: row.org.id, name: row.org.name },
+    user: redeemer ? { email: redeemer.email, name: redeemer.name ?? "" } : null,
   });
 });
 
@@ -210,7 +217,15 @@ deviceLinkRouter.post("/:code/redeem", _redeemAuth, async (req, res) => {
       },
     });
 
-    return res.json({ ok: true, org: { id: org.id, name: org.name } });
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true },
+    });
+    return res.json({
+      ok: true,
+      org: { id: org.id, name: org.name },
+      user: user ? { email: user.email, name: user.name ?? "" } : null,
+    });
   } catch (err) {
     return httpError(res, 500, "server_error", String(err));
   }

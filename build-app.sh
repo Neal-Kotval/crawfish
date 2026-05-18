@@ -35,6 +35,15 @@ cd "$APP_DIR"
 echo "▶ building Tauri bundle (this takes a minute…)"
 npm run build
 
+PORTAL_URL="${PORTAL_URL:-http://localhost:5174}"
+
+open_portal() {
+  if command -v open >/dev/null 2>&1; then
+    echo "▶ opening portal at $PORTAL_URL"
+    open "$PORTAL_URL" 2>/dev/null || true
+  fi
+}
+
 case "${1:-}" in
   --install)
     DMG="$(find src-tauri/target/release/bundle/dmg -name 'Crawfish_*.dmg' 2>/dev/null | head -1)"
@@ -46,8 +55,10 @@ case "${1:-}" in
       echo "▶ registering crawfish-dash:// URL scheme with launchd"
       /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister \
         -f "/Applications/Crawfish.app" 2>/dev/null || true
-      echo "✓ installed. Launch once so macOS confirms the URL handler:"
-      echo "  open /Applications/Crawfish.app"
+      echo "▶ launching Crawfish.app so macOS confirms the URL handler"
+      open /Applications/Crawfish.app 2>/dev/null || true
+      open_portal
+      echo "✓ installed. Sign in on the portal tab, then click Open in Dash."
     else
       echo "✗ no .app produced; check the build log above."
       exit 1
@@ -56,15 +67,20 @@ case "${1:-}" in
   --open)
     DMG="$(find src-tauri/target/release/bundle/dmg -name 'Crawfish_*.dmg' 2>/dev/null | head -1)"
     [ -n "$DMG" ] && open "$DMG"
+    open_portal
     ;;
   "")
     echo
     echo "✓ build done. Bundle at:"
     find src-tauri/target/release/bundle -name 'Crawfish*.{dmg,app}' -maxdepth 3 2>/dev/null | sed 's|^|  |'
     echo
+    open_portal
     echo "Next steps:"
     echo "  ./build-app.sh --install    # install to /Applications and register the URL scheme"
     echo "  ./build-app.sh --open       # open the DMG to drag manually"
+    echo
+    echo "Env vars:"
+    echo "  PORTAL_URL    URL to open in the browser (default http://localhost:5174)"
     ;;
   *)
     echo "Unknown arg: $1"
