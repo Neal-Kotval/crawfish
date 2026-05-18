@@ -106,3 +106,57 @@ describe("GET /api/github/repos", () => {
     expect(res.body.error.code).toBe("github_disconnected");
   });
 });
+
+describe("GET /api/github/repos/:owner/:name/check", () => {
+  const repoPayload = {
+    id: 42,
+    full_name: "octo/hello",
+    default_branch: "main",
+    private: false,
+  };
+
+  function stubFetchOk(payload: unknown) {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+  }
+
+  function stubFetchStatus(status: number) {
+    globalThis.fetch = (async () =>
+      new Response("{}", {
+        status,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+  }
+
+  it("returns repo metadata when the user has access", async () => {
+    getUserOauthAccessToken.mockResolvedValue({ data: [{ token: "gho_test" }] });
+    stubFetchOk(repoPayload);
+    const res = await request(app)
+      .get("/api/github/repos/octo/hello/check")
+      .set("X-User-Id", "gh-user-d");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(repoPayload);
+  });
+
+  it("returns 404 repo_not_found when GitHub 404s", async () => {
+    getUserOauthAccessToken.mockResolvedValue({ data: [{ token: "gho_test" }] });
+    stubFetchStatus(404);
+    const res = await request(app)
+      .get("/api/github/repos/octo/missing/check")
+      .set("X-User-Id", "gh-user-e");
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("repo_not_found");
+  });
+
+  it("returns 409 github_disconnected when Clerk has no token", async () => {
+    getUserOauthAccessToken.mockResolvedValue({ data: [] });
+    const res = await request(app)
+      .get("/api/github/repos/octo/hello/check")
+      .set("X-User-Id", "gh-user-f");
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("github_disconnected");
+  });
+});

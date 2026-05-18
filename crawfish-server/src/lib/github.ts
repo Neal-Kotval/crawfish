@@ -53,6 +53,29 @@ export interface RepoSummary {
   updated_at: string;
 }
 
+export class GithubRepoNotFound extends Error {
+  constructor() {
+    super("GitHub repository not found or inaccessible");
+  }
+}
+
+export async function fetchRepoByName(
+  token: string,
+  owner: string,
+  name: string,
+): Promise<RepoMetadata> {
+  const r = await fetch(
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+    {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+    },
+  );
+  if (r.status === 404) throw new GithubRepoNotFound();
+  if (!r.ok) throw new Error(`github ${r.status}`);
+  const j = (await r.json()) as RepoMetadata;
+  return { id: j.id, full_name: j.full_name, default_branch: j.default_branch, private: j.private };
+}
+
 export async function listUserRepos(token: string, page: number): Promise<RepoSummary[]> {
   const url = `https://api.github.com/user/repos?sort=updated&per_page=30&page=${page}`;
   const r = await fetch(url, {

@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { httpError } from "../lib/errors.js";
 import {
+  fetchRepoByName,
   getGithubToken,
   GithubNotConnected,
+  GithubRepoNotFound,
   listUserRepos,
 } from "../lib/github.js";
 
@@ -34,4 +36,29 @@ githubRouter.get("/repos", async (req, res) => {
 
   const filtered = q ? repos.filter((r) => r.full_name.toLowerCase().includes(q)) : repos;
   return res.json(filtered);
+});
+
+githubRouter.get("/repos/:owner/:name/check", async (req, res) => {
+  const userId = req.userId;
+  if (!userId) return httpError(res, 401, "unauthenticated", "");
+
+  const { owner, name } = req.params;
+
+  let token: string;
+  try {
+    token = await getGithubToken(userId);
+  } catch (err) {
+    if (err instanceof GithubNotConnected)
+      return httpError(res, 409, "github_disconnected", "");
+    return httpError(res, 502, "github_error", String(err));
+  }
+
+  try {
+    const repo = await fetchRepoByName(token, owner, name);
+    return res.json(repo);
+  } catch (err) {
+    if (err instanceof GithubRepoNotFound)
+      return httpError(res, 404, "repo_not_found", "");
+    return httpError(res, 502, "github_error", String(err));
+  }
 });
