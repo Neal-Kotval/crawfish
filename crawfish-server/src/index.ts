@@ -42,6 +42,7 @@ app.use("/api/invites", publicInvitesRouter);
 // Dash-sync route: accepts X-Crawfish-Token (aud-scoped JWT). Mounted as its
 // own sub-app so the dash-sync middleware only fires here, not on user routes.
 app.use("/api/dash", dashSyncMiddleware, dashAgentsRouter);
+app.use("/api/dash/orgs/:orgId/projects", dashSyncMiddleware, projectsRouter);
 
 // All remaining /api routes require user auth (Clerk in prod; dev shim
 // otherwise).

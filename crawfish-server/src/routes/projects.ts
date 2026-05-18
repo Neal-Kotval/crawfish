@@ -120,3 +120,39 @@ projectsRouter.post("/", async (req, res) => {
   });
   return res.status(201).json(created);
 });
+
+const PatchBody = z.object({
+  cloneStatus: z.enum(["pending", "cloning", "cloned", "local_only", "error"]).optional(),
+  localPath: z.string().max(1024).nullable().optional(),
+  cloneError: z.string().max(1024).nullable().optional(),
+  deviceId: z.string().max(128).nullable().optional(),
+  name: z.string().min(1).max(120).optional(),
+});
+
+projectsRouter.patch("/:pid", async (req, res) => {
+  const params = req.params as { orgId: string; pid: string };
+  const ctx = await requireMember(req, params.orgId);
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+
+  const parsed = PatchBody.safeParse(req.body);
+  if (!parsed.success) return httpError(res, 400, "invalid_body", parsed.error.message);
+
+  const project = await db.project.findFirst({ where: { id: params.pid, orgId: ctx.orgId } });
+  if (!project) return httpError(res, 404, "not_found", "");
+
+  const touchesCloneFields =
+    parsed.data.cloneStatus !== undefined ||
+    parsed.data.localPath !== undefined ||
+    parsed.data.cloneError !== undefined ||
+    parsed.data.deviceId !== undefined;
+  const dashOrgId = (req as Request & { dashOrgId?: string }).dashOrgId;
+  if (touchesCloneFields && !dashOrgId) {
+    return httpError(res, 403, "device_token_required", "");
+  }
+
+  const updated = await db.project.update({
+    where: { id: project.id },
+    data: parsed.data,
+  });
+  return res.json(updated);
+});

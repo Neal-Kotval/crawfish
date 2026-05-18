@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import request from "supertest";
 import { app, db } from "../../src/index.js";
 import { _setClerkClientForTests } from "../../src/lib/github.js";
+import { signOrgToken } from "../../src/lib/jwt.js";
 
 // Stub Clerk so getGithubToken returns a fake token without hitting the API.
 _setClerkClientForTests({
@@ -149,6 +150,62 @@ describe("GET /api/orgs/:orgId/projects", () => {
     const res = await request(app)
       .get(`/api/orgs/${orgId}/projects`)
       .set("X-User-Id", "outsider");
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("PATCH /api/orgs/:orgId/projects/:pid", () => {
+  it("allows founder to rename a project via web auth", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: { orgId, name: "old-name", cloneStatus: "pending", createdById: founder!.id },
+    });
+    const res = await request(app)
+      .patch(`/api/orgs/${orgId}/projects/${p.id}`)
+      .set("X-User-Id", "acme-founder")
+      .send({ name: "new-name" });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe("new-name");
+  });
+
+  it("rejects clone-field updates via web auth with 403", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: { orgId, name: "p1", cloneStatus: "pending", createdById: founder!.id },
+    });
+    const res = await request(app)
+      .patch(`/api/orgs/${orgId}/projects/${p.id}`)
+      .set("X-User-Id", "acme-founder")
+      .send({ cloneStatus: "cloned", localPath: "/x/y" });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("device_token_required");
+  });
+
+  it("updates clone fields when called via device-link JWT on /api/dash", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: { orgId, name: "p1", cloneStatus: "pending", createdById: founder!.id },
+    });
+    const token = signOrgToken(founder!.id, orgId);
+    const res = await request(app)
+      .patch(`/api/dash/orgs/${orgId}/projects/${p.id}`)
+      .set("X-Crawfish-Token", token)
+      .send({
+        cloneStatus: "cloned",
+        localPath: "/Users/me/crawfish/acme/p1",
+        deviceId: "dev_xyz",
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.cloneStatus).toBe("cloned");
+    expect(res.body.localPath).toBe("/Users/me/crawfish/acme/p1");
+    expect(res.body.deviceId).toBe("dev_xyz");
+  });
+
+  it("returns 404 when project does not belong to the org", async () => {
+    const res = await request(app)
+      .patch(`/api/orgs/${orgId}/projects/nonexistent`)
+      .set("X-User-Id", "acme-founder")
+      .send({ name: "new-name" });
     expect(res.status).toBe(404);
   });
 });
