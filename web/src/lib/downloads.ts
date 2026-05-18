@@ -49,6 +49,7 @@ export function detectPlatform(): Platform {
 export interface ReleaseAsset {
   name: string;
   browser_download_url: string;
+  size?: number; // bytes, from GitHub Releases API
 }
 export interface Release {
   tag_name?: string;
@@ -128,6 +129,20 @@ export function assetUrlFor(release: Release | null, platform: Platform): string
     if (hit) return hit.browser_download_url;
   }
   return release.html_url || RELEASES_FALLBACK_URL;
+}
+
+/**
+ * Returns the size in MB (rounded to nearest integer) for the primary asset
+ * of the given platform, or null if the release/asset is unavailable.
+ */
+export function assetSizeMbFor(release: Release | null, platform: Platform): number | null {
+  if (!release || platform === "unknown") return null;
+  const patterns = PATTERNS[platform];
+  for (const pat of patterns) {
+    const hit = release.assets.find((a) => pat.test(a.name));
+    if (hit && hit.size) return Math.round(hit.size / 1_048_576);
+  }
+  return null;
 }
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
