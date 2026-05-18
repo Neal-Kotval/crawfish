@@ -307,4 +307,34 @@ Centered error card: `"SOMETHING WENT WRONG"` eyebrow, `"Couldn't load invite"` 
 ├── billing/{mobile,tablet,desktop}.png
 ├── settings/{mobile,tablet,desktop}.png
 └── invites/{mobile,tablet,desktop}.png                ← no recovery (M-9)
+
+---
+
+## Fix-pass 2026-05-18
+
+**Teammate:** fix-platform agent (claude-sonnet-4-6)
+**Commits:** `c08ce3e`, `c3e0017`, `ae6dda2`
+**Type-check result:** `npx tsc --noEmit -p tsconfig.json` — zero errors, zero new warnings.
+
+### Findings closed
+
+| ID | Description | Commit |
+|----|-------------|--------|
+| C-1 | Raw "Failed to fetch" / raw error strings on OrgPicker, OrgMembers, OrgRoute (canvas error), InviteAccept, Projects, Link — all now use `formatApiError(e).{title,body}` | `c3e0017` |
+| C-2 | Projects.tsx bare `/api/…` URLs hitting Vite fallback → `SyntaxError` — fixed by Vite proxy `/api` → `http://127.0.0.1:7878`; also added content-type guard before `res.json()` | `c08ce3e` |
+| C-3 | Onboarding deep-link silent redirect — resume notice is now above-fold, `aria-live="polite"`, has a heading + body explaining the redirect instead of being dismissible-only | `ae6dda2` |
+| M (OrgPicker skeleton) | Single dashed "loading…" card replaced with 3 blank dashed cards so the grid reads as loading state not a broken org row | `c3e0017` |
+| M (Projects poller) | Poller now pauses when `document.hidden` and restarts on `visibilitychange` — no more background server drain | `c3e0017` |
+| M (Handoff grid) | `gridTemplateColumns: "1fr 1fr"` → `repeat(auto-fit, minmax(280px, 1fr))` — cards reflow below 640px | `ae6dda2` |
+| M (SegRow) | Hand-rolled segmented control replaced with `.cf-segmented` + `.cf-segmented__item[--active]` from `globals.css` | `ae6dda2` |
+| M (active-org dot) | Dot was rendered on every org row; now only rendered when `isActive` | `ae6dda2` |
+| M (Auth Enter key) | DevFacade "Continue with GitHub" button wrapped in `<form onSubmit>` so Enter submits | `ae6dda2` |
+| M (Auth + Link width) | Fixed-width integer `460`/`420` → `width: "100%", maxWidth: 460/420` so cards shrink on mobile | `ae6dda2` |
+| M (React Router warnings) | Added `future={{ v7_startTransition: true, v7_relativeSplatPath: true }}` to `BrowserRouter` | `ae6dda2` |
+
+### Not fixed (requires lead action or backend)
+
+- **C-4 (SERVER_URL :7882→:7878):** Lead already fixed `.env.local` locally (gitignored). Not a platform/src change.
+- **OrgMembers `window.confirm()` revoke** (M): still uses native `confirm()`. Replacement would require a new inline confirm component — noting for next pass.
+- **Minor/Polish** (P-1 through P-8): skipped per scope — trivial 10px font-size and aria-label polish left for a dedicated a11y pass.
 ```
