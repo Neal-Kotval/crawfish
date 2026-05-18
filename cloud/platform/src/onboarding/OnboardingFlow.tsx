@@ -482,7 +482,7 @@ function Propose({ answers, error }: { answers: Answers; error: string | null })
         className="cf-mono"
         style={{
           background: "var(--ink)",
-          color: "#e9e4d0",
+          color: "var(--paper-2)",
           padding: 24,
           borderRadius: "var(--r-md)",
           fontSize: 12.5,
@@ -570,7 +570,7 @@ function Install({ answers }: { answers: Answers }) {
       <div
         style={{
           background: "var(--ink)",
-          color: "#e9e4d0",
+          color: "var(--paper-2)",
           padding: 24,
           borderRadius: "var(--r-md)",
           fontFamily: "var(--ff-mono)",
@@ -688,7 +688,7 @@ function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
           onClick={tryOpenDash}
           style={{
             background: "var(--ink)",
-            color: "#f7f3ea",
+            color: "var(--paper-2)",
             borderRadius: "var(--r-lg)",
             padding: 24,
             display: "flex",
