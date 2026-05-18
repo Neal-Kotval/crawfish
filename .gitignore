@@ -11,3 +11,13 @@ node_modules/
 /verify-*.png
 /page-*.png
 dev-logs/
+
+# Local test/dev org folders that accidentally land at the repo root
+# (real org data lives in ~/crawfish/<org>/ on disk; these only appear
+# when a Playwright run targets the repo cwd as its org root).
+/alby/
+/e2e-*/
+test-results/
+
+# Audit-script copies dropped into platform subdir by the auditor
+/*/.audit-*.mjs

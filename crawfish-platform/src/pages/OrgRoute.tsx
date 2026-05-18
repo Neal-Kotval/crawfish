@@ -230,14 +230,20 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
             >
               Open in Dash ↗
             </a>
-            <span className="cf-mono" style={{ fontSize: 11, color: "var(--ink-mute)" }}>
-              viewing as {me.name || me.email}
-            </span>
-            <AvatarStack>
-              {org.members.slice(0, 5).map((m) => (
-                <Avatar key={m.email} name={m.name || m.email} size="sm" title={`${m.email} · ${m.role}`} />
-              ))}
-            </AvatarStack>
+            <Pill tone="ink">viewing as {me.name || me.email}</Pill>
+            {org.members.length === 1 ? (
+              <Avatar
+                name={org.members[0].name || org.members[0].email}
+                size="sm"
+                title={`${org.members[0].email} · ${org.members[0].role}`}
+              />
+            ) : (
+              <AvatarStack>
+                {org.members.slice(0, 5).map((m) => (
+                  <Avatar key={m.email} name={m.name || m.email} size="sm" title={`${m.email} · ${m.role}`} />
+                ))}
+              </AvatarStack>
+            )}
           </div>
         </div>
       </div>
