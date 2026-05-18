@@ -14,12 +14,12 @@ import {
   fetchOrg,
   listInvites,
   revokeInvite,
-  type ApiError,
   type CreateInviteResponse,
   type Invite,
   type InviteRole,
   type Org,
 } from "../lib/api";
+import { formatApiError } from "@crawfish/ui/lib/formatApiError";
 
 void _accept;
 
@@ -43,8 +43,8 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
       const invites = await listInvites(org.id);
       setState({ kind: "ok", org, invites });
     } catch (e) {
-      const err = e as ApiError;
-      setState({ kind: "error", message: err.message || "Failed to load team." });
+      const friendly = formatApiError(e);
+      setState({ kind: "error", message: friendly.body });
     }
   }, [orgSlug]);
 
@@ -74,8 +74,7 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
       setCopied(false);
       await refresh();
     } catch (e) {
-      const err = e as ApiError;
-      setFormError(err.message || "Failed to send invite.");
+      setFormError(formatApiError(e).body);
     } finally {
       setSubmitting(false);
     }
@@ -88,8 +87,7 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
       await revokeInvite(state.org.id, invite.id);
       await refresh();
     } catch (e) {
-      const err = e as ApiError;
-      window.alert(err.message || "Failed to revoke.");
+      window.alert(formatApiError(e).body);
     }
   }
 
@@ -118,7 +116,28 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
     return (
       <main className="cfp-shell__main" style={{ padding: 28 }}>
         <Eyebrow>{orgSlug} · team</Eyebrow>
-        <p style={{ color: "var(--ink-soft)", fontSize: 14, marginTop: 12 }}>{state.message}</p>
+        <h1
+          style={{
+            fontFamily: "var(--ff-display)",
+            fontWeight: 500,
+            fontSize: 32,
+            letterSpacing: "-0.025em",
+            margin: "6px 0 12px",
+          }}
+        >
+          Team and invites
+        </h1>
+        <p style={{ color: "var(--ink-soft)", fontSize: 14, marginBottom: 16, maxWidth: 560 }}>
+          {state.message}
+        </p>
+        <button
+          type="button"
+          className="cfp-btn"
+          onClick={refresh}
+          style={{ cursor: "pointer" }}
+        >
+          Try again
+        </button>
       </main>
     );
   }

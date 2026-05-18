@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eyebrow } from "@crawfish/ui/components/Eyebrow";
 import { Pill } from "@crawfish/ui/components/Pill";
-import { listMyOrgs, type OrgSummary, type ApiError } from "../lib/api";
+import { listMyOrgs, type OrgSummary } from "../lib/api";
+import { formatApiError } from "@crawfish/ui/lib/formatApiError";
 
 export function OrgPicker() {
   const navigate = useNavigate();
   const [orgs, setOrgs] = useState<OrgSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ title: string; body: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -17,8 +18,8 @@ export function OrgPicker() {
       })
       .catch((e) => {
         if (cancelled) return;
-        const err = e as ApiError;
-        setError(err.message || "Failed to load orgs.");
+        const friendly = formatApiError(e);
+        setError({ title: friendly.title, body: friendly.body });
         setOrgs([]);
       });
     return () => {
@@ -46,19 +47,19 @@ export function OrgPicker() {
 
       {error && (
         <div
-          className="cf-mono"
           style={{
-            marginBottom: 16,
-            padding: "8px 12px",
-            fontSize: 12,
-            color: "var(--danger)",
+            marginBottom: 24,
+            padding: "14px 16px",
             background: "var(--warn-bg)",
             border: "1px solid var(--rule-3)",
-            borderRadius: "var(--r-sm)",
+            borderRadius: "var(--r-md)",
             maxWidth: 1000,
           }}
         >
-          {error}
+          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>
+            {error.title}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>{error.body}</div>
         </div>
       )}
 
@@ -71,18 +72,20 @@ export function OrgPicker() {
         }}
       >
         {loading && (
-          <div
-            className="cf-mono"
-            style={{
-              padding: 24,
-              color: "var(--ink-mute)",
-              fontSize: 12,
-              border: "1px dashed var(--rule)",
-              borderRadius: "var(--r-lg)",
-            }}
-          >
-            loading…
-          </div>
+          <>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                style={{
+                  padding: 24,
+                  border: "1px dashed var(--rule)",
+                  borderRadius: "var(--r-lg)",
+                  minHeight: 100,
+                  background: "var(--paper-2)",
+                }}
+              />
+            ))}
+          </>
         )}
 
         {!loading &&

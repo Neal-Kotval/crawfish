@@ -20,6 +20,7 @@ import {
   type ApiError,
   type InvitePreview,
 } from "../lib/api";
+import { formatApiError } from "@crawfish/ui/lib/formatApiError";
 import { useCurrentUser } from "../lib/useAuth";
 import { CLERK_ENABLED } from "../lib/clerk";
 
@@ -55,7 +56,7 @@ export function InviteAccept() {
             message: err.message || "This invite is no longer valid.",
           });
         }
-        setState({ kind: "error", message: err.message || "Failed to load invite." });
+        setState({ kind: "error", message: formatApiError(e).body });
       });
     return () => {
       cancelled = true;
@@ -69,8 +70,7 @@ export function InviteAccept() {
       const result = await acceptInvite(code);
       navigate(`/orgs/${result.org.slug}/canvas`, { replace: true });
     } catch (e) {
-      const err = e as ApiError;
-      setAcceptError(err.message || "Failed to accept invite.");
+      setAcceptError(formatApiError(e).body);
       setAccepting(false);
     }
   }

@@ -13,6 +13,7 @@ import { Pill } from "@crawfish/ui/components/Pill";
 import { Node } from "@crawfish/ui/components/Node";
 import { Avatar, AvatarStack } from "@crawfish/ui/components/Avatar";
 import { fetchOrg, type Org, type ApiError } from "../lib/api";
+import { formatApiError } from "@crawfish/ui/lib/formatApiError";
 import { useCurrentUser } from "../lib/useAuth";
 import { buildDashLink, dashLinkTarget, isDevDashEnabled } from "../lib/dashUrl";
 import { OrgMembers } from "./OrgMembers";
@@ -93,7 +94,8 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
       .catch((e) => {
         if (cancelled) return;
         const err = e as ApiError;
-        setState({ kind: "error", status: err.status, message: err.message || "Failed to load org." });
+        const friendly = formatApiError(e);
+        setState({ kind: "error", status: err.status, message: friendly.body });
       });
     return () => {
       cancelled = true;

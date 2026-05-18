@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "../lib/api";
+import { formatApiError } from "@crawfish/ui/lib/formatApiError";
 
 type Status = "ready" | "redeeming" | "linked" | "error";
 
@@ -42,7 +43,7 @@ export function LinkRedeem() {
       });
       setStatus("error");
     } catch (err) {
-      setError({ code: "network", message: String(err) });
+      setError({ code: "network", message: formatApiError(err).body });
       setStatus("error");
     }
   }
@@ -61,7 +62,8 @@ export function LinkRedeem() {
     >
       <div
         style={{
-          width: 460,
+          width: "100%",
+          maxWidth: 460,
           background: "var(--surface-2)",
           border: "1px solid var(--rule-3)",
           borderRadius: "var(--r-lg)",

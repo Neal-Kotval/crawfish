@@ -12,9 +12,10 @@
  *
  * The Import modal itself is Task 13; we only wire the open trigger.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Eyebrow } from "@crawfish/ui/components/Eyebrow";
 import { Pill } from "@crawfish/ui/components/Pill";
+import { formatApiError } from "@crawfish/ui/lib/formatApiError";
 
 export type Project = {
   id: string;
@@ -40,40 +41,56 @@ export function Projects({
 }) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
 
+  const cancelledRef = useRef(false);
+
   useEffect(() => {
-    let cancelled = false;
+    cancelledRef.current = false;
 
     async function poll() {
+      // Pause when the tab is hidden — don't burn server quota in the background.
+      if (document.hidden) return;
       try {
         const r = await fetch(`/api/orgs/${encodeURIComponent(orgId)}/projects`, {
           credentials: "include",
         });
-        if (cancelled) return;
+        if (cancelledRef.current) return;
         if (r.status === 409) {
           setState({ kind: "disconnected" });
           return;
         }
         if (!r.ok) {
-          setState({ kind: "error", message: `HTTP ${r.status}` });
+          // Check content-type: if Vite returns HTML (proxy miss), surface a
+          // friendly message rather than a raw SyntaxError from res.json().
+          const ct = r.headers.get("content-type") ?? "";
+          if (ct.includes("text/html")) {
+            setState({ kind: "error", message: "Can't reach the server. Start cloud/server and refresh." });
+            return;
+          }
+          setState({ kind: "error", message: formatApiError({ status: r.status }).body });
           return;
         }
         const json = (await r.json()) as Project[];
-        if (!cancelled) setState({ kind: "ok", projects: json });
+        if (!cancelledRef.current) setState({ kind: "ok", projects: json });
       } catch (e) {
-        if (!cancelled) {
-          setState({
-            kind: "error",
-            message: e instanceof Error ? e.message : String(e),
-          });
+        if (!cancelledRef.current) {
+          setState({ kind: "error", message: formatApiError(e).body });
         }
       }
     }
 
     poll();
     const t = window.setInterval(poll, 5000);
+
+    // Restart polling when the tab becomes visible again.
+    function onVisibility() {
+      if (!document.hidden && !cancelledRef.current) poll();
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
       window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [orgId]);
 
@@ -141,9 +158,21 @@ function Body({
 
   if (state.kind === "error") {
     return (
-      <p style={{ color: "var(--ink-soft)", fontSize: 14, marginTop: 12 }}>
-        Couldn't load projects: {state.message}
-      </p>
+      <div
+        style={{
+          marginTop: 12,
+          padding: "14px 16px",
+          background: "var(--warn-bg)",
+          border: "1px solid var(--rule-3)",
+          borderRadius: "var(--r-md)",
+          maxWidth: 640,
+        }}
+      >
+        <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>
+          Couldn't load projects
+        </div>
+        <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>{state.message}</div>
+      </div>
     );
   }
 
