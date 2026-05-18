@@ -22,10 +22,19 @@ export async function renderRoadmap(repoRoot: string, sources: string[]): Promis
   const lines = ["# Roadmap", ""];
   for (const abs of sorted) {
     const rel = relative(repoRoot, abs);
-    const heading = firstHeading(readFileSync(abs, "utf8"));
+    const content = readFileSync(abs, "utf8");
+    const heading = firstHeading(content);
     lines.push(`## ${heading}`);
     lines.push(`Source: \`${rel}\``);
     lines.push("");
+    if (sorted.length === 1) {
+      // Single-source: include full file body so consumers see the actual content
+      const body = content.replace(/^#[^\n]*\n/, "").trimStart();
+      if (body) {
+        lines.push(body.trimEnd());
+        lines.push("");
+      }
+    }
   }
   return lines.join("\n");
 }
