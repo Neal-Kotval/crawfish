@@ -41,7 +41,7 @@ describe("device-link", () => {
     expect(res.body.pending).toBe(true);
   });
 
-  it("user B redeems the code", async () => {
+  it("user B redeems the code and the response carries server-vouched user info", async () => {
     const res = await asUser(
       client().post(`/api/device-link/${code}/redeem`),
       "linker-b",
@@ -50,14 +50,17 @@ describe("device-link", () => {
     expect(res.status).toBe(200);
     expect(res.body.org?.id).toBe(orgId);
     expect(res.body.org?.name).toBe("link-org");
+    expect(res.body.user?.email).toBe("linker-b@example.com");
+    expect(typeof res.body.user?.name).toBe("string");
   });
 
-  it("post-redeem GET returns the auth token + org and is single-use", async () => {
+  it("post-redeem GET returns the auth token + org + user and is single-use", async () => {
     const res = await client().get(`/api/device-link/${code}`);
     expect(res.status).toBe(200);
     expect(res.body.redeemedAt).toBeTruthy();
     expect(res.body.authToken).toBeTruthy();
     expect(res.body.org?.name).toBe("link-org");
+    expect(res.body.user?.email).toBe("linker-b@example.com");
 
     // Single-use: row is deleted after read.
     const after = await client().get(`/api/device-link/${code}`);
