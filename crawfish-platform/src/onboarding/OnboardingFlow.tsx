@@ -16,6 +16,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { Eyebrow } from "@crawfish/ui/components/Eyebrow";
 import { Pill } from "@crawfish/ui/components/Pill";
 import { createOrg, type Org, type ApiError } from "../lib/api";
+import { useCurrentUser } from "../lib/useAuth";
 
 type Stage = "welcome" | "propose" | "install" | "hired" | "handoff";
 const STAGES: Stage[] = ["welcome", "propose", "install", "hired", "handoff"];
@@ -565,6 +566,7 @@ const MARKETING_URL = (import.meta.env.VITE_MARKETING_URL as string | undefined)
 function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
   const name = org?.name ?? answers.name ?? "your-org";
   const navigate = useNavigate();
+  const me = useCurrentUser();
   const [dashLikelyMissing, setDashLikelyMissing] = useState(false);
 
   // Custom-scheme links fail silently in browsers when no app is registered.
@@ -572,7 +574,10 @@ function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
   // the protocol wasn't handled. Surface a download fallback inline.
   function tryOpenDash(e: React.MouseEvent<HTMLAnchorElement>) {
     e.preventDefault();
-    const href = `crawfish-dash://link?org=${encodeURIComponent(name)}`;
+    const params = new URLSearchParams({ org: name });
+    if (me.email) params.set("user", me.email);
+    if (me.name) params.set("name", me.name);
+    const href = `crawfish-dash://link?${params.toString()}`;
     const startedAt = Date.now();
     const onHide = () => {
       if (document.hidden) {
@@ -607,7 +612,7 @@ function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <a
-          href={`crawfish-dash://link?org=${encodeURIComponent(name)}`}
+          href={`crawfish-dash://link?org=${encodeURIComponent(name)}${me.email ? `&user=${encodeURIComponent(me.email)}` : ""}${me.name ? `&name=${encodeURIComponent(me.name)}` : ""}`}
           onClick={tryOpenDash}
           style={{
             background: "var(--ink)",

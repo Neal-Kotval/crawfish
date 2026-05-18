@@ -215,6 +215,19 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <a
+              href={`crawfish-dash://link?org=${encodeURIComponent(org.name)}${me.email ? `&user=${encodeURIComponent(me.email)}` : ""}${me.name ? `&name=${encodeURIComponent(me.name)}` : ""}`}
+              className="cfp-btn cfp-btn--sm"
+              title="Open this org in the Crawfish desktop app. Requires Dash to be installed."
+              style={{
+                background: "var(--ink)",
+                color: "#f7f3ea",
+                border: "1px solid var(--ink)",
+                textDecoration: "none",
+              }}
+            >
+              Open in Dash ↗
+            </a>
             <span className="cf-mono" style={{ fontSize: 11, color: "var(--ink-mute)" }}>
               viewing as {me.name || me.email}
             </span>
