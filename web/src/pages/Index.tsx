@@ -61,10 +61,10 @@ export function Index() {
             border: "1px solid var(--rule-3)", borderRadius: 999, marginLeft: 4,
           }}>v0.4 · public beta</span>
         </div>
-        <nav style={{ display: "flex", gap: 28 }}>
+        <nav aria-label="Main navigation" style={{ display: "flex", gap: 28 }}>
           <NavLink href="https://github.com/crawfish">Github</NavLink>
         </nav>
-        <div style={{ width: 1 }} />
+        <PlatBtn primary href="https://app.crawfish.dev/signin">Sign in →</PlatBtn>
       </header>
 
       {/* hero */}
