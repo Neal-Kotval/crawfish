@@ -157,6 +157,65 @@ projectsRouter.patch("/:pid", async (req, res) => {
   return res.json(updated);
 });
 
+const CRAWFISH_FILE_ALLOWLIST = new Set([
+  "index.json",
+  "memory.md",
+  "context.md",
+  "roadmap.md",
+  "decisions.md",
+  "activity.md",
+]);
+
+projectsRouter.get("/:pid/files/:filename", async (req, res) => {
+  const params = req.params as { orgId: string; pid: string; filename: string };
+  const ctx = await requireMember(req, params.orgId);
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+
+  if (!CRAWFISH_FILE_ALLOWLIST.has(params.filename)) {
+    return httpError(res, 400, "invalid_filename", "");
+  }
+
+  const project = await db.project.findFirst({ where: { id: params.pid, orgId: ctx.orgId } });
+  if (!project) return httpError(res, 404, "not_found", "");
+
+  if (project.cloneStatus !== "cloned" && project.cloneStatus !== "local_only") {
+    return httpError(res, 409, "project_not_initialized", "");
+  }
+  if (!project.githubRepo) {
+    return httpError(res, 404, "no_remote", "");
+  }
+
+  let token: string;
+  try {
+    token = await getGithubToken(ctx.userId);
+  } catch (err) {
+    if (err instanceof GithubNotConnected) return httpError(res, 409, "github_disconnected", "");
+    return httpError(res, 502, "github_error", String(err));
+  }
+
+  const ref = project.defaultBranch ?? "main";
+  const url = `https://api.github.com/repos/${project.githubRepo}/contents/.crawfish/${params.filename}?ref=${encodeURIComponent(ref)}`;
+  const ghRes = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github.raw+json",
+      "User-Agent": "crawfish-server",
+    },
+  });
+
+  if (ghRes.status === 404) return httpError(res, 404, "file_not_found", "");
+  if (!ghRes.ok) return httpError(res, 502, "github_error", `status ${ghRes.status}`);
+
+  const body = await ghRes.text();
+  const contentType =
+    params.filename === "index.json"
+      ? "application/json; charset=utf-8"
+      : "text/markdown; charset=utf-8";
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(200).send(body);
+});
+
 projectsRouter.delete("/:pid", async (req, res) => {
   const params = req.params as { orgId: string; pid: string };
   const ctx = await requireMember(req, params.orgId);

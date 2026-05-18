@@ -245,3 +245,121 @@ describe("DELETE /api/orgs/:orgId/projects/:pid", () => {
   });
 
 });
+
+describe("GET /api/orgs/:orgId/projects/:pid/files/:filename", () => {
+  const repoMetaFetch = globalThis.fetch;
+
+  function setFetch(fn: typeof fetch) {
+    globalThis.fetch = fn;
+  }
+  function restoreFetch() {
+    globalThis.fetch = repoMetaFetch;
+  }
+
+  it("returns 200 with markdown body when project is cloned and GH returns file", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: {
+        orgId,
+        name: "p1",
+        cloneStatus: "cloned",
+        githubRepo: "octo/hello",
+        githubRepoId: 12345,
+        defaultBranch: "main",
+        createdById: founder!.id,
+      },
+    });
+    setFetch((async () =>
+      new Response("# Memory\n\nhello", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      })) as typeof fetch);
+    try {
+      const res = await getAsFounder(`/api/orgs/${orgId}/projects/${p.id}/files/memory.md`);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-type"]).toMatch(/text\/markdown/);
+      expect(res.text).toBe("# Memory\n\nhello");
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  it("rejects non-members with 404", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: {
+        orgId,
+        name: "p1",
+        cloneStatus: "cloned",
+        githubRepo: "octo/hello",
+        githubRepoId: 12345,
+        defaultBranch: "main",
+        createdById: founder!.id,
+      },
+    });
+    const res = await request(app)
+      .get(`/api/orgs/${orgId}/projects/${p.id}/files/memory.md`)
+      .set("X-User-Id", "outsider");
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects invalid filename with 400", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: {
+        orgId,
+        name: "p1",
+        cloneStatus: "cloned",
+        githubRepo: "octo/hello",
+        githubRepoId: 12345,
+        defaultBranch: "main",
+        createdById: founder!.id,
+      },
+    });
+    const res = await getAsFounder(`/api/orgs/${orgId}/projects/${p.id}/files/secrets.env`);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("invalid_filename");
+  });
+
+  it("returns 404 file_not_found when GitHub returns 404", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: {
+        orgId,
+        name: "p1",
+        cloneStatus: "cloned",
+        githubRepo: "octo/hello",
+        githubRepoId: 12345,
+        defaultBranch: "main",
+        createdById: founder!.id,
+      },
+    });
+    setFetch((async () =>
+      new Response("Not Found", { status: 404 })) as typeof fetch);
+    try {
+      const res = await getAsFounder(`/api/orgs/${orgId}/projects/${p.id}/files/memory.md`);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("file_not_found");
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  it("returns 409 project_not_initialized when project is pending", async () => {
+    const founder = await db.user.findUnique({ where: { email: "acme-founder@local" } });
+    const p = await db.project.create({
+      data: {
+        orgId,
+        name: "p1",
+        cloneStatus: "pending",
+        githubRepo: "octo/hello",
+        githubRepoId: 12345,
+        defaultBranch: "main",
+        createdById: founder!.id,
+      },
+    });
+    const res = await getAsFounder(`/api/orgs/${orgId}/projects/${p.id}/files/memory.md`);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("project_not_initialized");
+  });
+});
