@@ -28,3 +28,19 @@ export async function getGithubToken(userId: string): Promise<string> {
   if (!token) throw new GithubNotConnected();
   return token;
 }
+
+export interface RepoMetadata {
+  id: number;
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+}
+
+export async function fetchRepoMetadata(token: string, repoId: number): Promise<RepoMetadata> {
+  const r = await fetch(`https://api.github.com/repositories/${repoId}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+  });
+  if (!r.ok) throw new Error(`github ${r.status}`);
+  const j = (await r.json()) as RepoMetadata;
+  return { id: j.id, full_name: j.full_name, default_branch: j.default_branch, private: j.private };
+}
