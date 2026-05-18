@@ -32,7 +32,7 @@ import { RequireAuth } from "./lib/useAuth";
 import "@crawfish/ui/tokens/globals.css";
 
 const tree = (
-  <BrowserRouter>
+  <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
     <Routes>
       <Route path="/signin/*" element={<Auth mode="signin" />} />
       <Route path="/signup/*" element={<Auth mode="signup" />} />

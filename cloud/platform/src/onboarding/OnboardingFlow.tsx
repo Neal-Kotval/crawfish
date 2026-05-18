@@ -235,28 +235,35 @@ export function OnboardingFlow() {
         {showResumeNotice && stage === "welcome" ? (
           <div
             role="status"
+            aria-live="polite"
             style={{
               marginBottom: 32,
-              padding: "10px 14px",
-              border: "1px dashed var(--rule-3)",
-              borderRadius: "var(--r-sm)",
+              padding: "14px 16px",
+              border: "1px solid var(--rule-3)",
+              borderRadius: "var(--r-md)",
               background: "var(--surface-2)",
-              fontSize: 13,
+              fontSize: 14,
               color: "var(--ink-soft)",
               display: "flex",
               justifyContent: "space-between",
               gap: 12,
-              alignItems: "center",
+              alignItems: "flex-start",
             }}
           >
-            <span>
-              Your earlier answers expired. Pick up from the start, the rest of the flow will follow.
-            </span>
+            <div>
+              <div style={{ fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>
+                Session expired — fill in your details to continue
+              </div>
+              <div style={{ fontSize: 13 }}>
+                This link goes to a later step, but your earlier answers are gone. Fill in the form
+                below to start over — the rest of the flow will follow automatically.
+              </div>
+            </div>
             <button
               type="button"
               className="cfp-btn cfp-btn--sm"
               onClick={() => setShowResumeNotice(false)}
-              style={{ background: "transparent" }}
+              style={{ flexShrink: 0 }}
             >
               Dismiss
             </button>
@@ -414,36 +421,16 @@ function SegRow<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        padding: 3,
-        gap: 2,
-        background: "var(--paper-2)",
-        border: "1px solid var(--rule)",
-        borderRadius: "var(--r-sm)",
-      }}
-    >
+    <div className="cf-segmented">
       {options.map((o) => {
         const active = o === value;
         return (
           <button
             key={o}
             type="button"
+            className={`cf-segmented__item${active ? " cf-segmented__item--active" : ""}`}
+            aria-pressed={active}
             onClick={() => onChange(o)}
-            style={{
-              appearance: "none",
-              cursor: "pointer",
-              border: "none",
-              padding: "6px 14px",
-              borderRadius: 4,
-              fontFamily: "var(--ff-sans)",
-              fontSize: 13,
-              fontWeight: 500,
-              background: active ? "var(--surface-2)" : "transparent",
-              color: active ? "var(--ink)" : "var(--ink-mute)",
-              boxShadow: active ? "var(--shadow-sm)" : "none",
-            }}
           >
             {o}
           </button>
@@ -680,7 +667,7 @@ function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
         Where do you want to work today?
       </h1>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
         <a
           href={buildDashLink({ org: name, user: me.email, name: me.name })}
           target={dashLinkTarget()}

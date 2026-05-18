@@ -142,27 +142,32 @@ export function Shell() {
               {orgs.length > 0 && (
                 <Eyebrow style={{ padding: "0 6px", marginBottom: 6 }}>Your orgs</Eyebrow>
               )}
-              {orgs.length > 0 && orgs.map((o) => (
+              {orgs.length > 0 && orgs.map((o) => {
+                const isActive = inOrg && org === o.name;
+                return (
                   <SideItem
                     key={o.id}
                     label={
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                        <span
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            background: "var(--accent)",
-                          }}
-                        />
+                        {isActive && (
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              background: "var(--accent)",
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
                         {o.name}
                       </span>
                     }
-                    active={inOrg && org === o.name}
+                    active={isActive}
                     onClick={() => navigate(`/orgs/${o.name}/canvas`)}
                   />
-                ))
-              }
+                );
+              })}
               <div style={{ marginTop: 6 }}>
                 <SideItem
                   icon={Icons.plus}

@@ -43,7 +43,8 @@ export function Auth({ mode }: { mode: "signin" | "signup" }) {
     >
       <div
         style={{
-          width: CLERK_ENABLED ? 460 : 420,
+          width: "100%",
+          maxWidth: CLERK_ENABLED ? 460 : 420,
           background: "var(--surface-2)",
           border: "1px solid var(--rule-3)",
           borderRadius: "var(--r-lg)",
@@ -121,14 +122,20 @@ function DevFacade({ isSignup, onContinue }: { isSignup: boolean; onContinue: ()
         {isSignup ? "Two minutes to your first agent." : "Sign in to keep building your company."}
       </p>
 
-      <button
-        type="button"
-        className="cfp-btn cfp-btn--ink"
-        style={{ width: "100%", justifyContent: "center", padding: "10px 14px" }}
-        onClick={onContinue}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onContinue();
+        }}
       >
-        Continue with GitHub →
-      </button>
+        <button
+          type="submit"
+          className="cfp-btn cfp-btn--ink"
+          style={{ width: "100%", justifyContent: "center", padding: "10px 14px" }}
+        >
+          Continue with GitHub →
+        </button>
+      </form>
 
       <p style={{ color: "var(--ink-mute)", fontSize: 12, marginTop: 18, textAlign: "center" }}>
         {isSignup ? (
