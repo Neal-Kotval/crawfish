@@ -44,3 +44,27 @@ export async function fetchRepoMetadata(token: string, repoId: number): Promise<
   const j = (await r.json()) as RepoMetadata;
   return { id: j.id, full_name: j.full_name, default_branch: j.default_branch, private: j.private };
 }
+
+export interface RepoSummary {
+  id: number;
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+  updated_at: string;
+}
+
+export async function listUserRepos(token: string, page: number): Promise<RepoSummary[]> {
+  const url = `https://api.github.com/user/repos?sort=updated&per_page=30&page=${page}`;
+  const r = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+  });
+  if (!r.ok) throw new Error(`github ${r.status}`);
+  const arr = (await r.json()) as RepoSummary[];
+  return arr.map((j) => ({
+    id: j.id,
+    full_name: j.full_name,
+    default_branch: j.default_branch,
+    private: j.private,
+    updated_at: j.updated_at,
+  }));
+}

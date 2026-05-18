@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import request from "supertest";
+import { app } from "../../src/index.js";
 import {
   getGithubToken,
   GithubNotConnected,
@@ -7,13 +9,20 @@ import {
 
 const getUserOauthAccessToken = vi.fn();
 
+const realFetch = globalThis.fetch;
+
+afterAll(() => {
+  _setClerkClientForTests(null);
+  globalThis.fetch = realFetch;
+});
+
 beforeEach(() => {
   getUserOauthAccessToken.mockReset();
   _setClerkClientForTests({
-    // Only the surface we use is stubbed; cast to satisfy the ClerkClient type.
     users: { getUserOauthAccessToken },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
+  globalThis.fetch = realFetch;
 });
 
 describe("getGithubToken", () => {
@@ -28,5 +37,72 @@ describe("getGithubToken", () => {
   it("throws GithubNotConnected when Clerk returns no token", async () => {
     getUserOauthAccessToken.mockResolvedValue({ data: [] });
     await expect(getGithubToken("user_1")).rejects.toBeInstanceOf(GithubNotConnected);
+  });
+});
+
+describe("GET /api/github/repos", () => {
+  const sampleRepos = [
+    {
+      id: 1,
+      full_name: "octo/hello",
+      default_branch: "main",
+      private: false,
+      updated_at: "2026-05-10T00:00:00Z",
+    },
+    {
+      id: 2,
+      full_name: "octo/world",
+      default_branch: "main",
+      private: true,
+      updated_at: "2026-05-09T00:00:00Z",
+    },
+    {
+      id: 3,
+      full_name: "acme/widgets",
+      default_branch: "master",
+      private: false,
+      updated_at: "2026-05-08T00:00:00Z",
+    },
+  ];
+
+  function stubFetchOk(payload: unknown) {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch;
+  }
+
+  it("returns the user's repos", async () => {
+    getUserOauthAccessToken.mockResolvedValue({ data: [{ token: "gho_test" }] });
+    stubFetchOk(sampleRepos);
+    const res = await request(app).get("/api/github/repos").set("X-User-Id", "gh-user-a");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(3);
+    expect(res.body[0]).toMatchObject({
+      id: 1,
+      full_name: "octo/hello",
+      default_branch: "main",
+      private: false,
+      updated_at: "2026-05-10T00:00:00Z",
+    });
+  });
+
+  it("filters by q against full_name (case-insensitive)", async () => {
+    getUserOauthAccessToken.mockResolvedValue({ data: [{ token: "gho_test" }] });
+    stubFetchOk(sampleRepos);
+    const res = await request(app)
+      .get("/api/github/repos?q=ACME")
+      .set("X-User-Id", "gh-user-b");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].full_name).toBe("acme/widgets");
+  });
+
+  it("returns 409 github_disconnected when Clerk has no token", async () => {
+    getUserOauthAccessToken.mockResolvedValue({ data: [] });
+    const res = await request(app).get("/api/github/repos").set("X-User-Id", "gh-user-c");
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("github_disconnected");
   });
 });

@@ -33,6 +33,7 @@ import { orgsRouter, meRouter, dashAgentsRouter } from "./routes/orgs.js";
 import { deviceLinkRouter } from "./routes/deviceLink.js";
 import { invitesRouter, publicInvitesRouter } from "./routes/invites.js";
 import { projectsRouter } from "./routes/projects.js";
+import { githubRouter } from "./routes/github.js";
 
 // Public routes (no user auth required) — mounted before authMiddleware.
 app.use("/api/health", healthRouter);
@@ -48,6 +49,7 @@ app.use("/api/dash/orgs/:orgId/projects", dashSyncMiddleware, projectsRouter);
 // otherwise).
 app.use("/api", authMiddleware);
 
+app.use("/api/github", githubRouter);
 app.use("/api/orgs/:orgId/invites", invitesRouter);
 app.use("/api/orgs/:orgId/projects", projectsRouter);
 app.use("/api/orgs", orgsRouter);
