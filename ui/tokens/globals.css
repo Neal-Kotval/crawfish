@@ -40,6 +40,7 @@
   /* ─── Semantic state ──────────────────────────────────────────────── */
   --good:    #2f7a4d;
   --good-bg: #d8e8de;
+  --bad:     #b1452f;
   --warn:    #b8862c;
   --warn-bg: #f3e6c4;
   --danger:  #b53224;
