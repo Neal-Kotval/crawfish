@@ -12,7 +12,7 @@
  *   $ craw install-hooks
  *
  * Dispatches to crawfish-projectctl. Resolution order:
- *   1. ../crawfish-projectctl/dist/index.js (umbrella checkout — today)
+ *   1. ../cli/projectctl/dist/index.js (umbrella checkout — today)
  *   2. node_modules/crawfish-projectctl/dist/index.js (future npm publish)
  *
  * Signals propagate to the child via spawn (not spawnSync).
@@ -64,9 +64,9 @@ function printHelp(stream) {
 
 // ─── locate projectctl entry ─────────────────────────────────────────────
 
-function findEntry(pkgName) {
+function findEntry(pkgName, cliName) {
   const candidates = [
-    resolve(ROOT, pkgName, "dist", "index.js"),
+    resolve(ROOT, "cli", cliName, "dist", "index.js"),
     resolve(ROOT, "node_modules", pkgName, "dist", "index.js"),
   ];
   for (const c of candidates) {
@@ -93,12 +93,12 @@ if (!forwarded) {
   exit(1);
 }
 
-const entry = findEntry("crawfish-projectctl");
+const entry = findEntry("crawfish-projectctl", "projectctl");
 if (!entry) {
   stderr.write(
     "craw: couldn't locate crawfish-projectctl. Build it first:\n",
   );
-  stderr.write("    cd crawfish-projectctl && npm install && npm run build\n");
+  stderr.write("    cd cli/projectctl && npm install && npm run build\n");
   exit(1);
 }
 

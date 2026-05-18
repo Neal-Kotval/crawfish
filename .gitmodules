@@ -1,17 +1,20 @@
 [submodule "crawfish-opt"]
-	path = crawfish-opt
+	path = desktop/opt
 	url = https://github.com/Neal-Kotval/crawfish-opt.git
 	branch = main
 [submodule "crawfish-lens"]
-	path = crawfish-lens
+	path = desktop/lens
 	url = https://github.com/Neal-Kotval/crawfish-lens.git
-	branch = main
+	branch = wk5/stage1-now
 [submodule "crawfish-opt-codebase"]
-	path = crawfish-opt-codebase
+	path = desktop/opt-codebase
 	url = https://github.com/Neal-Kotval/crawfish-opt-codebase.git
+	branch = main
 [submodule "crawfish-dash"]
-	path = crawfish-dash
+	path = desktop/dash
 	url = https://github.com/Neal-Kotval/crawfish-dash.git
+	branch = wk5/stage1-now
 [submodule "crawfish-app"]
-	path = crawfish-app
+	path = desktop/app
 	url = https://github.com/Neal-Kotval/crawfish-app.git
+	branch = main

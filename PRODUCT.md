@@ -8,32 +8,36 @@
 
 ```
 crawfish/
-├── crawfish-lens/         (submodule) JSONL transcript reader + REST/SSE API + 8 diagnoses rules
-├── crawfish-dash/         (submodule) Local dashboard UI (Tauri-hosted) — sessions, agents, board, analytics
-├── crawfish-app/          (submodule) Tauri shell that boots lens + dash as children
-├── crawfish-opt/          (submodule) Browser-side token optimizer (MCP server)
-├── crawfish-opt-codebase/ (submodule) Codebase token optimizer — 3.25× reduction on bench
-├── crawfish-platform/     Signed-in web SPA — Clerk auth, org/project import, dashboard tabs
-├── crawfish-server/       Platform backend — Express + Prisma + Clerk session verification
-├── crawfish-orgctl/       Org-control MCP server — board + hosted-FS tools at ~/.crawfish/orgs/<id>/
-├── crawfish-projectctl/   Per-project .crawfish/ engine — CLI + MCP + hooks preset
-├── crawfish-web/          Marketing & onboarding site for crawfish.dev
-├── crawfish-starter-app/  Tiny Express target repo for the MVP demo
-├── bin/                   Umbrella launchers: `crawfish` (boots lens+dash), `craw` (per-project verbs)
-├── e2e/                   Cross-surface Playwright suite
-├── ui/                    Shared design tokens — globals.css consumed by platform + dash via @crawfish/ui
-├── docs/                  Documentation (see docs/README.md)
-├── scripts/               Repo-wide tooling — dev.sh, run-bench.sh, build-dmg.sh, smoke-15min.ts
-├── bench/                 Benchmark fixtures + prompts
-├── dev.sh / build-app.sh  Top-level entry scripts
-├── package.json           Umbrella — builds lens + dash, exposes `crawfish` / `craw` bins
-├── ROADMAP.md             Build schedule — start here for what's shipping
-├── CLAUDE.md              Project instructions loaded by every Claude Code session
-├── README.md              GitHub front page
-└── PRODUCT.md             This file
+├── cloud/
+│   ├── platform/         Signed-in web SPA — Clerk auth, org/project import, dashboard tabs
+│   └── server/           Platform backend — Express + Prisma + Clerk session verification
+├── desktop/
+│   ├── app/              (submodule) Tauri shell that boots lens + dash as children
+│   ├── dash/             (submodule) Local dashboard UI (Tauri-hosted) — sessions, agents, board, analytics
+│   ├── lens/             (submodule) JSONL transcript reader + REST/SSE API + 8 diagnoses rules
+│   ├── opt/              (submodule) Browser-side token optimizer (MCP server)
+│   ├── opt-codebase/     (submodule) Codebase token optimizer — 3.25× reduction on bench
+│   ├── opt-artifact/     Artifact-id optimizer (in-tree)
+│   └── opt-logs/         Logs-summarize optimizer (in-tree)
+├── cli/
+│   ├── orgctl/           Org-control MCP server — board + hosted-FS tools at ~/.crawfish/orgs/<id>/
+│   └── projectctl/       Per-project .crawfish/ engine — CLI + MCP + hooks preset
+├── web/                  Marketing & onboarding site for crawfish.dev
+├── bin/                  Umbrella launchers: `crawfish` (boots lens+dash), `craw` (per-project verbs)
+├── e2e/                  Cross-surface Playwright suite
+├── ui/                   Shared design tokens — globals.css consumed by platform + dash via @crawfish/ui
+├── docs/                 Documentation (see docs/README.md); examples/starter-app/ for MVP demo
+├── scripts/              Repo-wide tooling — dev.sh, run-bench.sh, build-dmg.sh, smoke-15min.ts
+├── bench/                Benchmark fixtures + prompts
+├── dev.sh / build-app.sh Top-level entry scripts
+├── package.json          Umbrella — builds lens + dash, exposes `crawfish` / `craw` bins
+├── ROADMAP.md            Build schedule — start here for what's shipping
+├── CLAUDE.md             Project instructions loaded by every Claude Code session
+├── README.md             GitHub front page
+└── PRODUCT.md            This file
 ```
 
-Five `crawfish-*` directories are git submodules (their paths are pinned by `.gitmodules`). The rest are in-tree packages or supporting folders.
+Five directories under `desktop/` are git submodules (their paths are pinned by `.gitmodules`). The rest are in-tree packages or supporting folders.
 
 ---
 
@@ -41,22 +45,22 @@ Five `crawfish-*` directories are git submodules (their paths are pinned by `.gi
 
 ### CLI layer
 
-- **`crawfish-orgctl`** — MCP server giving agents `board_*` and `org_fs_*` tools against `~/.crawfish/orgs/<id>/`. Contract: `docs/specs/org-contract.md`.
-- **`crawfish-projectctl`** — manages `.crawfish/` inside a user's repo (memory, context, decisions, activity). Contract: `docs/superpowers/specs/2026-05-18-crawfish-project-folder-design.md`.
-- **`bin/craw`** — shim that dispatches per-project verbs (`craw init`, `craw status`, etc.) to `crawfish-projectctl`.
-- **`bin/crawfish`** — umbrella launcher that boots `crawfish-lens` and `crawfish-dash` together (or via the Tauri shell).
+- **`cli/orgctl`** — MCP server giving agents `board_*` and `org_fs_*` tools against `~/.crawfish/orgs/<id>/`. Contract: `docs/specs/org-contract.md`.
+- **`cli/projectctl`** — manages `.crawfish/` inside a user's repo (memory, context, decisions, activity). Contract: `docs/superpowers/specs/2026-05-18-crawfish-project-folder-design.md`.
+- **`bin/craw`** — shim that dispatches per-project verbs (`craw init`, `craw status`, etc.) to `cli/projectctl`.
+- **`bin/crawfish`** — umbrella launcher that boots `desktop/lens` and `desktop/dash` together (or via the Tauri shell).
 
 ### Local runtime
 
-- **`crawfish-lens`** — Node service. Reads Claude Code JSONL sessions, exposes REST + SSE, runs the diagnoses engine. The local data plane.
-- **`crawfish-dash`** — React UI inside Tauri. Sessions / Agents / Plan / Board / Compare / Settings / Analytics tabs. Proxies to lens.
-- **`crawfish-app`** — Tauri shell. Spawns lens + dash as children, owns the desktop window. How to start: `docs/ops/RUNNING.md`.
+- **`desktop/lens`** — Node service. Reads Claude Code JSONL sessions, exposes REST + SSE, runs the diagnoses engine. The local data plane.
+- **`desktop/dash`** — React UI inside Tauri. Sessions / Agents / Plan / Board / Compare / Settings / Analytics tabs. Proxies to lens.
+- **`desktop/app`** — Tauri shell. Spawns lens + dash as children, owns the desktop window. How to start: `docs/ops/RUNNING.md`.
 
 ### Cloud / web
 
-- **`crawfish-platform`** — signed-in React SPA at `:5174`. Clerk-based auth, org canvas, repo import, GitHub-hosted file rendering for the 5-tab project dashboard.
-- **`crawfish-server`** — Express backend on Prisma + SQLite (dev) / Postgres (prod). Verifies Clerk sessions, stores `Organization` / `Project` / `Member` rows, brokers GitHub OAuth handoff. Auth + import contract: `docs/superpowers/specs/2026-05-18-github-login-import-design.md`.
-- **`crawfish-web`** — marketing site (crawfish.dev). Warm-paper + vermillion brand from `docs/product/DESIGN.md`.
+- **`cloud/platform`** — signed-in React SPA at `:5174`. Clerk-based auth, org canvas, repo import, GitHub-hosted file rendering for the 5-tab project dashboard.
+- **`cloud/server`** — Express backend on Prisma + SQLite (dev) / Postgres (prod). Verifies Clerk sessions, stores `Organization` / `Project` / `Member` rows, brokers GitHub OAuth handoff. Auth + import contract: `docs/superpowers/specs/2026-05-18-github-login-import-design.md`.
+- **`web/`** — marketing site (crawfish.dev). Warm-paper + vermillion brand from `docs/product/DESIGN.md`.
 
 ---
 
@@ -82,10 +86,10 @@ User signs in to the web platform with GitHub via Clerk. They create an Organiza
 
 ## What to read next
 
-- … a backend engineer → `crawfish-server/` (Express routes, Prisma schema at `crawfish-server/prisma/schema.prisma`).
-- … a frontend engineer on the web app → `crawfish-platform/src/pages/` + `ui/tokens/globals.css`.
-- … working on the per-project CLI → `crawfish-projectctl/` + its spec under `docs/superpowers/specs/`.
-- … exploring the local Tauri app → `crawfish-app/` + `crawfish-dash/`, then `docs/ops/RUNNING.md`.
-- … contributing diagnoses rules → `crawfish-lens/src/diagnoses/` (note `CLAUDE.md` ownership rules — registry edits are lead-only).
+- … a backend engineer → `cloud/server/` (Express routes, Prisma schema at `cloud/server/prisma/schema.prisma`).
+- … a frontend engineer on the web app → `cloud/platform/src/pages/` + `ui/tokens/globals.css`.
+- … working on the per-project CLI → `cli/projectctl/` + its spec under `docs/superpowers/specs/`.
+- … exploring the local Tauri app → `desktop/app/` + `desktop/dash/`, then `docs/ops/RUNNING.md`.
+- … contributing diagnoses rules → `desktop/lens/src/diagnoses/` (note `CLAUDE.md` ownership rules — registry edits are lead-only).
 - … running the bench → `docs/ops/BENCH-PROTOCOL.md` + `scripts/run-bench.sh`.
 - … spawning an agent team → `docs/ops/AGENT-TEAMS.md` + `CLAUDE.md`.

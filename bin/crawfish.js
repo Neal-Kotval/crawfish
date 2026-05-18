@@ -9,9 +9,9 @@
  * SIGTERM cleanly shut down both children.
  *
  * Resolution order for finding the lens/dash dist files:
- *   1. ../crawfish-lens/dist/index.js (umbrella checkout — what we use today)
- *   2. node_modules/crawfish-lens/dist/index.js (future: separate npm packages)
- *   3. ./vendor/crawfish-lens/dist/index.js (future: bundled npm package)
+ *   1. ../desktop/<name>/dist/index.js (umbrella checkout — what we use today)
+ *   2. node_modules/<name>/dist/index.js (future: separate npm packages)
+ *   3. ./vendor/<name>/dist/index.js (future: bundled npm package)
  *
  * The first form is what works in this repo today. The other two are
  * stubs for when we publish — the launcher itself doesn't change.
@@ -27,9 +27,9 @@ const ROOT = resolve(__dirname, "..");
 
 // ─── locate dist entries ─────────────────────────────────────────────────
 
-function findEntry(pkgName) {
+function findEntry(pkgName, desktopName) {
   const candidates = [
-    resolve(ROOT, pkgName, "dist", "index.js"),
+    resolve(ROOT, "desktop", desktopName, "dist", "index.js"),
     resolve(ROOT, "node_modules", pkgName, "dist", "index.js"),
     resolve(ROOT, "vendor", pkgName, "dist", "index.js"),
   ];
@@ -39,8 +39,8 @@ function findEntry(pkgName) {
   return null;
 }
 
-const lensEntry = findEntry("crawfish-lens");
-const dashEntry = findEntry("crawfish-dash");
+const lensEntry = findEntry("crawfish-lens", "lens");
+const dashEntry = findEntry("crawfish-dash", "dash");
 
 if (!lensEntry || !dashEntry) {
   console.error(
@@ -51,8 +51,8 @@ if (!lensEntry || !dashEntry) {
   console.error("    cd crawfish && npm run build && npx crawfish");
   console.error("");
   console.error(`Looked in:`);
-  console.error(`  - ${resolve(ROOT, "crawfish-lens/dist/index.js")}`);
-  console.error(`  - ${resolve(ROOT, "crawfish-dash/dist/index.js")}`);
+  console.error(`  - ${resolve(ROOT, "desktop/lens/dist/index.js")}`);
+  console.error(`  - ${resolve(ROOT, "desktop/dash/dist/index.js")}`);
   exit(1);
 }
 
@@ -103,7 +103,8 @@ if (flags.installHook || flags.uninstallHook) {
   const cmd = flags.installHook ? "install-hooks" : "uninstall-hooks";
   const hookCommand = resolve(
     ROOT,
-    "crawfish-dash",
+    "desktop",
+    "dash",
     "dist",
     "policy",
     "hook.js",

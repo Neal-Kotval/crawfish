@@ -8,7 +8,7 @@
     "craw": "./bin/craw.js"
   },
   "scripts": {
-    "build": "cd crawfish-lens && npm run build && cd ../crawfish-dash && npm run build",
+    "build": "cd desktop/lens && npm run build && cd ../dash && npm run build",
     "start": "node bin/crawfish.js"
   },
   "engines": {

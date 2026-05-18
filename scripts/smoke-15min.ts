@@ -23,8 +23,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
-const LENS_DIR = join(REPO_ROOT, "crawfish-lens");
-const TEMPLATES_DIR = join(REPO_ROOT, "crawfish-dash", "src", "templates");
+const LENS_DIR = join(REPO_ROOT, "desktop", "lens");
+const TEMPLATES_DIR = join(REPO_ROOT, "desktop", "dash", "src", "templates");
 
 const TIME_BUDGET_MS = 15 * 60 * 1000;
 const startedAt = Date.now();

@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@crawfish/ui": path.resolve(__dirname, "../ui"),
+      "@crawfish/ui": path.resolve(__dirname, "../../ui"),
     },
   },
   server: { port: 5174 },

@@ -11,7 +11,7 @@
 # Logs stream into ./dev-logs/. Ctrl-C kills all four cleanly.
 #
 # To also run the Tauri shell against the dash:
-#   cd crawfish-app && npm run dev      (in another terminal)
+#   cd desktop/app && npm run dev      (in another terminal)
 # That spawns its own dash node server, so don't start both at once.
 #
 # To install Dash so the `crawfish-dash://` URL scheme works in browsers:
@@ -66,16 +66,16 @@ start() {
 # Build the dash server once before launching (its tsx invocation reads source
 # directly, but the templates / policy code expects no stale artifacts).
 echo "▶ pre-flight: type-checking dash server…"
-(cd "$ROOT/crawfish-dash" && npx tsc --noEmit) || {
+(cd "$ROOT/desktop/dash" && npx tsc --noEmit) || {
   echo "✗ dash server type-check failed — aborting"; exit 1; }
 
-start dash-node     crawfish-dash      "npm run serve"   7880
-start cf-server     crawfish-server    "npm run dev"     7882
+start dash-node     desktop/dash       "npm run serve"   7880
+start cf-server     cloud/server       "npm run dev"     7882
 # Give the node servers a moment so vite's first proxy call doesn't fail.
 sleep 1
-start dash-web      crawfish-dash      "npm run web:dev" 7881
-start marketing     crawfish-web       "npm run dev"     5173
-start platform      crawfish-platform  "npm run dev"     5174
+start dash-web      desktop/dash       "npm run web:dev" 7881
+start marketing     web                "npm run dev"     5173
+start platform      cloud/platform     "npm run dev"     5174
 
 # Give Vite a moment to actually bind to 5174 before launching the browser.
 PORTAL_URL="${PORTAL_URL:-http://localhost:5174}"
@@ -93,7 +93,7 @@ cat <<EOF
   dash (web)   →  http://localhost:7881/canvas
   dash (api)   →  http://localhost:7880/api/orgs
   cf-server    →  http://localhost:7882/api/health
-  Tauri shell  →  cd crawfish-app && npm run dev   (separate terminal)
+  Tauri shell  →  cd desktop/app && npm run dev   (separate terminal)
 
   Logs:       tail -f dev-logs/<name>.log
   Stop:       Ctrl-C

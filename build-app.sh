@@ -2,8 +2,8 @@
 # build-app.sh — build the Tauri shell once and (optionally) install it.
 #
 # Run this when you've changed any of:
-#   - crawfish-app/src-tauri/**          (Rust shell / deep-link handler)
-#   - crawfish-app/src-tauri/tauri.conf.json
+#   - desktop/app/src-tauri/**          (Rust shell / deep-link handler)
+#   - desktop/app/src-tauri/tauri.conf.json
 #   - the deep-link scheme registration
 #
 # Full bundle: ~2-5 min cold, ~30-90s warm. dev.sh deliberately does NOT
@@ -17,7 +17,7 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP_DIR="$ROOT/crawfish-app"
+APP_DIR="$ROOT/desktop/app"
 
 # rustup toolchain isn't always on PATH in fresh shells.
 for p in "$HOME/.cargo/bin" "$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin"; do

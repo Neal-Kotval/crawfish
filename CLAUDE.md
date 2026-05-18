@@ -83,13 +83,22 @@ else.
 
 ```
 crawfish/
-├── ui/                    # shared design tokens + components (canonical CSS lives here)
-├── crawfish-lens/         # transcript reader, REST API, server-side reductions
-├── crawfish-dash/         # dashboard UI, proxies to lens, owns policies + benchmarks
-├── crawfish-opt/          # browser optimizer (MCP server)
-├── crawfish-opt-codebase/ # codebase optimizer
-├── crawfish-app/          # Tauri shell that spawns lens+dash as children
-└── crawfish-orchestrator/ # (future, C2.P3) OpenClaw bundle
+├── ui/                       # shared design tokens + components (canonical CSS lives here)
+├── cloud/
+│   ├── platform/             # signed-in web SPA (Clerk, org/project import)
+│   └── server/               # platform backend (Express + Prisma)
+├── desktop/
+│   ├── app/                  # (submodule) Tauri shell that spawns lens+dash as children
+│   ├── dash/                 # (submodule) dashboard UI, proxies to lens, owns policies + benchmarks
+│   ├── lens/                 # (submodule) transcript reader, REST API, server-side reductions
+│   ├── opt/                  # (submodule) browser optimizer (MCP server)
+│   ├── opt-codebase/         # (submodule) codebase optimizer
+│   ├── opt-artifact/         # artifact-id optimizer (in-tree)
+│   └── opt-logs/             # logs-summarize optimizer (in-tree)
+├── cli/
+│   ├── orgctl/               # org-control MCP server
+│   └── projectctl/           # per-project .crawfish/ engine
+└── web/                      # marketing & onboarding site
 ```
 
 Cross-cutting changes (e.g., a new shared CSS class in `ui/tokens/globals.css`
@@ -110,11 +119,11 @@ single sequential pass through the registries at the end.)
 
 | File | Why it conflicts |
 |---|---|
-| `crawfish-lens/src/diagnoses/index.ts` | One `registerRule(...)` line per new rule. Two teammates appending creates a merge conflict every time. |
-| `crawfish-lens/src/diagnoses/tool-optimizer-map.ts` | Tool→optimizer map; each new optimizer adds an entry. |
-| `crawfish-lens/src/server/index.ts` | Route registration. |
-| `crawfish-dash/web/src/App.tsx` (and equivalent route registries) | Route table. |
-| `crawfish-app/src-tauri/tauri.conf.json` | Single source of truth for the desktop shell. |
+| `desktop/lens/src/diagnoses/index.ts` | One `registerRule(...)` line per new rule. Two teammates appending creates a merge conflict every time. |
+| `desktop/lens/src/diagnoses/tool-optimizer-map.ts` | Tool→optimizer map; each new optimizer adds an entry. |
+| `desktop/lens/src/server/index.ts` | Route registration. |
+| `desktop/dash/web/src/App.tsx` (and equivalent route registries) | Route table. |
+| `desktop/app/src-tauri/tauri.conf.json` | Single source of truth for the desktop shell. |
 | `ROADMAP.md`, `PRODUCT.md`, `docs/product/BRAINSTORM.md`, `docs/product/INTEGRATIONS.md` | Cross-team narrative documents. |
 | `package.json` (any submodule) | Dep-bumps and script renames must be coordinated. |
 | Any generated file (`dist/`, `web/dist/`, JSON schemas) | Builds from source; running parallel builds clobber each other. |
@@ -134,9 +143,9 @@ phases, hand each teammate the listed paths *exclusively*.
 
 | Teammate | Owns | Forbidden |
 |---|---|---|
-| `single-call` | `crawfish-lens/src/diagnoses/rules/{dom-dump-detected,log-truncation-pattern,thinking-overhead}.ts` + `test/fixtures/diagnoses/single-call/` | All other rule files; `index.ts`. |
-| `journey` | `crawfish-lens/src/diagnoses/rules/{re-read-loops,grep-then-read-storms,context-window-panic}.ts` + `test/fixtures/diagnoses/journey/` | All other rule files; `index.ts`; `timeline.ts` (contract is fixed). |
-| `graph` | `crawfish-lens/src/diagnoses/rules/{sibling-redundancy,agent-fanout-cost,low-cache-hit-rate}.ts` + `test/fixtures/diagnoses/graph/` | All other rule files; `index.ts`; `topology.ts`. |
+| `single-call` | `desktop/lens/src/diagnoses/rules/{dom-dump-detected,log-truncation-pattern,thinking-overhead}.ts` + `test/fixtures/diagnoses/single-call/` | All other rule files; `index.ts`. |
+| `journey` | `desktop/lens/src/diagnoses/rules/{re-read-loops,grep-then-read-storms,context-window-panic}.ts` + `test/fixtures/diagnoses/journey/` | All other rule files; `index.ts`; `timeline.ts` (contract is fixed). |
+| `graph` | `desktop/lens/src/diagnoses/rules/{sibling-redundancy,agent-fanout-cost,low-cache-hit-rate}.ts` + `test/fixtures/diagnoses/graph/` | All other rule files; `index.ts`; `topology.ts`. |
 
 **Lead does at the end:** appends the eight new `registerRule(...)` calls to
 `diagnoses/index.ts` in one commit. Hand-merging is faster than three
@@ -146,9 +155,9 @@ teammates fighting over the same file.
 
 | Teammate | Owns | Forbidden |
 |---|---|---|
-| `openclaw` | `crawfish-lens/src/adapters/openclaw.ts` (polish only — adapter already shipped) | Other adapters; `transcript.ts`. |
-| `cursor` | `crawfish-lens/src/adapters/cursor.ts` (new) | Other adapters; `transcript.ts`. |
-| `sdk` | `crawfish-lens/src/adapters/sdk.ts` (new) | Other adapters; `transcript.ts`. |
+| `openclaw` | `desktop/lens/src/adapters/openclaw.ts` (polish only — adapter already shipped) | Other adapters; `transcript.ts`. |
+| `cursor` | `desktop/lens/src/adapters/cursor.ts` (new) | Other adapters; `transcript.ts`. |
+| `sdk` | `desktop/lens/src/adapters/sdk.ts` (new) | Other adapters; `transcript.ts`. |
 
 **Spec first:** the lead writes `docs/specs/adapter-contract.md` and gets
 the user's OK on it before spawning. All three teammates code against that
@@ -159,9 +168,9 @@ contract. If a teammate hits a schema field the contract doesn't cover, they
 
 | Teammate | Owns | Forbidden |
 |---|---|---|
-| `first-run` | `crawfish-dash/web/src/wizards/first-run/**` + `crawfish-dash/src/server/first-run.ts` | Other wizard dirs. |
-| `policy` | `crawfish-dash/web/src/wizards/policy/**` + `crawfish-dash/src/server/policy.ts` | Other wizard dirs. |
-| `prep` | `crawfish-opt-codebase/src/cli/prep.ts` + `crawfish-dash/web/src/wizards/prep/**` | Other wizard dirs. |
+| `first-run` | `desktop/dash/web/src/wizards/first-run/**` + `desktop/dash/src/server/first-run.ts` | Other wizard dirs. |
+| `policy` | `desktop/dash/web/src/wizards/policy/**` + `desktop/dash/src/server/policy.ts` | Other wizard dirs. |
+| `prep` | `desktop/opt-codebase/src/cli/prep.ts` + `desktop/dash/web/src/wizards/prep/**` | Other wizard dirs. |
 
 Lead handles the cross-wizard navigation and the `App.tsx` route table.
 
@@ -172,7 +181,7 @@ copy of the repo. Each teammate is told to render the same fixture session
 (`a774c151-c2f5-4923-9fbb-9cc095483c4c` in OpenClaw or any session with
 subagents in Claude Code) using a different layout primitive. They review
 each other's output and converge on a winner. Lead picks. No production
-files touched by any teammate — all work in `crawfish-dash/web/src/components/topology/<layout>/` or similar.
+files touched by any teammate — all work in `desktop/dash/web/src/components/topology/<layout>/` or similar.
 
 ---
 

@@ -9,7 +9,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$ROOT/crawfish-app"
+APP_DIR="$ROOT/desktop/app"
 OUT_PNG="$APP_DIR/src-tauri/icons/icon-source.png"
 
 export PATH="$HOME/.cargo/bin:/opt/homebrew/opt/rustup/bin:$PATH"

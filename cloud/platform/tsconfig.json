@@ -14,8 +14,8 @@
     "useDefineForClassFields": true,
     "baseUrl": ".",
     "paths": {
-      "@crawfish/ui/*": ["../ui/*"]
+      "@crawfish/ui/*": ["../../ui/*"]
     }
   },
-  "include": ["src", "vite.config.ts", "../ui/**/*"]
+  "include": ["src", "vite.config.ts", "../../ui/**/*"]
 }

@@ -19,7 +19,7 @@ import { homedir } from "node:os";
 
 export default async function globalSetup(): Promise<void> {
   const repoRoot = join(__dirname, "..");
-  const serverDir = join(repoRoot, "crawfish-server");
+  const serverDir = join(repoRoot, "cloud", "server");
 
   // 1. Reset the platform server DB.
   try {

@@ -1,0 +1,25 @@
+{
+  "name": "crawfish-starter-app",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Tiny Express server used as the target repo for the Crawfish MVP demo. An agent will add a /healthz endpoint to it live, on stage.",
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

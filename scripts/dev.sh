@@ -71,7 +71,7 @@ fi
 
 # Verify dist exists if we're running the API
 if [[ "$RUN_API" == true ]]; then
-  for p in crawfish-lens/dist/index.js crawfish-dash/dist/index.js; do
+  for p in desktop/lens/dist/index.js desktop/dash/dist/index.js; do
     if [[ ! -f "$ROOT/$p" ]]; then
       echo "crawfish-dev: $p missing — run with --rebuild first"
       exit 1
@@ -94,7 +94,7 @@ fi
 # ─── boot Vite HMR for the dash UI ───────────────────────────────────────
 if [[ "$RUN_VITE" == true ]]; then
   echo "crawfish-dev: starting Vite HMR (:7881)…"
-  ( cd crawfish-dash && npm run web:dev --silent ) &
+  ( cd desktop/dash && npm run web:dev --silent ) &
   PIDS+=($!)
   for _ in $(seq 1 40); do
     if curl -sf -o /dev/null http://127.0.0.1:7881/; then break; fi

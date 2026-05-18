@@ -18,9 +18,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$ROOT/crawfish-app"
-LENS_DIR="$ROOT/crawfish-lens"
-DASH_DIR="$ROOT/crawfish-dash"
+APP_DIR="$ROOT/desktop/app"
+LENS_DIR="$ROOT/desktop/lens"
+DASH_DIR="$ROOT/desktop/dash"
 
 OPEN_FINDER=0
 SKIP_DEPS=0

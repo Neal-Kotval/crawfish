@@ -26,9 +26,9 @@ set -euo pipefail
 
 # ─── locate everything ────────────────────────────────────────────────────
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OPT_BIN="$ROOT/crawfish-opt-codebase/dist/index.js"
-HOOK_BIN="$ROOT/crawfish-dash/dist/policy/hook.js"
-DASH_BIN="$ROOT/crawfish-dash/dist/index.js"
+OPT_BIN="$ROOT/desktop/opt-codebase/dist/index.js"
+HOOK_BIN="$ROOT/desktop/dash/dist/policy/hook.js"
+DASH_BIN="$ROOT/desktop/dash/dist/index.js"
 SETTINGS_JSON="$HOME/.claude.json"
 DASH_URL="${DASH_URL:-http://127.0.0.1:7880}"
 
@@ -66,8 +66,8 @@ need claude
 need jq
 need node
 
-[ -f "$OPT_BIN"  ] || { echo "missing: $OPT_BIN. Run: cd crawfish-opt-codebase && npm run build" >&2; exit 1; }
-[ -f "$HOOK_BIN" ] || { echo "missing: $HOOK_BIN. Run: cd crawfish-dash && npm run build" >&2; exit 1; }
+[ -f "$OPT_BIN"  ] || { echo "missing: $OPT_BIN. Run: cd desktop/opt-codebase && npm run build" >&2; exit 1; }
+[ -f "$HOOK_BIN" ] || { echo "missing: $HOOK_BIN. Run: cd desktop/dash && npm run build" >&2; exit 1; }
 [ -f "$SETTINGS_JSON" ] || { echo "no $SETTINGS_JSON yet — run claude once to create it" >&2; exit 1; }
 
 # ─── combined prompt ──────────────────────────────────────────────────────
