@@ -151,13 +151,13 @@ export function Index() {
             blurb="Same engine, no GUI. ASCII TUI, scriptable from CI, ships the orgctl MCP server."
             cta={
               <div style={{
-                background: "#1a1a18", color: "#e9e4d0",
+                background: "var(--ink)", color: "var(--surface)",
                 fontFamily: "var(--ff-mono)", fontSize: 12.5, lineHeight: 1.7,
                 padding: "12px 14px", borderRadius: "var(--r-md)",
               }}>
-                <div><span style={{ color: "#6fb98f" }}>$</span> brew install crawfish</div>
-                <div><span style={{ color: "#6fb98f" }}>$</span> crawfish login</div>
-                <div style={{ color: "#7a766c" }}># or: curl -fsSL crawfish.dev/i | sh</div>
+                <div><span style={{ color: "var(--good)" }}>$</span> brew install crawfish</div>
+                <div><span style={{ color: "var(--good)" }}>$</span> crawfish login</div>
+                <div style={{ color: "var(--ink-mute)" }}># or: curl -fsSL crawfish.dev/i | sh</div>
               </div>
             }
             foot={<><span>macOS · Linux · Windows (WSL)</span><span>v0.4.1</span></>}
