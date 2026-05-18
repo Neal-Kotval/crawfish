@@ -13,6 +13,10 @@
 # To also run the Tauri shell against the dash:
 #   cd crawfish-app && npm run dev      (in another terminal)
 # That spawns its own dash node server, so don't start both at once.
+#
+# To install Dash so the `crawfish-dash://` URL scheme works in browsers:
+#   ./build-app.sh --install
+# (Slow — runs only when you change the Rust shell or tauri.conf.json.)
 
 set -e
 
