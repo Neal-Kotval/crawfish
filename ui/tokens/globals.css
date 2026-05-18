@@ -3646,3 +3646,61 @@ textarea:focus-visible {
     animation: cfp-drawer-in 180ms ease-out;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   2026-05-18 Playwright-audit foundations
+   - .cf-touch-target — 44×44 min hit area for marketing CTAs & nav rows
+   - .cf-focus-ring   — explicit focus-visible ring for marketing primitives
+   - .cfp-shell @media (max-width: 960px) — collapse rail + sidebar so
+     cfp-shell__main never renders zero-width on mobile (dash Critical)
+   ─────────────────────────────────────────────────────────────────── */
+
+.cf-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Explicit focus rings for marketing components. The global :focus-visible
+   rule at the top of the file covers most inputs/buttons, but PlatBtn and
+   NavLink render as plain <a> inside marketing chrome where the global
+   double-shadow ring (var(--cf-focus-ring)) gets visually clipped by tight
+   padding. This rule replaces the box-shadow with an outline, which paints
+   outside the layout box. */
+.cf-platbtn:focus-visible,
+.cf-navlink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+}
+
+/* Dash shell — responsive collapse below 960px.
+   The default grid is "232px 1fr 304px" (sidebar / main / rail) which makes
+   cfp-shell__main render zero-width on a 390-viewport phone. Below 960px we
+   stack: hide the right rail, narrow the sidebar to 64px (icons-only), and
+   give the main pane min-width:0 so it can flex. */
+@media (max-width: 960px) {
+  .cfp-shell,
+  .cfp-shell--no-rail {
+    grid-template-columns: 64px 1fr;
+  }
+  .cfp-shell__rail {
+    display: none;
+  }
+  .cfp-shell__main {
+    min-width: 0;
+  }
+  .cfp-shell .cfp-side__label,
+  .cfp-shell .cfp-side__badge {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .cfp-shell,
+  .cfp-shell--no-rail {
+    grid-template-columns: 1fr;
+  }
+  .cfp-shell__sidebar {
+    display: none;
+  }
+}
