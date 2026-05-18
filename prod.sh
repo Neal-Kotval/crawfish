@@ -62,6 +62,14 @@ if [[ "${1:-}" == "stop" ]]; then
   exit 0
 fi
 
+# Always remove /Applications/Crawfish.app — we only want one copy of the app,
+# which is the build artifact under desktop/app/src-tauri/target/release/bundle.
+# If the user has dragged the DMG into Applications, that copy gets stale fast.
+if [[ -d /Applications/Crawfish.app ]]; then
+  echo "→ removing stale /Applications/Crawfish.app (build copy is canonical)"
+  rm -rf /Applications/Crawfish.app
+fi
+
 # ─── prereqs ───────────────────────────────────────────────────────────────
 
 echo "→ checking prereqs"
