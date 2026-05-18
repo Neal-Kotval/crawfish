@@ -17,6 +17,7 @@ import { useCurrentUser } from "../lib/useAuth";
 import { buildDashLink, dashLinkTarget, isDevDashEnabled } from "../lib/dashUrl";
 import { OrgMembers } from "./OrgMembers";
 import { Projects } from "./Projects";
+import { ImportModal } from "./ImportModal";
 
 function Surface({ title, eyebrow, body }: { title: string; eyebrow: string; body: string }) {
   return (
@@ -317,12 +318,12 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
 
 function ProjectsSurface({ org }: { org: string }) {
   const [importOpen, setImportOpen] = useState(false);
-  // ImportModal lands in Task 13. The `importOpen` state is wired so the
-  // open-trigger works today; until the modal exists we render `null`.
   return (
     <>
       <Projects orgId={org} openImport={() => setImportOpen(true)} />
-      {importOpen && null}
+      {importOpen && (
+        <ImportModal orgId={org} onClose={() => setImportOpen(false)} />
+      )}
     </>
   );
 }
