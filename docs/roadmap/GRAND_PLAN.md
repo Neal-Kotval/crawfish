@@ -29,7 +29,9 @@ This is enough surface to demo "agents as first-class employees." It is not yet 
 
 ## 1 · The north-star vision
 
-**The agent filesystem + librarian is the moat.** Anthropic, OpenAI, and Google will keep eating the harness layer — Managed Agents, AgentKit, Vertex Agent Builder. They will not build the **org-level knowledge substrate** plus its **learning router**: the long-lived filesystem an agent company actually runs on, with the LLM Wiki that exposes it, the RAG that retrieves over it, and — critically — the contextual-bandit librarian (§3.3.1) that learns per-org which sources to consult for which question type. The substrate alone is replicable in a quarter. The substrate plus six months of an org's accumulated bandit state is not. That is the durable surface frontier vendors structurally cannot own, because doing so means picking sides between every tool an org uses *and* spending six months learning each org's individual taxonomy from production traffic.
+**The agent filesystem + librarian is the moat. The native orchestration runtime (§3.14) is the engine that makes the moat defensible from the inside.** Anthropic, OpenAI, and Google will keep eating the harness layer — Managed Agents, AgentKit, Vertex Agent Builder. They will not build the **org-level knowledge substrate** plus its **learning router**: the long-lived filesystem an agent company actually runs on, with the LLM Wiki that exposes it, the RAG that retrieves over it, and — critically — the contextual-bandit librarian (§3.3.1) that learns per-org which sources to consult for which question type. The substrate alone is replicable in a quarter. The substrate plus six months of an org's accumulated bandit state is not. That is the durable surface frontier vendors structurally cannot own, because doing so means picking sides between every tool an org uses *and* spending six months learning each org's individual taxonomy from production traffic.
+
+The orchestration runtime is the second pillar: native swarm scheduling, a GOAP-style planner, federation across machines, and a portable MCP-tool surface. Other runtimes (Claude Code, Codex, Ruflo, Mastra) remain pluggable — but shipping our own runtime gives us three things wrappers cannot: deterministic integration with the org-fs and librarian, hooks at every step of the agent loop for the diagnoses engine, and a federation path that doesn't depend on a third party's protocol decisions. The runtime is not the moat — the filesystem + librarian is — but without the runtime, the moat is partially exposed to whichever third-party engine is in fashion that quarter.
 
 Crawfish becomes the place where an agent organization's institutional memory lives. The CrawfishTask is the unit of work. The **org filesystem is the unit of memory.** The flow graph is the org chart. The token meter is the wage bill.
 
@@ -537,6 +539,41 @@ Both surfaces are exportable as CSV/Parquet, both have a webhook bus (`task.comp
 
 **Personas:** Small CEO (T1), Engineer IC (T1), Platform engineer (T2), Manager (T2), Support lead (T3).
 
+### 3.14 The orchestration runtime — native multi-agent execution
+
+**Decision (2026-05-18):** Crawfish ships a native orchestration runtime. Third-party runtimes (Claude Code, Codex, OpenAI API, Ruflo, Mastra) stay pluggable via the existing runtime registry, but the *default* runtime for new Crawfish orgs is the one we build. This is a scope-add to Stage 1, not a pivot — the org-layer (§3.1–3.13) remains the product thesis. The runtime exists because every other workstream gets sharper when we own the agent loop: the diagnoses engine can hook every tool call, the librarian can rewrite retrieval at runtime, the org-fs can be the canonical state store, and federation can match our trust model instead of inheriting someone else's.
+
+**Inspiration:** Ruflo (swarm topologies, GOAP planner, agent federation), Microsoft Agent Framework (Magentic-One specialist roles, sequential/concurrent/handoff/group-chat patterns, checkpointing + human-in-the-loop), LangGraph (graph-of-functions execution), CrewAI (role-and-task framing). All four are read for design ideas; none of their code is forked. Where their MCP tool schemas have converged (`swarm_init`, `agent_spawn`, `memory_store`, `task_orchestrate`, `goal_decompose`), we adopt the schemas verbatim so users can switch runtimes without relearning.
+
+**Surface — the eight runtime capabilities we own:**
+
+1. **Swarm primitives.** Three topologies: hierarchical (one orchestrator → workers), mesh (peer-to-peer with consensus voting), adaptive (starts hierarchical, devolves to mesh when the orchestrator becomes a bottleneck). Topology choice is per-task, set in the task frontmatter or chosen by the planner.
+2. **GOAP planner.** Plain-English goal → state-space A\* through actions with preconditions/effects → executable plan tree. Renders in the Plan tab (§3.10) as a collapsible tree with blocked branches and rollbacks highlighted. Replans on the fly when state changes — failures become re-search, not loops.
+3. **Agent scheduler.** Token-budget-aware dispatch. Capability-matched routing (a task tagged `code-review` goes to an agent whose container declares `capability: code-review`). Per-agent concurrency limits. Backpressure when the org-wide token budget is depleted.
+4. **Agent memory.** Per-agent working memory + shared org-fs `org-fs/memory/<agent-id>/`. Memory snapshots (RVF-style save/restore) so a long-running agent can be paused, exported, and resumed on another machine without losing state.
+5. **Federation v0.** Two crawfish instances on different machines discover each other (mDNS on LAN, signed invite for WAN), authenticate via ed25519 challenge-response, and exchange tasks through a typed message bus. PII pipeline (§3.11) sits in front of every outbound message. v0 is two-node; multi-node mesh is Stage 2.
+6. **Self-learning loop.** Every completed task writes a trajectory record (goal, plan, outcome, tokens, success/failure, fix-if-failed). The planner queries trajectories via the librarian (§3.3.1) before A\* search — past solutions become learned priors. SONA-style pattern extraction is Stage 2.
+7. **MCP-tool catalog.** Native tools (`swarm_init`, `agent_spawn`, `task_orchestrate`, `goal_decompose`, `memory_store`, `memory_search`, `federation_send`, `trajectory_replay`) registered in `cli/orgctl` alongside the existing `board_*` and `org_fs_*` tools. Schemas match the converging community shape — same tool names as Ruflo where overlap exists, so agents written against Ruflo work against Crawfish runtime with adapter shim only.
+8. **Runtime adapter parity.** The native runtime implements the same adapter contract (`crawfish-lens/src/adapters/`) as Claude Code / Codex / OpenClaw. Lens reads native-runtime transcripts the same way it reads OpenClaw's. Diagnoses rules fire on native runs without modification.
+
+**What we explicitly do NOT build into the runtime (anti-features):**
+
+- GPU-accelerated vector search. Use existing CPU HNSW via `sqlite-vec`. Users who need GPU plug in RuVector as a backend.
+- On-device LLM fine-tuning. Out of scope for Stage 1. Users wanting local LLMs route to Ollama via the existing `claude-api`-compatible adapter shim.
+- A separate plugin marketplace. The runtime extends through skills (§3.4) and org-templates (§3.1) — our existing extension surfaces — not a parallel plugin system.
+- Cryptographic federation beyond mTLS + ed25519. No WireGuard mesh, no PKI hierarchy in Stage 1. The federation surface stays small.
+- Methodology packs (SPARC/DDD/ADR equivalents) baked into the runtime. Those ship as org-templates or skill packs, not as runtime concepts.
+
+**Stack:** TypeScript first, in `desktop/lens/src/runtime/` (new directory). Rust crate `crawfish-runtime-core` for the hot-path scheduler + federation transport — added when the TypeScript scheduler measurably bottlenecks at >50 concurrent agents per org, not before. Reuses primitives from the open-source crate ecosystem (`tokio`, `rustls`, `ed25519-dalek`, `hnsw_rs`) rather than forking Ruflo's Rust code. MIT-license compatible everywhere.
+
+**Where this puts us vs. Ruflo (the honest read):** Ruflo has 18+ months of head start on the orchestration substrate alone. We will not match feature count in Stage 1. The thesis is *not* "build a better orchestration runtime than Ruflo" — it is *"build the runtime that integrates losslessly with our org-layer, and let the org-layer be the reason users pick us."* If a user wants the deepest orchestration features regardless of org-layer integration, they should still pick Ruflo, and the runtime registry will let them. We are betting that more users want the integrated experience.
+
+**Sequencing:** P5 ships swarm primitives + GOAP planner + agent scheduler + native MCP-tool catalog (capabilities 1, 2, 3, 7). P6 ships agent memory + federation v0 + runtime adapter parity + self-learning loop bootstrap (capabilities 4, 5, 6, 8). Stage 2 deepens federation (multi-node, advanced trust), SONA pattern extraction, and the Rust hot-path scheduler.
+
+**Personas:** Solo founder (T1, default runtime), Engineer IC (T1, picks runtime per project), Platform engineer (T2, sets policy on which runtimes orgs can use), Research lead (T3, swarm-heavy workloads), Manager (T2, federation across team machines).
+
+**Risk register:** (a) Ruflo ships a v3 with significantly better swarm intelligence before our P5 — mitigation: keep Ruflo as a first-class adapter so users aren't blocked. (b) Building the runtime delays §3.5 (IDE) and §3.7 (web-for-agents) by ~3–6 months — mitigation: ship P5 minimum-viable runtime (capabilities 1–3 only) and defer 4–8 to P6+ if §3.5/§3.7 timing slips. (c) Federation v0 introduces a security surface — mitigation: P6 ships single-machine first; federation is gated on a security audit before any multi-machine code merges.
+
 ---
 
 ## 4 · Stage 2 — Medium Companies (months 9–24)
@@ -752,11 +789,13 @@ This is the category that's grown most in the last twelve months and is now the 
 
 **Ruflo (ruvnet, formerly Claude Flow, [github.com/ruvnet/ruflo](https://github.com/ruvnet/ruflo)).** Still the closest direct competitor on the orchestration framing. MIT, OSS, momentum (Budapest summit, claude-flow → Ruflo rebrand, beta UI at flo.ruv.io). "Multi-agent AI orchestration for Claude Code" with 100+ specialized agents, swarms, self-learning memory, federation across machines, Cognitum.One Rust engine. 32 plugins as of May 2026 covering core orchestration, memory/knowledge (agentdb, rag-memory, rvf, ruvector, knowledge-graph), intelligence (intelligence, daa, ruvllm, goals), code (testgen, browser, jujutsu, docs), security (security-audit, aidefence), methodology (adr, ddd, sparc), DevOps (migrations, observability, cost-tracker), runtime (ruflo-agent with WASM + CMA), plus plugin-creator and domain packs.
 
-**Where Crawfish wins vs. Ruflo:** framing (org vs. orchestrator), buyer (founder/CEO/manager vs. developer), humans-as-first-class-peers, native task board with structured acceptance criteria, dual analytics (Pendo-side is absent in Ruflo), multi-runtime breadth, the communication graph as a flagship visual, the diagnoses engine with click-to-fix, the librarian as a learned routing policy (Ruflo has separate plugins; we ship integration), design + UX discipline, local-first as a principle.
+**Updated positioning (2026-05-18):** with §3.14 added to Stage 1, Crawfish now ships a *native* orchestration runtime alongside the org-layer. The framing distinction ("org vs. orchestrator") becomes "org-layer-with-integrated-orchestration vs. orchestration-as-standalone." Ruflo remains a first-class third-party runtime in Crawfish's registry; users can opt in. The competitive question shifts from "do we compete?" to "which of the two product shapes wins the developer + founder buyer."
 
-**Where Ruflo is ahead:** plugin granularity (32 plugins each doing one thing well), WASM sandbox (already adopted in §3.8), AI-Defence layer (prompt injection + PII — add to §3.11), methodology packs (SPARC/DDD/ADR — ship as Crawfish org-templates or skill packs).
+**Where Crawfish wins vs. Ruflo:** integrated org-layer (board, plan, founder dashboard, dual analytics — none of which Ruflo ships), humans-as-first-class-peers in the same task graph as agents, the librarian as a learned routing policy that the runtime queries before planning (Ruflo has separate plugins; we ship integration), the diagnoses engine wired into the runtime's tool-call path, local-first as a principle, design + UX discipline, buyer breadth (founder/CEO/manager + developer vs. developer-only).
 
-**Threat-level *orange*.** If Ruflo ships an Obsidian-shaped knowledge layer with a learned source-separation router before we do, the fight gets meaningfully harder.
+**Where Ruflo is ahead:** 18+ months of orchestration-substrate head start (swarm topologies, federation, AgentDB, RuVector are all production today while §3.14 ships in P5+), plugin granularity (32 plugins each doing one thing well), WASM sandbox (already adopted in §3.8), AI-Defence layer (prompt injection + PII — add to §3.11), methodology packs (SPARC/DDD/ADR — ship as Crawfish org-templates or skill packs), GPU vector search via RuVector (we explicitly do not match this — §3.14 anti-features).
+
+**Threat-level *red* on the runtime dimension** (we are entering their core territory ~18 months late), ***orange* on the integrated-product dimension** (their org-layer is non-existent; this is where we win). The bet is that the integrated product shape outsells the best-of-breed runtime in the buyer segments we care about (T1 founder, T1 CEO, T2 manager). If Ruflo ships an Obsidian-shaped knowledge layer with a learned source-separation router *and* an integrated task board *and* a non-developer buyer pitch before our P5, the integrated-product dimension also goes red.
 
 **Block Goose ([github.com/block/goose](https://github.com/block/goose)).** 29k GitHub stars. Apache 2.0. Native desktop apps macOS/Linux/Windows + full CLI. 30+ LLM providers (OpenAI, Anthropic, Ollama, local inference). MCP-native. Custom MCP servers and tools. **Joined the Linux Foundation's Agentic AI Foundation (AAIF) as an inaugural project in December 2025.**
 
@@ -937,9 +976,9 @@ The ROADMAP defines phases P0–P6. Grand Plan items slot into them as follows.
 
 **P4 (5 → 11 weeks):** Multi-LLM runtimes + GitHub bridge + knowledge layer. §3.1 (industry templates), §3.2 (AI triage + auto-decomposition), §3.3 (three zones + LightRAG), §3.7 Track A (site recipes), §3.11 (`opt-context` + `opt-artifact`), §3.12 (org-level overlay).
 
-**P5 (11 → 16 weeks):** Native messaging + cloud sync stub + team dashboard + marketplace. §3.3 (LLM Wiki + Obsidian sync), §3.5 (Crawfish IDE v0.1), §3.7 Track B (proxy MVP), §3.8 (local Codespaces), §3.9 (test-generation), §3.11 (caching trajectories + dynamic model switching + cost-manager agent), §3.12 (time scrubber), §3.13 (Pendo-parity product side).
+**P5 (11 → 16 weeks):** Native messaging + cloud sync stub + team dashboard + marketplace + **orchestration runtime MVP**. §3.3 (LLM Wiki + Obsidian sync), §3.5 (Crawfish IDE v0.1), §3.7 Track B (proxy MVP), §3.8 (local Codespaces), §3.9 (test-generation), §3.11 (caching trajectories + dynamic model switching + cost-manager agent), §3.12 (time scrubber), §3.13 (Pendo-parity product side), **§3.14 capabilities 1–3 + 7 (swarm primitives, GOAP planner, agent scheduler, native MCP-tool catalog)**.
 
-**P6 (open-ended):** Native code review + compliance + CI + runtime adapters. §3.3 (CRDT + git-worktree), §3.5 (IDE worktree switcher), §3.7 Track B (more adapters), §3.9 (visual-auditor), §3.12 (pattern detection). Begin Stage 2.
+**P6 (open-ended):** Native code review + compliance + CI + runtime adapters + **runtime deepening**. §3.3 (CRDT + git-worktree), §3.5 (IDE worktree switcher), §3.7 Track B (more adapters), §3.9 (visual-auditor), §3.12 (pattern detection), **§3.14 capabilities 4–6 + 8 (agent memory, federation v0, self-learning loop bootstrap, runtime adapter parity)**. Begin Stage 2.
 
 **Stage 2 (months 9 → 24):** §4 wholesale.
 
