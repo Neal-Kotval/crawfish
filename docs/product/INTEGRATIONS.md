@@ -4,7 +4,7 @@
 
 ## Why integrations matter
 
-The biggest VC pushback on crawfish is **single-platform dependency** — *"if Anthropic changes their transcript format, you die."* Each additional runtime adapter neutralizes that question and expands the addressable market without changing the core lens / dash / opt architecture. Multi-runtime is also a moat (see [`ROADMAP.md` § 0b — Edge 2](./ROADMAP.md)).
+The biggest VC pushback on crawfish is **single-platform dependency** — *"if Anthropic changes their transcript format, you die."* Each additional runtime adapter neutralizes that question and expands the addressable market without changing the core lens / dash / opt architecture. Multi-runtime is also a moat (see [`ROADMAP.md` § 0b — Edge 2](../../ROADMAP.md)).
 
 The data layer is already runtime-agnostic. What's runtime-specific is:
 
@@ -106,7 +106,7 @@ This is the unknown — OpenClaw's documentation doesn't expose a `PreToolUse`-e
 ### Specific assets we already have
 
 - `~/.claude/projects/-Users-nealkotval--openclaw-workspace/` exists locally — direct evidence the user has run OpenClaw via Claude Code. The `mcp-logs-openclaw/` directory under `~/Library/Caches/claude-cli-nodejs/` proves OpenClaw runs as a Claude Code MCP server. So we already have real session data to test the adapter against.
-- The user's `crawfish-dash` Agents tab is already designed with a "tabs by runtime" structure in mind ([dash plan in `ROADMAP.md` § P2](./ROADMAP.md)).
+- The user's `crawfish-dash` Agents tab is already designed with a "tabs by runtime" structure in mind ([dash plan in `ROADMAP.md` § P2](../../ROADMAP.md)).
 
 ### Outreach angle
 

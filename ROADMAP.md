@@ -2,9 +2,9 @@
 
 > **Concrete, week-shaped plan to ship the Grand Plan.** Every item is a single named deliverable with files, definition-of-done, and dependency. No prose. If a feature is not on this list with a phase and a DoD, it is not being built.
 >
-> Source of vision: [`GRAND_PLAN.md`](./GRAND_PLAN.md). This file is the build schedule.
+> Source of vision: [`GRAND_PLAN.md`](./docs/roadmap/GRAND_PLAN.md). This file is the build schedule.
 >
-> Companion docs: [`PRODUCT.md`](./PRODUCT.md) · [`DESIGN.md`](./DESIGN.md) · [`INTEGRATIONS.md`](./INTEGRATIONS.md) · [`BRAINSTORM.md`](./BRAINSTORM.md) · [`AGENT-TEAMS.md`](./AGENT-TEAMS.md).
+> Companion docs: [`PRODUCT.md`](./PRODUCT.md) · [`DESIGN.md`](./docs/product/DESIGN.md) · [`INTEGRATIONS.md`](./docs/product/INTEGRATIONS.md) · [`BRAINSTORM.md`](./docs/product/BRAINSTORM.md) · [`AGENT-TEAMS.md`](./docs/ops/AGENT-TEAMS.md).
 
 Last updated: 2026-05-16.
 
@@ -507,5 +507,5 @@ Anything not in one of those buckets is, by convention, not being built. Add it 
 
 - **What's shipped:** `main` of each repo + §0 above.
 - **What's planned:** §1 above. Edits go through PR review.
-- **What we will not build:** §6, plus [`GRAND_PLAN.md`](./GRAND_PLAN.md) §9 anti-goals.
+- **What we will not build:** §6, plus [`GRAND_PLAN.md`](./docs/roadmap/GRAND_PLAN.md) §9 anti-goals.
 - **North star (one sentence):** Make it as easy to run a company with AI agents as it is to run one with people — and make the agent company faster, cheaper, and more observable than the human one.

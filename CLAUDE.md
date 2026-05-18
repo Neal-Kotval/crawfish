@@ -115,7 +115,7 @@ single sequential pass through the registries at the end.)
 | `crawfish-lens/src/server/index.ts` | Route registration. |
 | `crawfish-dash/web/src/App.tsx` (and equivalent route registries) | Route table. |
 | `crawfish-app/src-tauri/tauri.conf.json` | Single source of truth for the desktop shell. |
-| `ROADMAP.md`, `BRAINSTORM.md`, `INTEGRATIONS.md`, `PRODUCT.md` | Cross-team narrative documents. |
+| `ROADMAP.md`, `PRODUCT.md`, `docs/product/BRAINSTORM.md`, `docs/product/INTEGRATIONS.md` | Cross-team narrative documents. |
 | `package.json` (any submodule) | Dep-bumps and script renames must be coordinated. |
 | Any generated file (`dist/`, `web/dist/`, JSON schemas) | Builds from source; running parallel builds clobber each other. |
 

@@ -124,8 +124,8 @@ edits to them at the end of the fan-out:
 - `crawfish-lens/src/server/index.ts` (route registration)
 - `crawfish-dash/web/src/App.tsx` (route table)
 - `crawfish-app/src-tauri/tauri.conf.json`
-- `ui/tokens/globals.css` (cross-cutting CSS — see `DESIGN.md`)
-- `ROADMAP.md`, `PRODUCT.md`, `DESIGN.md`, `BRAINSTORM.md`, `INTEGRATIONS.md`
+- `ui/tokens/globals.css` (cross-cutting CSS — see `../product/DESIGN.md`)
+- `ROADMAP.md`, `PRODUCT.md`, `docs/product/DESIGN.md`, `docs/product/BRAINSTORM.md`, `docs/product/INTEGRATIONS.md`
 - Any `package.json` (dep bumps coordinate-only)
 - Anything under `dist/` (generated)
 - Shared schema files (e.g. `docs/specs/org-contract.md`)

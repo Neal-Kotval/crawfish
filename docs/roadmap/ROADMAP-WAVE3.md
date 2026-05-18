@@ -60,7 +60,7 @@ and produce a written review of the auth/RBAC/invite paths.
 ### W3.T5 — code review pass *(read-only)*
 - Run the `review` skill on commits `41f80d8..HEAD` on `wk5/stage1-now` — Wave 2 surface area (server + platform + dash OnlineLink).
 - Focus: auth middleware bypass paths, Zod validation gaps, EMAIL_MISMATCH case-sensitivity, race conditions in invite-accept transaction, device-link code entropy, missing rate-limits, secrets-in-logs.
-- Produce `REVIEW-WAVE2.md` at repo root with findings classified Critical / High / Med / Low.
+- Produce `docs/reviews/REVIEW-WAVE2.md` with findings classified Critical / High / Med / Low.
 
 ---
 
@@ -75,6 +75,6 @@ serial:   commit each suite separately, push umbrella branch
 ## Definition of done
 - `npx playwright test` green in `crawfish-platform`, `crawfish-web`, `crawfish-dash/web`.
 - `npm test` green in `crawfish-server`.
-- `REVIEW-WAVE2.md` exists with at least one entry in each severity bucket (or a "none found" note).
+- `docs/reviews/REVIEW-WAVE2.md` exists with at least one entry in each severity bucket (or a "none found" note).
 - README in each suite directory explains: how to run, what's covered, what's not.
 - `dev.sh` unchanged — tests own their server lifecycle.

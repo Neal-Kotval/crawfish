@@ -8,12 +8,12 @@ This document is the long-horizon vision. It assumes the v1 agent-org layer is a
 
 Companion docs:
 
-- `PRODUCT.md` — one-page pitch
-- `ROADMAP.md` — phased build schedule (P0–P6)
-- `BRAINSTORM.md` — half-formed ideas, ranked
-- `DESIGN.md` — design system + tokens
-- `INTEGRATIONS.md` — runtime adapter matrix
-- `AGENT-TEAMS.md` — multi-teammate working conventions
+- `../../PRODUCT.md` — repo map / one-page pitch
+- `../../ROADMAP.md` — phased build schedule (P0–P6)
+- `../product/BRAINSTORM.md` — half-formed ideas, ranked
+- `../product/DESIGN.md` — design system + tokens
+- `../product/INTEGRATIONS.md` — runtime adapter matrix
+- `../ops/AGENT-TEAMS.md` — multi-teammate working conventions
 
 ---
 

@@ -2,7 +2,7 @@
 
 Canonical UI primitives for the crawfish platform. Imported by **both** `crawfish-lens` and `crawfish-dash` via the `@crawfish/ui` Vite alias. Edit once, ship everywhere.
 
-**The design system is documented in `../DESIGN.md`** — tokens, utility
+**The design system is documented in `../docs/product/DESIGN.md`** — tokens, utility
 classes, component primitives, and authoring rules. Read it before adding
 anything here.
 
