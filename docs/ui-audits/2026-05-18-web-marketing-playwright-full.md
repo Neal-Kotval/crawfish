@@ -349,3 +349,31 @@ Currently zero keyboard or hover feedback on any interactive element on the page
 **Make the hero H1 interactive: let the visitor "hire" one of the five default agents by clicking through the word "company."**
 
 The headline "Hire your company in fifteen minutes" is a promise. The word "company" could be a subtle inline reveal — on hover (desktop) or tap (mobile), it cycles through the five default agent names: "Hire your **Designer-bot** in fifteen minutes", "Hire your **Eng-bot** in fifteen minutes", etc. with a 200ms cross-fade using `opacity` only (no layout shift, respects `prefers-reduced-motion`). A small cursor or underline affordance signals the interaction. This transforms a static marketing line into a micro-demo of the product's core concept — agent hiring — without requiring the user to navigate anywhere. It is non-obvious (no other AI tool does this), has zero performance cost, and directly communicates the product's value prop through direct manipulation rather than description. It also gives the page a distinctive, memorable quality that makes a second-share moment — "did you click the headline?" — which is the highest-value organic growth lever for a developer tool.
+
+---
+
+## Fix-pass 2026-05-18 (`fix-web` teammate)
+
+All fixes confined to `web/src/**` and `web/index.html`. Type-check clean (zero new errors in `src/`; two pre-existing `vite.config.ts` errors remain and are out of scope).
+
+| Commit | Finding(s) closed | Summary |
+|---|---|---|
+| `17c308c` | F-16 (partial — infra) | `downloads.ts`: add `size?: number` to `ReleaseAsset`; export `assetSizeMbFor()` helper |
+| `f59cd2e` | F-05, F-06, F-09, F-14, F-16, F-21 + a11y polish | `Index.tsx`: Sign-in PlatBtn moved inside `<nav>`; GitHub NavLink gets `aria-label="Crawfish on GitHub"`; eyebrow ● dot gets `aria-hidden="true"`; hero stat divs get `className="cf-num"`; info-strip border changed from dashed to `solid var(--rule-2)`; install card footer version+size derived from `useLatestRelease()` with hardcoded fallback; secondary platform buttons get `aria-label` + ↓ prefix; footer status ● gets `aria-hidden`; "Invite a teammate later" link gets `minHeight: 44` |
+| `9254e06` | F-19 | `index.html`: add `<meta name="description">`, `og:title`, `og:description`, `og:image`, `og:url`, `og:type`, `twitter:card`, `twitter:title`, `twitter:description`, `twitter:image`, `<link rel="canonical">` |
+
+### Findings status after fix-pass
+
+| ID | Severity | Status |
+|---|---|---|
+| F-01 | Critical | Closed in lead commit 989870f (REPO slug corrected) |
+| F-02 | Critical | Closed by lead (PlatBtn/NavLink carry `.cf-touch-target`); "Invite a teammate later" link additionally patched in `f59cd2e` |
+| F-04 | Major | Closed by lead (`.cf-platbtn`/`.cf-navlink` focus-visible rings in `globals.css`) |
+| F-05 | Major | Closed `f59cd2e` — Sign-in inside nav landmark; GitHub link aria-label |
+| F-06 | Minor | Closed `f59cd2e` — `aria-hidden` on eyebrow bullet |
+| F-09 | Minor | Closed `f59cd2e` — `.cf-num` on hero stat numbers |
+| F-14 | Minor | Closed `f59cd2e` — dashed → solid border on info strip |
+| F-16 | Major | Closed `17c308c` + `f59cd2e` — version tag and MB derived from live API |
+| F-17 | Major | Out of scope — `globals.css` (`prefers-reduced-motion` on `cfp-march`/`cfp-blink`) is lead-only |
+| F-19 | Major | Closed `9254e06` — full OG/Twitter/canonical meta block |
+| F-21 | Minor | Closed `f59cd2e` — `aria-label` + ↓ prefix on secondary platform buttons |
