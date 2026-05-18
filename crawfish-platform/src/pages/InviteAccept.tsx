@@ -199,6 +199,7 @@ function InviteBody({
             type="button"
             onClick={onAccept}
             disabled={accepting}
+            className="cfp-btn cfp-btn--primary"
             style={primaryBtn(accepting)}
           >
             {accepting ? "Joining…" : `Accept and join ${preview.org.name}`}
@@ -209,7 +210,7 @@ function InviteBody({
               style={{
                 marginTop: 12,
                 fontSize: 12,
-                color: "var(--bad, #a23a2a)",
+                color: "var(--danger)",
               }}
             >
               {acceptError}
@@ -249,18 +250,15 @@ function Body({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Pair with className="cfp-btn cfp-btn--primary" so the button matches
+// the vermillion primary CTA in onboarding and Auth. Width + cursor are
+// the only inline overrides needed.
 function primaryBtn(disabled: boolean): React.CSSProperties {
   return {
     width: "100%",
-    padding: "12px 18px",
-    fontSize: 14,
-    fontWeight: 500,
-    background: "var(--ink)",
-    color: "var(--accent)",
-    border: "none",
-    borderRadius: "var(--r-sm)",
-    cursor: disabled ? "wait" : "pointer",
+    justifyContent: "center",
     opacity: disabled ? 0.6 : 1,
+    cursor: disabled ? "wait" : "pointer",
   };
 }
 
@@ -273,10 +271,9 @@ function SigninCTA({ inviteEmail, code }: { inviteEmail: string; code: string })
       </p>
       <a
         href={`/signin?redirect=${redirect}`}
+        className="cfp-btn cfp-btn--primary"
         style={{
           ...primaryBtn(false),
-          display: "block",
-          textAlign: "center",
           textDecoration: "none",
         }}
       >
@@ -326,7 +323,13 @@ function EmailMismatch({
         <strong>{currentEmail || "an unknown user"}</strong>. Sign out and back in as the invited
         address to continue.
       </p>
-      <button type="button" onClick={onSignOut} disabled={signingOut} style={primaryBtn(signingOut)}>
+      <button
+        type="button"
+        onClick={onSignOut}
+        disabled={signingOut}
+        className="cfp-btn cfp-btn--primary"
+        style={primaryBtn(signingOut)}
+      >
         {signingOut ? "Signing out…" : "Sign out"}
       </button>
     </>

@@ -145,7 +145,7 @@ function ConfirmView({
       </div>
 
       {error ? (
-        <p style={{ color: "var(--bad, #b1452f)", fontSize: 12, marginBottom: 12 }}>
+        <p style={{ color: "var(--danger)", fontSize: 12, marginBottom: 12 }}>
           {error.message}
         </p>
       ) : null}

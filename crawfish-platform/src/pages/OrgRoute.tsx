@@ -157,7 +157,7 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
       <div
         style={{
           padding: "10px 20px",
-          background: "var(--paper-2, #f3eee2)",
+          background: "var(--paper-2)",
           borderBottom: "1px solid var(--rule)",
           display: "flex",
           alignItems: "center",
@@ -220,18 +220,13 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
               href={buildDashLink({ org: org.name, user: me.email, name: me.name })}
               target={dashLinkTarget()}
               rel={dashLinkTarget() ? "noopener noreferrer" : undefined}
-              className="cfp-btn cfp-btn--sm"
+              className="cfp-btn cfp-btn--sm cfp-btn--ink"
               title={
                 isDevDashEnabled()
                   ? "Open the dev dash web build (no Tauri install needed)."
                   : "Open this org in the Crawfish desktop app. Requires Dash to be installed."
               }
-              style={{
-                background: "var(--ink)",
-                color: "#f7f3ea",
-                border: "1px solid var(--ink)",
-                textDecoration: "none",
-              }}
+              style={{ textDecoration: "none" }}
             >
               Open in Dash ↗
             </a>
@@ -254,7 +249,7 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
           flex: 1,
           minHeight: 520,
           background:
-            "radial-gradient(circle, var(--rule, #e6e0d0) 1px, transparent 1px) 0 0 / 18px 18px",
+            "radial-gradient(circle, var(--rule) 1px, transparent 1px) 0 0 / 18px 18px",
           backgroundColor: "var(--paper)",
           overflow: "auto",
         }}

@@ -61,6 +61,15 @@ export function OnboardingFlow() {
 
   const go = (s: Stage | undefined) => (s ? navigate(`/onboarding/${s}`) : navigate("/"));
 
+  // Guard: any stage after welcome requires answers.name. Otherwise a deep
+  // link or browser back/forward lands on a screen with "your-org" / blank
+  // labels and silently POSTs name:"" -> server 400.
+  useEffect(() => {
+    if (idx > 0 && !answers.name.trim()) {
+      navigate("/onboarding/welcome", { replace: true });
+    }
+  }, [idx, answers.name, navigate]);
+
   const canContinueFromWelcome = answers.name.trim().length > 0;
 
   const handleContinue = async () => {
@@ -148,6 +157,8 @@ export function OnboardingFlow() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 16,
         }}
       >
         <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10 }}>
@@ -176,7 +187,7 @@ export function OnboardingFlow() {
         </div>
         <div
           style={{
-            width: 240,
+            width: "min(240px, 100%)",
             height: 4,
             background: "var(--paper-2)",
             borderRadius: 999,
@@ -265,7 +276,7 @@ function Welcome({
         style={{
           fontFamily: "var(--ff-display)",
           fontWeight: 500,
-          fontSize: 56,
+          fontSize: "clamp(36px, 7vw, 56px)",
           lineHeight: 1.02,
           letterSpacing: "-0.032em",
           margin: "8px 0 16px",
@@ -323,10 +334,10 @@ function Welcome({
           style={{
             marginTop: 16,
             padding: "10px 14px",
-            background: "var(--surface-warn, #fef3e6)",
+            background: "var(--warn-bg)",
             border: "1px solid var(--rule-3)",
             borderRadius: "var(--r-sm)",
-            color: "var(--bad, #a23a2a)",
+            color: "var(--danger)",
             fontSize: 13,
           }}
         >
@@ -395,7 +406,7 @@ function Propose({ answers, error }: { answers: Answers; error: string | null })
         style={{
           fontFamily: "var(--ff-display)",
           fontWeight: 500,
-          fontSize: 48,
+          fontSize: "clamp(32px, 6vw, 48px)",
           lineHeight: 1.02,
           letterSpacing: "-0.028em",
           margin: "8px 0 24px",
@@ -444,10 +455,10 @@ ${DEFAULT_AGENTS.map(
           style={{
             marginTop: 16,
             padding: "10px 14px",
-            background: "var(--surface-warn, #fef3e6)",
+            background: "var(--warn-bg)",
             border: "1px solid var(--rule-3)",
             borderRadius: "var(--r-sm)",
-            color: "var(--bad, #a23a2a)",
+            color: "var(--danger)",
             fontSize: 13,
           }}
         >
@@ -491,7 +502,7 @@ function Install({ answers }: { answers: Answers }) {
         style={{
           fontFamily: "var(--ff-display)",
           fontWeight: 500,
-          fontSize: 48,
+          fontSize: "clamp(32px, 6vw, 48px)",
           lineHeight: 1.02,
           letterSpacing: "-0.028em",
           margin: "8px 0 24px",
@@ -523,7 +534,7 @@ function Install({ answers }: { answers: Answers }) {
 }
 
 function Hired({ org, answers }: { org: Org | null; answers: Answers }) {
-  const name = org?.name ?? answers.name ?? "your-org";
+  const name = org?.name || answers.name || "your-org";
   const count = org?.agents.length ?? DEFAULT_AGENTS.length;
   const wordCount =
     count === 1 ? "one agent" :
@@ -538,7 +549,7 @@ function Hired({ org, answers }: { org: Org | null; answers: Answers }) {
         style={{
           fontFamily: "var(--ff-display)",
           fontWeight: 500,
-          fontSize: 56,
+          fontSize: "clamp(36px, 7vw, 56px)",
           lineHeight: 1.02,
           letterSpacing: "-0.032em",
           margin: "8px 0 16px",
@@ -565,7 +576,7 @@ function Hired({ org, answers }: { org: Org | null; answers: Answers }) {
 const MARKETING_URL = (import.meta.env.VITE_MARKETING_URL as string | undefined) ?? "http://localhost:5173";
 
 function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
-  const name = org?.name ?? answers.name ?? "your-org";
+  const name = org?.name || answers.name || "your-org";
   const navigate = useNavigate();
   const me = useCurrentUser();
   const [dashLikelyMissing, setDashLikelyMissing] = useState(false);
@@ -604,7 +615,7 @@ function Handoff({ org, answers }: { org: Org | null; answers: Answers }) {
         style={{
           fontFamily: "var(--ff-display)",
           fontWeight: 500,
-          fontSize: 44,
+          fontSize: "clamp(28px, 5.5vw, 44px)",
           lineHeight: 1.02,
           letterSpacing: "-0.028em",
           margin: "8px 0 24px",

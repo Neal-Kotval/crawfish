@@ -228,16 +228,10 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
           <button
             type="submit"
             disabled={submitting || !emailDraft.trim()}
+            className="cfp-btn cfp-btn--primary"
             style={{
-              padding: "10px 18px",
-              fontSize: 14,
-              fontWeight: 500,
-              background: "var(--ink)",
-              color: "var(--accent)",
-              border: "none",
-              borderRadius: "var(--r-sm)",
-              cursor: submitting ? "wait" : "pointer",
               opacity: submitting || !emailDraft.trim() ? 0.6 : 1,
+              cursor: submitting ? "wait" : undefined,
             }}
           >
             {submitting ? "Sending…" : "Send invite"}
@@ -251,8 +245,8 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
               marginTop: 12,
               padding: "8px 12px",
               fontSize: 12,
-              color: "var(--bad, #a23a2a)",
-              background: "var(--surface-warn, #fef3e6)",
+              color: "var(--danger)",
+              background: "var(--warn-bg)",
               border: "1px solid var(--rule-3)",
               borderRadius: "var(--r-sm)",
             }}
