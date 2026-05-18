@@ -3704,3 +3704,16 @@ textarea:focus-visible {
     display: none;
   }
 }
+
+/* Dash Settings — collapse two-column nav+panel to single column below
+   700px so the side nav doesn't eat half the viewport on phones.
+   Picked up from dash fix-team M3 finding. */
+@media (max-width: 700px) {
+  .cf-settings {
+    grid-template-columns: 1fr;
+  }
+  .cf-settings__nav {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+}
