@@ -1,8 +1,9 @@
 import express from "express";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
+import { fileURLToPath } from "node:url";
 
-const app = express();
+export const app = express();
 const port = Number(process.env.PORT ?? 7882);
 export const db = new PrismaClient();
 
@@ -29,6 +30,18 @@ app.use("/api/me", meRouter);
 app.use("/api/device-link", deviceLinkRouter);
 app.use("/api/invites", publicInvitesRouter);
 
-app.listen(port, "127.0.0.1", () => {
-  console.log(`crawfish-server: http://127.0.0.1:${port}`);
-});
+// Only start the HTTP listener when this file is executed directly
+// (i.e., not when imported by tests).
+const isMain = (() => {
+  try {
+    return process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+  } catch {
+    return false;
+  }
+})();
+
+if (isMain) {
+  app.listen(port, "127.0.0.1", () => {
+    console.log(`crawfish-server: http://127.0.0.1:${port}`);
+  });
+}

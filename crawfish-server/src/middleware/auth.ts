@@ -3,17 +3,23 @@ import { db } from "../index.js";
 import { verifyOrgToken } from "../lib/jwt.js";
 
 const DEV_USER_ID_HEADER = "x-user-id";
+const DEV_USER_EMAIL_HEADER = "x-user-email";
 const CRAWFISH_TOKEN_HEADER = "x-crawfish-token";
 const DEV_FALLBACK_USER = "dev-user";
 
 let devUserEnsured = false;
 
-async function ensureDevUser(externalId: string): Promise<string> {
+async function ensureDevUser(externalId: string, emailOverride?: string): Promise<string> {
   // Reuse a single User row keyed by a stable email derived from the header
   // value. In dev mode every header value becomes its own user.
-  const email = externalId === DEV_FALLBACK_USER
-    ? "dev@local"
-    : `${externalId}@local`;
+  // If X-User-Email is supplied (tests / email-match flows), use that email
+  // instead of the synthetic `<id>@local` form so invite EMAIL_MISMATCH
+  // checks can be exercised end-to-end.
+  const email = emailOverride
+    ? emailOverride.toLowerCase().trim()
+    : externalId === DEV_FALLBACK_USER
+      ? "dev@local"
+      : `${externalId}@local`;
   const user = await db.user.upsert({
     where: { email },
     update: {},
@@ -52,7 +58,8 @@ export async function authMiddleware(
     }
 
     const headerVal = req.header(DEV_USER_ID_HEADER) ?? DEV_FALLBACK_USER;
-    const userId = await ensureDevUser(headerVal);
+    const emailOverride = req.header(DEV_USER_EMAIL_HEADER);
+    const userId = await ensureDevUser(headerVal, emailOverride);
     req.userId = userId;
     devUserEnsured = true;
     next();
