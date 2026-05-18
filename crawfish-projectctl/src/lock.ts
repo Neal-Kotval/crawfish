@@ -25,7 +25,8 @@ export function acquireLock(repoRoot: string, debounceMs: number): Lock | null {
   writeFileSync(path, JSON.stringify({ ts: Date.now(), pid: process.pid }));
   return {
     release() {
-      try { unlinkSync(path); } catch { /* already gone */ }
+      // Rewrite with a fresh timestamp so debounce window starts from completion.
+      try { writeFileSync(path, JSON.stringify({ ts: Date.now() })); } catch { /* ignore */ }
     },
   };
 }
