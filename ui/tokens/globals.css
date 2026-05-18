@@ -3717,3 +3717,36 @@ textarea:focus-visible {
     border-bottom: 1px solid var(--rule);
   }
 }
+
+/* prefers-reduced-motion — when the user has reduced-motion set system-wide,
+   drop the marching-ants edge animation and blink-cursor live-trace
+   indicator. Motion in the Crawfish UI is functional (orienting, not
+   decorative) but at the user's request we still freeze it. The
+   eyebrow text remains visible so "active" / "live" semantics are
+   preserved through copy, not motion. */
+@media (prefers-reduced-motion: reduce) {
+  .cfp-march,
+  .cf-march,
+  [class*="cfp-march"],
+  [class*="cf-march"] {
+    animation: none !important;
+  }
+  .cfp-blink,
+  .cf-blink,
+  [class*="cfp-blink"],
+  [class*="cf-blink"] {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+  /* Generic taming: anything that uses our hover-lift, fade-in, or bar-fill
+     pattern should be stilled. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
