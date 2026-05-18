@@ -124,12 +124,21 @@ crawfish/                            # this umbrella repo
 ├── docs/
 │   ├── specs/org-contract.md        # the binding v1 schema
 │   └── screenshots/                 # the images above
-├── crawfish-lens/                   # → github.com/Neal-Kotval/crawfish-lens
-├── crawfish-dash/                   # → github.com/Neal-Kotval/crawfish-dash
-├── crawfish-orgctl/                 # → github.com/Neal-Kotval/crawfish-orgctl
-├── crawfish-opt/                    # → github.com/Neal-Kotval/crawfish-opt
-├── crawfish-opt-codebase/           # → github.com/Neal-Kotval/crawfish-opt-codebase
-└── crawfish-app/                    # → github.com/Neal-Kotval/crawfish-app
+├── cloud/
+│   ├── platform/                   # signed-in web SPA (Clerk, org/project import)
+│   └── server/                     # platform backend (Express + Prisma)
+├── desktop/
+│   ├── app/                        # → github.com/Neal-Kotval/crawfish-app (submodule)
+│   ├── dash/                       # → github.com/Neal-Kotval/crawfish-dash (submodule)
+│   ├── lens/                       # → github.com/Neal-Kotval/crawfish-lens (submodule)
+│   ├── opt/                        # → github.com/Neal-Kotval/crawfish-opt (submodule)
+│   ├── opt-codebase/               # → github.com/Neal-Kotval/crawfish-opt-codebase (submodule)
+│   ├── opt-artifact/               # artifact-id optimizer
+│   └── opt-logs/                   # logs-summarize optimizer
+├── cli/
+│   ├── orgctl/                     # org-control MCP server
+│   └── projectctl/                 # per-project .crawfish/ engine
+└── web/                            # marketing site (crawfish.dev)
 ```
 
 ## License
