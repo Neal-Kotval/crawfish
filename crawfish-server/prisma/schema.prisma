@@ -30,6 +30,7 @@ model Org {
   sessions       Session[]
   deviceCodes    DeviceLinkCode[]
   invites        Invite[]
+  projects       Project[]
 }
 
 model OrgMember {
@@ -100,4 +101,24 @@ model Invite {
   redeemedAt DateTime?
   redeemedBy User?   @relation("InvitesRedeemedByUser", fields: [redeemedById], references: [id])
   redeemedById String?
+}
+
+model Project {
+  id              String   @id @default(cuid())
+  org             Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId           String
+  name            String
+  githubRepo      String?
+  githubRepoId    Int?
+  defaultBranch   String?
+  isPrivate       Boolean  @default(false)
+  cloneStatus     String   @default("pending")
+  cloneError      String?
+  localPath       String?
+  deviceId        String?
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([orgId, githubRepoId], name: "org_repo_unique")
 }
