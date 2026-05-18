@@ -11,7 +11,7 @@ export type Platform = "mac-arm" | "mac-intel" | "linux" | "windows" | "unknown"
 
 const REPO: string =
   (import.meta as { env?: Record<string, string> }).env?.VITE_GITHUB_REPO ||
-  "anthropics/crawfish";
+  "Neal-Kotval/crawfish";
 const CACHE_KEY = "cf:release";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 export const RELEASES_FALLBACK_URL = `https://github.com/${REPO}/releases`;
