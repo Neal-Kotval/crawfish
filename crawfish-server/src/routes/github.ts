@@ -62,3 +62,28 @@ githubRouter.get("/repos/:owner/:name/check", async (req, res) => {
     return httpError(res, 502, "github_error", String(err));
   }
 });
+
+/**
+ * Dash-sync–only GitHub routes. Mounted under /api/dash/github behind
+ * dashSyncMiddleware so only device-linked desktops (with a valid
+ * X-Crawfish-Token JWT) can call them. The clone-token endpoint hands the
+ * raw GitHub OAuth token to the desktop so it can `git clone` directly,
+ * without proxying every clone through the server.
+ */
+export const dashGithubRouter = Router();
+
+dashGithubRouter.get("/clone-token", async (req, res) => {
+  const userId = req.userId;
+  if (!userId) return httpError(res, 401, "unauthenticated", "");
+
+  let token: string;
+  try {
+    token = await getGithubToken(userId);
+  } catch (err) {
+    if (err instanceof GithubNotConnected)
+      return httpError(res, 409, "github_disconnected", "");
+    return httpError(res, 502, "github_error", String(err));
+  }
+
+  return res.json({ token, expires_at: null });
+});

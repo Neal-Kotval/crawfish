@@ -6,6 +6,7 @@ import {
   GithubNotConnected,
   _setClerkClientForTests,
 } from "../../src/lib/github.js";
+import { signOrgToken } from "../../src/lib/jwt.js";
 
 const getUserOauthAccessToken = vi.fn();
 
@@ -158,5 +159,26 @@ describe("GET /api/github/repos/:owner/:name/check", () => {
       .set("X-User-Id", "gh-user-f");
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("github_disconnected");
+  });
+});
+
+describe("GET /api/dash/github/clone-token", () => {
+  it("returns the Clerk-stored GitHub token when called with a valid X-Crawfish-Token", async () => {
+    getUserOauthAccessToken.mockResolvedValue({ data: [{ token: "gho_clone_xyz" }] });
+    const jwt = signOrgToken("user_clone_1", "org_clone_1");
+    const res = await request(app)
+      .get("/api/dash/github/clone-token")
+      .set("X-Crawfish-Token", jwt);
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBe("gho_clone_xyz");
+    expect(res.body.expires_at).toBeNull();
+    expect(getUserOauthAccessToken).toHaveBeenCalledWith("user_clone_1", "oauth_github");
+  });
+
+  it("returns 401 when no X-Crawfish-Token is present (web auth headers ignored)", async () => {
+    const res = await request(app)
+      .get("/api/dash/github/clone-token")
+      .set("X-User-Id", "gh-user-web");
+    expect(res.status).toBe(401);
   });
 });

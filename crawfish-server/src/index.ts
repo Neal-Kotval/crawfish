@@ -33,7 +33,7 @@ import { orgsRouter, meRouter, dashAgentsRouter } from "./routes/orgs.js";
 import { deviceLinkRouter } from "./routes/deviceLink.js";
 import { invitesRouter, publicInvitesRouter } from "./routes/invites.js";
 import { projectsRouter } from "./routes/projects.js";
-import { githubRouter } from "./routes/github.js";
+import { githubRouter, dashGithubRouter } from "./routes/github.js";
 
 // Public routes (no user auth required) — mounted before authMiddleware.
 app.use("/api/health", healthRouter);
@@ -44,6 +44,8 @@ app.use("/api/invites", publicInvitesRouter);
 // own sub-app so the dash-sync middleware only fires here, not on user routes.
 app.use("/api/dash", dashSyncMiddleware, dashAgentsRouter);
 app.use("/api/dash/orgs/:orgId/projects", dashSyncMiddleware, projectsRouter);
+app.use("/api/dash/github", dashSyncMiddleware, dashGithubRouter);
+app.use("/api/dash/github", dashSyncMiddleware, githubRouter);
 
 // All remaining /api routes require user auth (Clerk in prod; dev shim
 // otherwise).
