@@ -3,6 +3,7 @@
  * Port of /design/designs/WebInstall.jsx, refactored to use the
  * @crawfish/ui marketing primitives.
  */
+import React from "react";
 import { NavLink } from "@crawfish/ui/components/marketing/NavLink";
 import { InstallCard } from "@crawfish/ui/components/marketing/InstallCard";
 import { PlatBtn } from "@crawfish/ui/components/marketing/PlatBtn";
@@ -168,8 +169,16 @@ export function Index() {
             blurb="Sidebar inside VS Code & Cursor. Token meter in the status bar, PreToolUse policy as inline diagnostics."
             cta={
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <PlatBtn>Open VS Code marketplace ↗</PlatBtn>
-                <PlatBtn>Open Cursor marketplace ↗</PlatBtn>
+                <span
+                  aria-disabled="true"
+                  title="Coming soon — Marketplace listing pending"
+                  style={{ opacity: 0.45, pointerEvents: "none", display: "block" }}
+                ><PlatBtn>Open VS Code marketplace ↗</PlatBtn></span>
+                <span
+                  aria-disabled="true"
+                  title="Coming soon — Marketplace listing pending"
+                  style={{ opacity: 0.45, pointerEvents: "none", display: "block" }}
+                ><PlatBtn>Open Cursor marketplace ↗</PlatBtn></span>
                 <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>JetBrains coming Q3 · vote on the roadmap.</div>
               </div>
             }
