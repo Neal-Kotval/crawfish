@@ -11,34 +11,56 @@
  * so the user is never stranded if the auto-redirect fails or pop-up blocker
  * trips.
  */
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useCurrentUser } from "../lib/useAuth";
 import { Eyebrow } from "@crawfish/ui/components/Eyebrow";
 
-const DASH_URL =
+// The installed Tauri app registers crawfish-dash:// (see desktop/app/src-tauri/
+// tauri.conf.json: deep-link.schemes). When the user has the desktop app
+// installed, the OS routes this URL to the running app. When they don't, the
+// browser silently no-ops; we then fall back to the local dev/web URL.
+const DASH_HTTP_URL =
   (import.meta.env.VITE_DASH_URL as string | undefined) ?? "http://localhost:7881";
 
 export function LinkDash() {
   const user = useCurrentUser();
 
-  const targetUrl = (() => {
-    if (!user.isLoaded || !user.isSignedIn) return null;
+  const { customSchemeUrl, fallbackUrl } = useMemo(() => {
+    if (!user.isLoaded || !user.isSignedIn) {
+      return { customSchemeUrl: null, fallbackUrl: null };
+    }
     const params = new URLSearchParams();
     if (user.email) params.set("user", user.email);
     if (user.name) params.set("name", user.name);
-    return `${DASH_URL}/?${params.toString()}`;
-  })();
+    const qs = params.toString();
+    return {
+      customSchemeUrl: `crawfish-dash://link?${qs}`,
+      fallbackUrl: `${DASH_HTTP_URL}/?${qs}`,
+    };
+  }, [user.isLoaded, user.isSignedIn, user.email, user.name]);
 
   useEffect(() => {
-    if (!targetUrl) return;
-    // Slight delay so the user reads the "Returning you to Dash…" message
-    // before the redirect fires. Tauri custom-scheme handlers are a future
-    // upgrade — for now this is a same-origin-shaped HTTP URL.
-    const t = window.setTimeout(() => {
-      window.location.replace(targetUrl);
-    }, 600);
-    return () => window.clearTimeout(t);
-  }, [targetUrl]);
+    if (!customSchemeUrl || !fallbackUrl) return;
+    // 1. Fire the custom scheme first — if the Tauri app is installed, this
+    //    is intercepted by the OS and routes to the running app instance.
+    // 2. After a short grace period, fall back to the HTTP URL so users
+    //    running dash in the browser (or who don't have the app installed)
+    //    still get signed in.
+    const fireCustom = window.setTimeout(() => {
+      try {
+        window.location.assign(customSchemeUrl);
+      } catch {
+        /* ignore — fallback handles it */
+      }
+    }, 200);
+    const fireFallback = window.setTimeout(() => {
+      window.location.replace(fallbackUrl);
+    }, 1500);
+    return () => {
+      window.clearTimeout(fireCustom);
+      window.clearTimeout(fireFallback);
+    };
+  }, [customSchemeUrl, fallbackUrl]);
 
   return (
     <div
@@ -80,23 +102,37 @@ export function LinkDash() {
           Signed in as <b>{user.email || "—"}</b>. Bouncing you back to the
           local Dash app now.
         </p>
-        {targetUrl ? (
-          <a
-            href={targetUrl}
-            className="cfp-btn cf-touch-target"
-            style={{
-              background: "var(--accent)",
-              color: "#fff",
-              border: "1px solid var(--accent)",
-              textDecoration: "none",
-              padding: "12px 20px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            Open Dash →
-          </a>
+        {customSchemeUrl && fallbackUrl ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+            <a
+              href={customSchemeUrl}
+              className="cfp-btn cf-touch-target"
+              style={{
+                background: "var(--accent)",
+                color: "#fff",
+                border: "1px solid var(--accent)",
+                textDecoration: "none",
+                padding: "12px 20px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              Open Dash →
+            </a>
+            <a
+              href={fallbackUrl}
+              className="cf-touch-target"
+              style={{
+                fontSize: 12,
+                color: "var(--ink-mute)",
+                textDecoration: "underline",
+                padding: "8px 4px",
+              }}
+            >
+              Or open in browser ↗
+            </a>
+          </div>
         ) : (
           <div className="cf-mono" style={{ fontSize: 12, color: "var(--ink-mute)" }}>
             loading session…
@@ -106,7 +142,7 @@ export function LinkDash() {
           className="cf-mono"
           style={{ fontSize: 11, color: "var(--ink-mute)", marginTop: 18, wordBreak: "break-all" }}
         >
-          {targetUrl ?? DASH_URL}
+          {customSchemeUrl ?? DASH_HTTP_URL}
         </div>
       </div>
     </div>
