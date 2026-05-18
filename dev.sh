@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # dev.sh — start every Crawfish dev surface at once.
 #
-# Brings up four processes:
+# Brings up five processes:
 #   • dash node server        http://127.0.0.1:7880   (REST: /api/orgs, /api/sessions, …)
 #   • dash vite SPA           http://127.0.0.1:7881   (the dash UI; /api proxied to :7880)
 #   • marketing vite          http://127.0.0.1:5173   (crawfish.dev front door)
 #   • platform vite           http://127.0.0.1:5174   (signed-in collab skeleton)
+#   • crawfish-server         http://127.0.0.1:7882   (Wave 2 cloud API: orgs, invites, link)
 #
 # Logs stream into ./dev-logs/. Ctrl-C kills all four cleanly.
 #
@@ -30,7 +31,7 @@ cleanup() {
     fi
   done
   # belt-and-suspenders: also kill anything still on these ports
-  for port in 7880 7881 5173 5174; do
+  for port in 7880 7881 7882 5173 5174; do
     lsof -ti tcp:"$port" 2>/dev/null | xargs -r kill 2>/dev/null || true
   done
   wait 2>/dev/null
@@ -65,7 +66,8 @@ echo "▶ pre-flight: type-checking dash server…"
   echo "✗ dash server type-check failed — aborting"; exit 1; }
 
 start dash-node     crawfish-dash      "npm run serve"   7880
-# Give the node server a moment so vite's first proxy call doesn't fail.
+start cf-server     crawfish-server    "npm run dev"     7882
+# Give the node servers a moment so vite's first proxy call doesn't fail.
 sleep 1
 start dash-web      crawfish-dash      "npm run web:dev" 7881
 start marketing     crawfish-web       "npm run dev"     5173
@@ -80,6 +82,7 @@ cat <<EOF
   platform     →  http://localhost:5174
   dash (web)   →  http://localhost:7881/canvas
   dash (api)   →  http://localhost:7880/api/orgs
+  cf-server    →  http://localhost:7882/api/health
   Tauri shell  →  cd crawfish-app && npm run dev   (separate terminal)
 
   Logs:       tail -f dev-logs/<name>.log
