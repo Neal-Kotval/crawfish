@@ -9,6 +9,7 @@ import { InstallCard } from "@crawfish/ui/components/marketing/InstallCard";
 import { PlatBtn } from "@crawfish/ui/components/marketing/PlatBtn";
 import {
   assetUrlFor,
+  assetSizeMbFor,
   detectPlatform,
   PLATFORM_LABELS,
   RELEASES_FALLBACK_URL,
@@ -24,6 +25,11 @@ export function Index() {
   const primaryPlatform: Exclude<Platform, "unknown"> = detected === "unknown" ? "mac-arm" : detected;
   const secondaryPlatforms = ALL_PLATFORMS.filter((p) => p !== primaryPlatform);
   const urlFor = (p: Platform): string => (release ? assetUrlFor(release, p) : RELEASES_FALLBACK_URL);
+
+  // Derive version tag and file size from live release API response.
+  // Fall back to the known-good literals if the API is unavailable.
+  const releaseTag = release?.tag_name ?? "v0.4.1";
+  const releaseSize = assetSizeMbFor(release, primaryPlatform) ?? 114;
 
   const [narrow, setNarrow] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 1100 : false
@@ -61,10 +67,10 @@ export function Index() {
             border: "1px solid var(--rule-3)", borderRadius: 999, marginLeft: 4,
           }}>v0.4 · public beta</span>
         </div>
-        <nav aria-label="Main navigation" style={{ display: "flex", gap: 28 }}>
-          <NavLink href="https://github.com/crawfish">Github</NavLink>
+        <nav aria-label="Main navigation" style={{ display: "flex", alignItems: "center", gap: 28 }}>
+          <NavLink href="https://github.com/crawfish" aria-label="Crawfish on GitHub">Github</NavLink>
+          <PlatBtn primary href="https://app.crawfish.dev/signin">Sign in →</PlatBtn>
         </nav>
-        <PlatBtn primary href="https://app.crawfish.dev/signin">Sign in →</PlatBtn>
       </header>
 
       {/* hero */}
@@ -80,7 +86,7 @@ export function Index() {
       >
         <div>
           <div className="cf-eyebrow" style={{ marginBottom: 18 }}>
-            <span style={{ color: "var(--accent)", marginRight: 8 }}>●</span>
+            <span aria-hidden="true" style={{ color: "var(--accent)", marginRight: 8 }}>●</span>
             For the founder spinning up their first five agents
           </div>
           <h1 style={{
@@ -116,7 +122,7 @@ export function Index() {
             { n: "$0",     l: "price through stage 1" },
           ].map((r) => (
             <div key={r.l}>
-              <div style={{
+              <div className="cf-num" style={{
                 fontFamily: "var(--ff-sans)", fontSize: 28, color: "var(--ink)",
                 fontWeight: 500, letterSpacing: "-0.01em",
               }}>{r.n}</div>
@@ -161,13 +167,13 @@ export function Index() {
                   {`↓ Download for ${PLATFORM_LABELS[primaryPlatform]}`}
                 </PlatBtn>
                 {secondaryPlatforms.map((p) => (
-                  <PlatBtn key={p} dark href={urlFor(p)}>
-                    {PLATFORM_LABELS[p].replace(/^Mac \(([^)]+)\)$/, "$1")}
+                  <PlatBtn key={p} dark href={urlFor(p)} aria-label={`Download for ${PLATFORM_LABELS[p]}`}>
+                    ↓ {PLATFORM_LABELS[p].replace(/^Mac \(([^)]+)\)$/, "$1")}
                   </PlatBtn>
                 ))}
               </div>
             }
-            foot={<><span>114 MB · v0.4.1</span><span>signed · notarized</span></>}
+            foot={<><span>{releaseSize} MB · {releaseTag}</span><span>signed · notarized</span></>}
           />
           <InstallCard
             eyebrow="Terminal · Brew · npm"
@@ -184,7 +190,7 @@ export function Index() {
                 <div style={{ color: "var(--ink-mute)" }}># or: curl -fsSL crawfish.dev/i | sh</div>
               </div>
             }
-            foot={<><span>macOS · Linux · Windows (WSL)</span><span>v0.4.1</span></>}
+            foot={<><span>macOS · Linux · Windows (WSL)</span><span>{releaseTag}</span></>}
           />
           <InstallCard
             tag="new"
@@ -214,7 +220,7 @@ export function Index() {
           marginTop: 18,
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "14px 18px",
-          background: "var(--surface)", border: "1px dashed var(--rule-3)", borderRadius: "var(--r-md)",
+          background: "var(--surface)", border: "1px solid var(--rule-2)", borderRadius: "var(--r-md)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "var(--ink-soft)" }}>
             <span>After install, your client runs locally. Your org lives in <span className="cf-mono" style={{ color: "var(--ink)" }}>~/crawfish/&lt;org&gt;/</span>.</span>
@@ -226,6 +232,7 @@ export function Index() {
               padding: "6px 12px", borderRadius: "var(--r-sm)",
               background: "transparent", border: "1px solid var(--ink)",
               color: "var(--ink)", textDecoration: "none",
+              display: "inline-flex", alignItems: "center", minHeight: 44,
             }}>Invite a teammate later →</a>
           </div>
         </div>
@@ -238,7 +245,7 @@ export function Index() {
         fontFamily: "var(--ff-mono)", fontSize: 11, color: "var(--ink-mute)",
       }}>
         <div>© 2026 · Crawfish · MIT</div>
-        <div>made in New Orleans · status: <span style={{ color: "var(--good)" }}>● all systems</span></div>
+        <div>made in New Orleans · status: <span style={{ color: "var(--good)" }}><span aria-hidden="true">● </span>all systems</span></div>
       </footer>
     </div>
   );
