@@ -139,20 +139,10 @@ export function Shell() {
         ) : (
           <>
             <div>
-              <Eyebrow style={{ padding: "0 6px", marginBottom: 6 }}>Your orgs</Eyebrow>
-              {orgs.length === 0 ? (
-                <div
-                  style={{
-                    padding: "8px 10px",
-                    fontSize: 12,
-                    color: "var(--ink-mute)",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  No orgs yet. Create one to get started.
-                </div>
-              ) : (
-                orgs.map((o) => (
+              {orgs.length > 0 && (
+                <Eyebrow style={{ padding: "0 6px", marginBottom: 6 }}>Your orgs</Eyebrow>
+              )}
+              {orgs.length > 0 && orgs.map((o) => (
                   <SideItem
                     key={o.id}
                     label={
