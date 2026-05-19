@@ -30,6 +30,9 @@ import {
 import { listFiles, readFile, writeFile } from "./files.js";
 import { tokensOf } from "./tokens.js";
 import { ACTIVITY_TOOL_DEFS, dispatchActivity } from "./tools/activity.js";
+import { PREFLIGHT_TOOL_DEFS, dispatchPreflight, type PreflightArgs } from "./preflight.js";
+import { CRITERIA_TOOL_DEFS, dispatchCriteria } from "./criteria.js";
+import { BUDGET_TOOL_DEFS, dispatchBudget } from "./budget.js";
 
 const server = new Server(
   { name: "crawfish-orgctl", version: "0.1.0" },
@@ -152,6 +155,10 @@ const TOOL_DEFS = [
   },
   // Phase 3 — activity / comments / mentions
   ...ACTIVITY_TOOL_DEFS,
+  // NOW-W2 — preflight / acceptance criteria / budget breach
+  ...PREFLIGHT_TOOL_DEFS,
+  ...CRITERIA_TOOL_DEFS,
+  ...BUDGET_TOOL_DEFS,
 ];
 
 /** Shape of one tool response (with tokens_used computed last). */
@@ -206,6 +213,15 @@ async function dispatch(name: string, args: Record<string, unknown>): Promise<To
     default:
       if (name.startsWith("activity_")) {
         return dispatchActivity(name, args);
+      }
+      if (name === "preflight_attest") {
+        return dispatchPreflight(args as unknown as PreflightArgs);
+      }
+      if (name.startsWith("criteria_")) {
+        return dispatchCriteria(name, args);
+      }
+      if (name === "task_budget_report" || name.startsWith("budget_")) {
+        return dispatchBudget(name, args);
       }
       throw new OrgError("not_found", `unknown tool: ${name}`);
   }

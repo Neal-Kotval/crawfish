@@ -3921,3 +3921,15 @@ textarea:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* Week 2 — criteria + budget */
+.cf-budget-bar__fill--gray   { background: var(--cf-fg-muted, #9ca3af); }
+.cf-budget-bar__fill--amber  { background: var(--cf-warn, #f59e0b); }
+.cf-budget-bar__fill--orange { background: #f97316; }
+.cf-budget-bar__fill--over   { background: var(--cf-danger, #ef4444); }
+.cf-budget-bar__over-label   { font-weight: 600; letter-spacing: 0.04em; }
+.cf-criteria-row             { transition: background 120ms ease; }
+.cf-criteria-row:hover       { background: var(--cf-surface-2, var(--cf-surface)); }
+.cf-criteria-kind            { text-transform: lowercase; }
+.cf-criteria-evidence-chip   { padding: 0; background: transparent; border: 0; }
+.cf-criteria-evidence-editor { font-size: 12px; }

@@ -28,7 +28,10 @@ export type ProjectBoardEventType =
   | "cycle_closed"
   | "epic_created"
   | "epic_updated"
-  | "epic_closed";
+  | "epic_closed"
+  | "criterion_set"
+  | "criterion_met"
+  | "criterion_cleared";
 
 export interface ProjectBoardEvent {
   /** ISO 8601 timestamp. */

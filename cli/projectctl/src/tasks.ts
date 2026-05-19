@@ -26,6 +26,8 @@ import {
   parseFrontmatter,
   serializeFrontmatter,
   type Frontmatter,
+  type Criterion,
+  type CriterionEvidence,
 } from "./frontmatter.js";
 import { appendEvent, makeEvent } from "./project-board.js";
 
@@ -43,6 +45,7 @@ export interface CreateTaskInput {
   dependsOn?: string[];
   cycle?: string;
   epic?: string;
+  criteria?: Criterion[];
   body?: string;
   /** Override actor for this write. Defaults to CRAWFISH_ACTOR or "local". */
   actor?: string;
@@ -95,6 +98,7 @@ export function createTask(repoRoot: string, input: CreateTaskInput): string {
   if (input.dependsOn) fm["depends-on"] = input.dependsOn;
   if (input.cycle) fm.cycle = input.cycle;
   if (input.epic) fm.epic = input.epic;
+  if (input.criteria && input.criteria.length > 0) fm.criteria = input.criteria;
 
   const body = input.body ?? `# ${input.title}\n`;
   writeFileSync(path, serializeFrontmatter(fm, body), "utf8");
@@ -127,8 +131,27 @@ export interface UpdateTaskPatch {
   dependsOn?: string[];
   cycle?: string | null;
   epic?: string | null;
+  /** Replace the whole criteria array (matches `criteria_set` MCP semantics). */
+  criteria?: Criterion[];
+  /** Attest a single criterion: store its evidence. */
+  setCriterionEvidence?: { id: string; evidence: CriterionEvidence };
+  /** Clear evidence from a single criterion. */
+  clearCriterionEvidence?: { id: string; by: string };
   body?: string;
   actor?: string;
+}
+
+function readCriteria(fm: Frontmatter): Criterion[] {
+  const v = fm.criteria;
+  if (Array.isArray(v) && v.length > 0 && typeof v[0] === "object" && v[0] !== null && "id" in (v[0] as object)) {
+    return (v as Criterion[]).map((c) => ({ ...c, evidence: c.evidence ? { ...c.evidence } : undefined }));
+  }
+  return [];
+}
+
+function writeCriteria(fm: Frontmatter, criteria: Criterion[]): void {
+  if (criteria.length === 0) delete fm.criteria;
+  else fm.criteria = criteria;
 }
 
 /**
@@ -150,13 +173,57 @@ export function updateTask(
   const { fm, body } = parseFrontmatter(raw);
 
   const before = { ...fm };
+  const beforeCriteria = readCriteria(fm);
   let changed = false;
+
+  // Apply criteria mutations BEFORE the status/done-guard so that setting
+  // evidence and transitioning to done in the same patch is allowed.
+  let nextCriteria = beforeCriteria;
+  let criteriaReplaced = false;
+  let metCriterion: Criterion | null = null;
+  let clearedId: string | null = null;
+  let clearedBy: string | null = null;
+
+  if (patch.criteria !== undefined) {
+    nextCriteria = patch.criteria.map((c) => ({ ...c, evidence: c.evidence ? { ...c.evidence } : undefined }));
+    criteriaReplaced = true;
+    changed = true;
+  }
+  if (patch.setCriterionEvidence) {
+    const { id, evidence } = patch.setCriterionEvidence;
+    const idx = nextCriteria.findIndex((c) => c.id === id);
+    if (idx < 0) throw new Error(`unknown_criterion: ${id}`);
+    nextCriteria = nextCriteria.map((c, i) => (i === idx ? { ...c, evidence: { ...evidence } } : c));
+    metCriterion = nextCriteria[idx];
+    changed = true;
+  }
+  if (patch.clearCriterionEvidence) {
+    const { id, by } = patch.clearCriterionEvidence;
+    const idx = nextCriteria.findIndex((c) => c.id === id);
+    if (idx < 0) throw new Error(`unknown_criterion: ${id}`);
+    nextCriteria = nextCriteria.map((c, i) => {
+      if (i !== idx) return c;
+      const { evidence: _e, ...rest } = c;
+      return rest;
+    });
+    clearedId = id;
+    clearedBy = by;
+    changed = true;
+  }
 
   if (patch.title !== undefined && fm.title !== patch.title) {
     fm.title = patch.title;
     changed = true;
   }
   if (patch.status !== undefined && fm.status !== patch.status) {
+    if (patch.status === "done") {
+      const unmet = nextCriteria.filter((c) => !c.evidence).map((c) => c.id);
+      if (unmet.length > 0) {
+        throw new Error(
+          `criteria_unmet: ${JSON.stringify({ code: "criteria_unmet", task_id: slug, unmet })}`,
+        );
+      }
+    }
     fm.status = patch.status;
     changed = true;
   }
@@ -202,6 +269,7 @@ export function updateTask(
 
   if (!changed) return;
 
+  writeCriteria(fm, nextCriteria);
   writeFileSync(path, serializeFrontmatter(fm, finalBody), "utf8");
 
   withActor(patch.actor, () => {
@@ -264,6 +332,37 @@ export function updateTask(
           }),
         );
       }
+    }
+    if (criteriaReplaced) {
+      appendEvent(
+        repoRoot,
+        makeEvent("criterion_set", {
+          task_id: slug,
+          payload: { criteria: nextCriteria },
+        }),
+      );
+    }
+    if (metCriterion && metCriterion.evidence) {
+      appendEvent(
+        repoRoot,
+        makeEvent("criterion_met", {
+          task_id: slug,
+          payload: {
+            id: metCriterion.id,
+            kind: metCriterion.kind,
+            evidence: metCriterion.evidence,
+          },
+        }),
+      );
+    }
+    if (clearedId) {
+      appendEvent(
+        repoRoot,
+        makeEvent("criterion_cleared", {
+          task_id: slug,
+          payload: { id: clearedId, by: clearedBy },
+        }),
+      );
     }
   });
 }

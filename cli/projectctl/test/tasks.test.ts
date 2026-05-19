@@ -159,6 +159,22 @@ test("CRAWFISH_ACTOR env var is honored when set", () => {
   }
 });
 
+test("updateTask done-guard rejects when criteria unmet, leaves status untouched", () => {
+  const root = mkRoot();
+  createTask(root, {
+    slug: "t1",
+    title: "T1",
+    status: "doing",
+    criteria: [{ id: "c1", statement: "must X", kind: "test" }],
+  });
+  assert.throws(
+    () => updateTask(root, "t1", { status: "done" }),
+    /^Error: criteria_unmet:/,
+  );
+  const t = readTask(root, "t1");
+  assert.equal(t?.frontmatter.status, "doing");
+});
+
 test("per-call actor override does not leak", () => {
   const root = mkRoot();
   createTask(root, { slug: "t1", title: "T1", actor: "alice" });
