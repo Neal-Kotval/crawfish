@@ -12,6 +12,7 @@ import { memoryAppend } from "../verbs/memory-append.js";
 import { boardRebuild } from "../verbs/board-rebuild.js";
 import { createTask, updateTask, deleteTask, readTask, type TaskStatus } from "../tasks.js";
 import { createCycle, listCycles, computeRollup } from "../cycles.js";
+import { createEpic, listEpics, updateEpic, computeEpicRollup, readEpic } from "../epics.js";
 import { readEvents } from "../project-board.js";
 
 const TOOLS = [
@@ -30,6 +31,11 @@ const TOOLS = [
   { name: "project_cycle_rollup", description: "Compute token-budget rollup for a cycle (estimate used vs token_budget, status breakdown).", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, id: { type: "string" } }, required: ["repo_root", "id"] } },
   { name: "project_board_events", description: "Read the .crawfish/board.jsonl event log for the project.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, limit: { type: "number" } }, required: ["repo_root"] } },
   { name: "project_board_rebuild", description: "Rebuild .crawfish/board.jsonl from current task and cycle files. Disaster recovery.", inputSchema: { type: "object", properties: { repo_root: { type: "string" } }, required: ["repo_root"] } },
+  { name: "project_epic_create", description: "Create an epic (.crawfish/epics/<id>.md) and emit epic_created.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, id: { type: "string" }, title: { type: "string" }, parent_cycle: { type: "string" }, body: { type: "string" } }, required: ["repo_root", "id", "title"] } },
+  { name: "project_epic_list", description: "List all epics in the project.", inputSchema: { type: "object", properties: { repo_root: { type: "string" } }, required: ["repo_root"] } },
+  { name: "project_epic_get", description: "Read a single epic with frontmatter + body.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, id: { type: "string" } }, required: ["repo_root", "id"] } },
+  { name: "project_epic_update", description: "Update epic fields. Emits epic_updated and (when status flips to closed) epic_closed.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, id: { type: "string" }, title: { type: "string" }, parent_cycle: { type: ["string", "null"] }, status: { type: "string", enum: ["open", "closed"] }, body: { type: "string" } }, required: ["repo_root", "id"] } },
+  { name: "project_epic_rollup", description: "Aggregate tasks pointing at this epic (count, estimate_used, by_status).", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, id: { type: "string" } }, required: ["repo_root", "id"] } },
 ];
 
 export async function dispatch(name: string, args: Record<string, unknown>): Promise<any> {
@@ -109,6 +115,36 @@ export async function dispatch(name: string, args: Record<string, unknown>): Pro
     }
     case "project_board_rebuild":
       return boardRebuild(root);
+    case "project_epic_create": {
+      const path = createEpic(root, {
+        id: String(args.id),
+        title: String(args.title),
+        parent_cycle: typeof args.parent_cycle === "string" ? args.parent_cycle : undefined,
+        body: typeof args.body === "string" ? args.body : undefined,
+      });
+      return { ok: true, path };
+    }
+    case "project_epic_list":
+      return { epics: listEpics(root) };
+    case "project_epic_get": {
+      const e = readEpic(root, String(args.id));
+      if (!e) return { error: "epic_not_found" };
+      return e;
+    }
+    case "project_epic_update": {
+      updateEpic(root, String(args.id), {
+        title: typeof args.title === "string" ? args.title : undefined,
+        parent_cycle: args.parent_cycle === null ? null : (typeof args.parent_cycle === "string" ? args.parent_cycle : undefined),
+        status: args.status as "open" | "closed" | undefined,
+        body: typeof args.body === "string" ? args.body : undefined,
+      });
+      return { ok: true };
+    }
+    case "project_epic_rollup": {
+      const r = computeEpicRollup(root, String(args.id));
+      if (!r) return { error: "epic_not_found" };
+      return r;
+    }
     default:
       throw new Error(`unknown tool: ${name}`);
   }

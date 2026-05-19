@@ -11,6 +11,7 @@ import { installHooks, uninstallHooks } from "./verbs/install-hooks.js";
 import { boardRebuild } from "./verbs/board-rebuild.js";
 import { createTask, updateTask, deleteTask, type TaskStatus } from "./tasks.js";
 import { createCycle, listCycles, computeRollup } from "./cycles.js";
+import { createEpic, listEpics, updateEpic, computeEpicRollup } from "./epics.js";
 
 const program = new Command();
 program.name("crawfish-projectctl").version("0.1.0");
@@ -122,6 +123,31 @@ program.command("cycle:rollup <id>").action((id: string) => {
   const r = computeRollup(root(), id);
   if (!r) {
     console.error(`cycle not found: ${id}`);
+    process.exit(1);
+  }
+  console.log(JSON.stringify(r, null, 2));
+});
+
+program.command("epic:create <id> <title>")
+  .option("--parent-cycle <id>", "cycle ULID this epic rolls up under")
+  .option("--body <text>", "markdown body")
+  .action((id: string, title: string, opts: { parentCycle?: string; body?: string }) => {
+    const path = createEpic(root(), { id, title, parent_cycle: opts.parentCycle, body: opts.body });
+    console.log(path);
+  });
+
+program.command("epic:list").action(() => {
+  console.log(JSON.stringify(listEpics(root()), null, 2));
+});
+
+program.command("epic:close <id>").action((id: string) => {
+  updateEpic(root(), id, { status: "closed" });
+});
+
+program.command("epic:rollup <id>").action((id: string) => {
+  const r = computeEpicRollup(root(), id);
+  if (!r) {
+    console.error(`epic not found: ${id}`);
     process.exit(1);
   }
   console.log(JSON.stringify(r, null, 2));
