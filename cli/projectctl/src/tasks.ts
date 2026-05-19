@@ -131,6 +131,10 @@ export interface UpdateTaskPatch {
   dependsOn?: string[];
   cycle?: string | null;
   epic?: string | null;
+  /** Assignee agent id (or null to clear). Emits `task_assigned`. */
+  assignee?: string | null;
+  /** Who/what assigned. Defaults to "human". The router passes "router". */
+  assignedBy?: string;
   /** Replace the whole criteria array (matches `criteria_set` MCP semantics). */
   criteria?: Criterion[];
   /** Attest a single criterion: store its evidence. */
@@ -261,6 +265,27 @@ export function updateTask(
       changed = true;
     }
   }
+  let assigneeChanged = false;
+  let assigneeFrom: string | null = null;
+  let assigneeTo: string | null = null;
+  if (patch.assignee !== undefined) {
+    const fromVal = typeof fm.assignee === "string" ? fm.assignee : undefined;
+    if (patch.assignee === null) {
+      if (fromVal !== undefined) {
+        delete fm.assignee;
+        assigneeChanged = true;
+        assigneeFrom = fromVal;
+        assigneeTo = null;
+        changed = true;
+      }
+    } else if (fromVal !== patch.assignee) {
+      assigneeFrom = fromVal ?? null;
+      assigneeTo = patch.assignee;
+      fm.assignee = patch.assignee;
+      assigneeChanged = true;
+      changed = true;
+    }
+  }
 
   const finalBody = patch.body !== undefined ? patch.body : body;
   if (patch.body !== undefined && patch.body !== body) {
@@ -332,6 +357,19 @@ export function updateTask(
           }),
         );
       }
+    }
+    if (assigneeChanged) {
+      appendEvent(
+        repoRoot,
+        makeEvent("task_assigned", {
+          task_id: slug,
+          payload: {
+            from: assigneeFrom,
+            to: assigneeTo,
+            by: patch.assignedBy ?? "human",
+          },
+        }),
+      );
     }
     if (criteriaReplaced) {
       appendEvent(

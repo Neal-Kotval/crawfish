@@ -3933,3 +3933,132 @@ textarea:focus-visible {
 .cf-criteria-kind            { text-transform: lowercase; }
 .cf-criteria-evidence-chip   { padding: 0; background: transparent; border: 0; }
 .cf-criteria-evidence-editor { font-size: 12px; }
+
+/* Week 3 — Triage column + Decomposition drawer (W3-B) */
+.cf-triage-column {
+  background: color-mix(in srgb, var(--cf-bg-muted, #1c1d22) 70%, transparent);
+  border-top: 2px solid var(--cf-fg-muted, #9ca3af);
+}
+.cf-triage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  margin: 0 8px 8px 8px;
+  border-radius: var(--cf-radius-md, 8px);
+  border: 1px solid var(--cf-border, #2a2b30);
+  background: var(--cf-surface, #1a1b20);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.cf-triage-card:hover { background: var(--cf-bg-hover, var(--cf-surface)); }
+.cf-triage-card--raw {
+  border-left: 3px solid var(--cf-fg-muted, #9ca3af);
+}
+.cf-triage-card--proposed {
+  border-left: 3px solid var(--cf-warn, #f59e0b);
+  background: color-mix(in srgb, var(--cf-warn, #f59e0b) 6%, var(--cf-surface, #1a1b20));
+}
+.cf-triage-card--selected {
+  outline: 2px solid var(--cf-accent, #6366f1);
+  outline-offset: -1px;
+}
+.cf-triage-card__row { display: flex; align-items: center; gap: 8px; }
+.cf-triage-card__check { flex: 0 0 auto; }
+.cf-triage-card__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cf-fg, #e6e6e6);
+  line-height: 1.35;
+}
+.cf-triage-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+.cf-triage-card__state {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.cf-triage-card__state--raw {
+  background: color-mix(in srgb, var(--cf-fg-muted, #9ca3af) 18%, transparent);
+  color: var(--cf-fg-muted, #9ca3af);
+}
+.cf-triage-card__state--proposed {
+  background: color-mix(in srgb, var(--cf-warn, #f59e0b) 22%, transparent);
+  color: var(--cf-warn, #f59e0b);
+}
+.cf-triage-card__conf {
+  color: var(--cf-fg-secondary, #b9bbc1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Decomposition drawer */
+.cf-decomp-empty {
+  padding: 12px;
+  border: 1px dashed var(--cf-border, #2a2b30);
+  border-radius: var(--cf-radius-md, 8px);
+  background: var(--cf-bg-muted, transparent);
+}
+.cf-decomp-root { width: 100%; }
+.cf-decomp-rationale {
+  padding: 8px 10px;
+  background: var(--cf-bg-muted, var(--cf-surface));
+  border-radius: var(--cf-radius-sm, 6px);
+  border-left: 2px solid var(--cf-accent, #6366f1);
+}
+.cf-decomp-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 12px;
+}
+@media (max-width: 760px) {
+  .cf-decomp-split { grid-template-columns: 1fr; }
+}
+.cf-decomp-list { min-width: 0; }
+.cf-decomp-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--cf-radius-md, 8px);
+  border: 1px solid var(--cf-border, #2a2b30);
+  background: var(--cf-surface, #1a1b20);
+}
+.cf-decomp-row--rejected {
+  opacity: 0.55;
+  background: var(--cf-bg-muted, var(--cf-surface));
+}
+.cf-decomp-row__meta { align-items: flex-end; flex-wrap: wrap; }
+.cf-decomp-row__deps { display: flex; gap: 4px; flex-wrap: wrap; align-self: center; }
+.cf-decomp-graph {
+  padding: 10px 12px;
+  border-radius: var(--cf-radius-md, 8px);
+  border: 1px solid var(--cf-border, #2a2b30);
+  background: var(--cf-bg-muted, var(--cf-surface));
+  font-size: 12px;
+  min-width: 0;
+}
+.cf-decomp-graph__title {
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.cf-decomp-graph__group {
+  margin: 6px 0 10px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--cf-border, #2a2b30);
+}
+.cf-decomp-graph__node {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+  flex-wrap: wrap;
+}
+.cf-decomp-actions { justify-content: flex-end; }

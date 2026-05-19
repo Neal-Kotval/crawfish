@@ -14,6 +14,8 @@ import { createTask, updateTask, deleteTask, readTask, type TaskStatus } from ".
 import { createCycle, listCycles, computeRollup } from "../cycles.js";
 import { createEpic, listEpics, updateEpic, computeEpicRollup, readEpic } from "../epics.js";
 import { readEvents } from "../project-board.js";
+import { getAgentStats } from "../agent-stats.js";
+import { runRouterPass } from "../router.js";
 
 const TOOLS = [
   { name: "project_init", description: "Scaffold .crawfish/ in the repo.", inputSchema: { type: "object", properties: { repo_root: { type: "string" } }, required: ["repo_root"] } },
@@ -36,6 +38,8 @@ const TOOLS = [
   { name: "project_epic_get", description: "Read a single epic with frontmatter + body.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, id: { type: "string" } }, required: ["repo_root", "id"] } },
   { name: "project_epic_update", description: "Update epic fields. Emits epic_updated and (when status flips to closed) epic_closed.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, id: { type: "string" }, title: { type: "string" }, parent_cycle: { type: ["string", "null"] }, status: { type: "string", enum: ["open", "closed"] }, body: { type: "string" } }, required: ["repo_root", "id"] } },
   { name: "project_epic_rollup", description: "Aggregate tasks pointing at this epic (count, estimate_used, by_status).", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, id: { type: "string" } }, required: ["repo_root", "id"] } },
+  { name: "agent_stats_get", description: "Rolling 30-day success_rate and avg_tokens_per_task per label for one agent.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, agent_id: { type: "string" } }, required: ["repo_root", "agent_id"] } },
+  { name: "router_run", description: "Run one router pass: assign unassigned tasks to qualified agents.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, dry_run: { type: "boolean" } }, required: ["repo_root"] } },
 ];
 
 export async function dispatch(name: string, args: Record<string, unknown>): Promise<any> {
@@ -145,6 +149,10 @@ export async function dispatch(name: string, args: Record<string, unknown>): Pro
       if (!r) return { error: "epic_not_found" };
       return r;
     }
+    case "agent_stats_get":
+      return getAgentStats(root, String(args.agent_id));
+    case "router_run":
+      return runRouterPass(root, { dryRun: args.dry_run === true });
     default:
       throw new Error(`unknown tool: ${name}`);
   }

@@ -19,6 +19,7 @@ export type ProjectBoardEventType =
   | "task_renamed"
   | "task_deleted"
   | "task_status_changed"
+  | "task_assigned"
   | "task_added_to_cycle"
   | "task_removed_from_cycle"
   | "task_added_to_epic"

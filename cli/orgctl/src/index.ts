@@ -33,6 +33,9 @@ import { ACTIVITY_TOOL_DEFS, dispatchActivity } from "./tools/activity.js";
 import { PREFLIGHT_TOOL_DEFS, dispatchPreflight, type PreflightArgs } from "./preflight.js";
 import { CRITERIA_TOOL_DEFS, dispatchCriteria } from "./criteria.js";
 import { BUDGET_TOOL_DEFS, dispatchBudget } from "./budget.js";
+import { TRIAGE_TOOL_DEFS, dispatchTriage } from "./triage.js";
+import { PLANNER_TOOL_DEFS, dispatchPlanner } from "./planner.js";
+import { GITHUB_INBOUND_TOOL_DEFS, dispatchGithubInbound } from "./inbound/github-issues.js";
 
 const server = new Server(
   { name: "crawfish-orgctl", version: "0.1.0" },
@@ -159,6 +162,10 @@ const TOOL_DEFS = [
   ...PREFLIGHT_TOOL_DEFS,
   ...CRITERIA_TOOL_DEFS,
   ...BUDGET_TOOL_DEFS,
+  // NOW-W3 — triage / planner / inbound channel adapters
+  ...TRIAGE_TOOL_DEFS,
+  ...PLANNER_TOOL_DEFS,
+  ...GITHUB_INBOUND_TOOL_DEFS,
 ];
 
 /** Shape of one tool response (with tokens_used computed last). */
@@ -222,6 +229,15 @@ async function dispatch(name: string, args: Record<string, unknown>): Promise<To
       }
       if (name === "task_budget_report" || name.startsWith("budget_")) {
         return dispatchBudget(name, args);
+      }
+      if (name.startsWith("triage_")) {
+        return dispatchTriage(name, args);
+      }
+      if (name.startsWith("planner_")) {
+        return dispatchPlanner(name, args);
+      }
+      if (name.startsWith("inbound_github_") || name === "inbound_github_ingest") {
+        return dispatchGithubInbound(name, args);
       }
       throw new OrgError("not_found", `unknown tool: ${name}`);
   }
