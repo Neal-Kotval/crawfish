@@ -16,6 +16,9 @@ import { createEpic, listEpics, updateEpic, computeEpicRollup, readEpic } from "
 import { readEvents } from "../project-board.js";
 import { getAgentStats } from "../agent-stats.js";
 import { runRouterPass } from "../router.js";
+import { addLink, removeLink } from "../links.js";
+import { searchTasks } from "../search.js";
+import type { LinkKind } from "../frontmatter.js";
 
 const TOOLS = [
   { name: "project_init", description: "Scaffold .crawfish/ in the repo.", inputSchema: { type: "object", properties: { repo_root: { type: "string" } }, required: ["repo_root"] } },
@@ -40,6 +43,9 @@ const TOOLS = [
   { name: "project_epic_rollup", description: "Aggregate tasks pointing at this epic (count, estimate_used, by_status).", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, id: { type: "string" } }, required: ["repo_root", "id"] } },
   { name: "agent_stats_get", description: "Rolling 30-day success_rate and avg_tokens_per_task per label for one agent.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, agent_id: { type: "string" } }, required: ["repo_root", "agent_id"] } },
   { name: "router_run", description: "Run one router pass: assign unassigned tasks to qualified agents.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, dry_run: { type: "boolean" } }, required: ["repo_root"] } },
+  { name: "task_link_add", description: "Add a link between two tasks. Writes reciprocal edge when applicable.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, source: { type: "string" }, kind: { type: "string", enum: ["blocks", "depends_on", "duplicates", "relates_to", "subtask_of"] }, target: { type: "string" } }, required: ["repo_root", "source", "kind", "target"] } },
+  { name: "task_link_remove", description: "Remove a link between two tasks. Removes reciprocal edge when applicable.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, source: { type: "string" }, kind: { type: "string", enum: ["blocks", "depends_on", "duplicates", "relates_to", "subtask_of"] }, target: { type: "string" } }, required: ["repo_root", "source", "kind", "target"] } },
+  { name: "tasks_search", description: "Search tasks with structured queries (assignee:foo label:bug priority>=high free text). Top 50 by FTS5 rank or updated_at.", inputSchema: { type: "object", properties: { repo_root: { type: "string" }, query: { type: "string" } }, required: ["repo_root", "query"] } },
 ];
 
 export async function dispatch(name: string, args: Record<string, unknown>): Promise<any> {
@@ -153,6 +159,14 @@ export async function dispatch(name: string, args: Record<string, unknown>): Pro
       return getAgentStats(root, String(args.agent_id));
     case "router_run":
       return runRouterPass(root, { dryRun: args.dry_run === true });
+    case "task_link_add":
+      addLink(root, String(args.source), String(args.kind) as LinkKind, String(args.target));
+      return { ok: true };
+    case "task_link_remove":
+      removeLink(root, String(args.source), String(args.kind) as LinkKind, String(args.target));
+      return { ok: true };
+    case "tasks_search":
+      return searchTasks(root, String(args.query));
     default:
       throw new Error(`unknown tool: ${name}`);
   }

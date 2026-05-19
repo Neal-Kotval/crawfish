@@ -25,7 +25,21 @@ export interface Criterion {
   evidence?: CriterionEvidence;
 }
 
-export type FrontmatterValue = string | string[] | number | Criterion[];
+export const LINK_KINDS = [
+  "blocks",
+  "depends_on",
+  "duplicates",
+  "relates_to",
+  "subtask_of",
+] as const;
+export type LinkKind = (typeof LINK_KINDS)[number];
+
+export interface TaskLink {
+  kind: LinkKind;
+  target_task_id: string;
+}
+
+export type FrontmatterValue = string | string[] | number | Criterion[] | TaskLink[];
 export type Frontmatter = Record<string, FrontmatterValue>;
 
 export interface ParsedDoc {
@@ -52,7 +66,7 @@ export function parseFrontmatter(raw: string): ParsedDoc {
     }
     const key = m[1];
     const value = m[2].trim();
-    if (key === "criteria" && value === "") {
+    if ((key === "criteria" || key === "links") && value === "") {
       // Block-style list-of-maps follows on indented lines.
       const block: string[] = [];
       i++;
@@ -68,7 +82,13 @@ export function parseFrontmatter(raw: string): ParsedDoc {
         block.push(nxt);
         i++;
       }
-      fm[key] = parseCriteriaBlock(block);
+      if (key === "criteria") fm[key] = parseCriteriaBlock(block);
+      else fm[key] = parseLinksBlock(block);
+      continue;
+    }
+    if (key === "links" && value === "[]") {
+      fm[key] = [] as TaskLink[];
+      i++;
       continue;
     }
     if (value === "") {
@@ -97,6 +117,18 @@ export function serializeFrontmatter(fm: Frontmatter, body: string): string {
       } else {
         lines.push(`${key}:`);
         for (const c of val) lines.push(...serializeCriterion(c));
+      }
+      continue;
+    }
+    if (key === "links" && Array.isArray(val) && isLinkArray(val)) {
+      if (val.length === 0) {
+        lines.push(`${key}: []`);
+      } else {
+        lines.push(`${key}:`);
+        for (const l of val) {
+          lines.push(`  - kind: ${quoteIfNeeded(l.kind)}`);
+          lines.push(`    target_task_id: ${quoteIfNeeded(l.target_task_id)}`);
+        }
       }
       continue;
     }
@@ -220,6 +252,44 @@ function finalizeCriterion(cur: CriterionInProgress): Criterion {
     c.evidence = { ...ev, kind } as CriterionEvidence;
   }
   return c;
+}
+
+function isLinkArray(val: unknown): val is TaskLink[] {
+  if (!Array.isArray(val)) return false;
+  if (val.length === 0) return true;
+  const first = val[0] as Record<string, unknown> | null;
+  return !!first && typeof first === "object" && "kind" in first && "target_task_id" in first;
+}
+
+function parseLinksBlock(lines: string[]): TaskLink[] {
+  const out: TaskLink[] = [];
+  let cur: { kind?: string; target_task_id?: string } | null = null;
+  for (const raw of lines) {
+    if (raw.trim() === "") continue;
+    const itemMatch = raw.match(/^\s{2}-\s+([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (itemMatch) {
+      if (cur && cur.kind && cur.target_task_id) {
+        out.push({ kind: cur.kind as LinkKind, target_task_id: cur.target_task_id });
+      }
+      cur = {};
+      const k = itemMatch[1];
+      const v = itemMatch[2].trim().replace(/^["']|["']$/g, "");
+      if (k === "kind") cur.kind = v;
+      else if (k === "target_task_id") cur.target_task_id = v;
+      continue;
+    }
+    const fieldMatch = raw.match(/^\s{4}([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (fieldMatch && cur) {
+      const k = fieldMatch[1];
+      const v = fieldMatch[2].trim().replace(/^["']|["']$/g, "");
+      if (k === "kind") cur.kind = v;
+      else if (k === "target_task_id") cur.target_task_id = v;
+    }
+  }
+  if (cur && cur.kind && cur.target_task_id) {
+    out.push({ kind: cur.kind as LinkKind, target_task_id: cur.target_task_id });
+  }
+  return out;
 }
 
 function parseScalar(v: string): unknown {

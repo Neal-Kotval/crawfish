@@ -28,6 +28,7 @@ import {
   type Frontmatter,
   type Criterion,
   type CriterionEvidence,
+  type TaskLink,
 } from "./frontmatter.js";
 import { appendEvent, makeEvent } from "./project-board.js";
 
@@ -46,6 +47,7 @@ export interface CreateTaskInput {
   cycle?: string;
   epic?: string;
   criteria?: Criterion[];
+  links?: TaskLink[];
   body?: string;
   /** Override actor for this write. Defaults to CRAWFISH_ACTOR or "local". */
   actor?: string;
@@ -99,6 +101,7 @@ export function createTask(repoRoot: string, input: CreateTaskInput): string {
   if (input.cycle) fm.cycle = input.cycle;
   if (input.epic) fm.epic = input.epic;
   if (input.criteria && input.criteria.length > 0) fm.criteria = input.criteria;
+  if (input.links && input.links.length > 0) fm.links = input.links.map((l) => ({ ...l }));
 
   const body = input.body ?? `# ${input.title}\n`;
   writeFileSync(path, serializeFrontmatter(fm, body), "utf8");
@@ -141,6 +144,8 @@ export interface UpdateTaskPatch {
   setCriterionEvidence?: { id: string; evidence: CriterionEvidence };
   /** Clear evidence from a single criterion. */
   clearCriterionEvidence?: { id: string; by: string };
+  /** Replace the full links array. Emits per-link task_linked / task_unlinked diff events. */
+  links?: TaskLink[];
   body?: string;
   actor?: string;
 }
@@ -287,6 +292,17 @@ export function updateTask(
     }
   }
 
+  const beforeLinks = readLinks(fm);
+  let nextLinks = beforeLinks;
+  let linksReplaced = false;
+  if (patch.links !== undefined) {
+    nextLinks = patch.links.map((l) => ({ ...l }));
+    if (!linksEqual(beforeLinks, nextLinks)) {
+      linksReplaced = true;
+      changed = true;
+    }
+  }
+
   const finalBody = patch.body !== undefined ? patch.body : body;
   if (patch.body !== undefined && patch.body !== body) {
     changed = true;
@@ -294,6 +310,7 @@ export function updateTask(
 
   if (!changed) return;
 
+  if (linksReplaced) writeLinks(fm, nextLinks);
   writeCriteria(fm, nextCriteria);
   writeFileSync(path, serializeFrontmatter(fm, finalBody), "utf8");
 
@@ -402,7 +419,60 @@ export function updateTask(
         }),
       );
     }
+    if (linksReplaced) {
+      const added = nextLinks.filter(
+        (n) => !beforeLinks.some((b) => b.kind === n.kind && b.target_task_id === n.target_task_id),
+      );
+      const removed = beforeLinks.filter(
+        (b) => !nextLinks.some((n) => n.kind === b.kind && n.target_task_id === b.target_task_id),
+      );
+      for (const l of added) {
+        appendEvent(
+          repoRoot,
+          makeEvent("task_linked", {
+            task_id: slug,
+            payload: { kind: l.kind, target_task_id: l.target_task_id },
+          }),
+        );
+      }
+      for (const l of removed) {
+        appendEvent(
+          repoRoot,
+          makeEvent("task_unlinked", {
+            task_id: slug,
+            payload: { kind: l.kind, target_task_id: l.target_task_id },
+          }),
+        );
+      }
+    }
   });
+}
+
+function readLinks(fm: Frontmatter): TaskLink[] {
+  const v = fm.links;
+  if (Array.isArray(v) && (v.length === 0 || (typeof v[0] === "object" && v[0] !== null && "kind" in (v[0] as object)))) {
+    return (v as TaskLink[]).map((l) => ({ ...l }));
+  }
+  return [];
+}
+
+function writeLinks(fm: Frontmatter, links: TaskLink[]): void {
+  if (links.length === 0) delete fm.links;
+  else fm.links = links;
+}
+
+function linksEqual(a: TaskLink[], b: TaskLink[]): boolean {
+  if (a.length !== b.length) return false;
+  const key = (l: TaskLink) => `${l.kind}|${l.target_task_id}`;
+  const sa = new Set(a.map(key));
+  for (const l of b) if (!sa.has(key(l))) return false;
+  return true;
+}
+
+export function readTaskLinks(repoRoot: string, slug: string): TaskLink[] {
+  const t = readTask(repoRoot, slug);
+  if (!t) return [];
+  return readLinks(t.frontmatter);
 }
 
 export function renameTask(

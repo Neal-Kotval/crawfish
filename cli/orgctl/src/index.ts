@@ -36,6 +36,7 @@ import { BUDGET_TOOL_DEFS, dispatchBudget } from "./budget.js";
 import { TRIAGE_TOOL_DEFS, dispatchTriage } from "./triage.js";
 import { PLANNER_TOOL_DEFS, dispatchPlanner } from "./planner.js";
 import { GITHUB_INBOUND_TOOL_DEFS, dispatchGithubInbound } from "./inbound/github-issues.js";
+import { NOTION_PAGES_INBOUND_TOOL_DEFS, dispatchNotionPagesInbound } from "./inbound/notion-pages.js";
 
 const server = new Server(
   { name: "crawfish-orgctl", version: "0.1.0" },
@@ -166,6 +167,8 @@ const TOOL_DEFS = [
   ...TRIAGE_TOOL_DEFS,
   ...PLANNER_TOOL_DEFS,
   ...GITHUB_INBOUND_TOOL_DEFS,
+  // NOW-W4 — external-ref ingestion (notion pages; github mirror folded into above)
+  ...NOTION_PAGES_INBOUND_TOOL_DEFS,
 ];
 
 /** Shape of one tool response (with tokens_used computed last). */
@@ -238,6 +241,9 @@ async function dispatch(name: string, args: Record<string, unknown>): Promise<To
       }
       if (name.startsWith("inbound_github_") || name === "inbound_github_ingest") {
         return dispatchGithubInbound(name, args);
+      }
+      if (name.startsWith("inbound_notion_") || name === "inbound_notion_ingest") {
+        return dispatchNotionPagesInbound(name, args);
       }
       throw new OrgError("not_found", `unknown tool: ${name}`);
   }

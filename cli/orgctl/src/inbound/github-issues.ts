@@ -117,6 +117,136 @@ export function ingestGithubIssue(
   };
 }
 
+// ---------- Mirror (outbound — round-trip) ----------
+
+export interface GithubExternalRef {
+  kind: "github_issue";
+  id: number;
+  url: string;
+}
+
+export interface MirrorTransition {
+  from?: string;
+  to: string;
+}
+
+export interface MirrorOptions extends GithubIngestOptions {
+  /** Optional assignee name surfaced in the "picked up" comment body. */
+  assignee?: string;
+  /** Optional crawfish task id surfaced in the close comment. */
+  taskId?: string;
+}
+
+export type MirrorResult =
+  | { ok: true; action: "closed" | "commented" | "reopened" | "noop"; gh_output: string }
+  | { error: { code: string; message: string } };
+
+export type MirrorEnvelope =
+  | { tokens_used: 0; ok: true; action: "closed" | "commented" | "reopened" | "noop"; gh_output: string }
+  | { tokens_used: 0; error: { code: string; message: string } };
+
+/**
+ * Parse `owner/repo` from an issue URL like
+ *   https://github.com/<owner>/<repo>/issues/<n>
+ * Returns null if the URL is not in that shape.
+ */
+function parseRepoFromUrl(url: string): string | null {
+  const m = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/\d+/.exec(url);
+  if (!m) return null;
+  return `${m[1]}/${m[2]}`;
+}
+
+/**
+ * Mirror a Crawfish task status transition back to its source GitHub issue.
+ *
+ * Crawfish is authoritative — this is best-effort one-way replication.
+ * - to === "done": close with a comment referencing the task id.
+ * - to === "doing" (from "todo" | "triage"): post a "picked up" comment. Do NOT reopen.
+ * - from === "done" && to !== "done": reopen the issue.
+ * - anything else: noop.
+ */
+export function mirrorStatusToGithub(
+  externalRef: { kind: string; id: number; url: string },
+  transition: MirrorTransition,
+  opts: MirrorOptions = {},
+): MirrorResult {
+  if (externalRef == null || typeof externalRef !== "object") {
+    return { error: { code: "invalid_external_ref", message: "external_ref is required" } };
+  }
+  if (externalRef.kind !== "github_issue") {
+    return {
+      error: {
+        code: "invalid_external_ref",
+        message: `expected github_issue, got ${String(externalRef.kind)}`,
+      },
+    };
+  }
+  if (!Number.isInteger(externalRef.id) || externalRef.id <= 0) {
+    return {
+      error: { code: "invalid_external_ref", message: "external_ref.id must be a positive integer" },
+    };
+  }
+  if (typeof externalRef.url !== "string" || externalRef.url.length === 0) {
+    return { error: { code: "invalid_external_ref", message: "external_ref.url is required" } };
+  }
+  const slug = parseRepoFromUrl(externalRef.url);
+  if (slug == null) {
+    return {
+      error: {
+        code: "invalid_external_ref",
+        message: `external_ref.url is not a GitHub issue URL: ${externalRef.url}`,
+      },
+    };
+  }
+  if (transition == null || typeof transition !== "object" || typeof transition.to !== "string") {
+    return { error: { code: "invalid_argument", message: "transition.to is required" } };
+  }
+
+  const runGh = opts.runGh ?? defaultRunGh;
+  const number = String(externalRef.id);
+  const taskRef = opts.taskId ? ` task ${opts.taskId}` : " task";
+  const assignee = opts.assignee && opts.assignee.length > 0 ? opts.assignee : "an agent";
+
+  try {
+    if (transition.to === "done") {
+      const out = runGh([
+        "issue",
+        "close",
+        number,
+        "--repo",
+        slug,
+        "--comment",
+        `Closed via Crawfish${taskRef}`,
+      ]);
+      return { ok: true, action: "closed", gh_output: out };
+    }
+    if (transition.to === "doing" && (transition.from === "todo" || transition.from === "triage")) {
+      const out = runGh([
+        "issue",
+        "comment",
+        number,
+        "--repo",
+        slug,
+        "--body",
+        `Crawfish${taskRef} picked up by ${assignee}`,
+      ]);
+      return { ok: true, action: "commented", gh_output: out };
+    }
+    if (transition.from === "done" && transition.to !== "done") {
+      const out = runGh(["issue", "reopen", number, "--repo", slug]);
+      return { ok: true, action: "reopened", gh_output: out };
+    }
+    return { ok: true, action: "noop", gh_output: "" };
+  } catch (err) {
+    return {
+      error: {
+        code: "upstream_error",
+        message: err instanceof Error ? err.message : String(err),
+      },
+    };
+  }
+}
+
 // ---------- Tool definition ----------
 
 export const GITHUB_INBOUND_TOOL_DEFS = [
@@ -134,6 +264,37 @@ export const GITHUB_INBOUND_TOOL_DEFS = [
       required: ["owner", "repo", "number"],
     },
   },
+  {
+    name: "inbound_github_mirror",
+    description:
+      "Use `inbound_github_mirror` to round-trip a Crawfish task status change back to its source GitHub issue. Crawfish is authoritative; this is best-effort one-way replication. On `to: 'done'` the issue is closed with a comment. On `to: 'doing'` from `todo`/`triage` a 'picked up' comment is posted (no reopen). On `from: 'done'` to anything else the issue is reopened. Other transitions are no-ops. Returns `{ error: { code: 'upstream_error' } }` if `gh` fails.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        external_ref: {
+          type: "object",
+          description: "External reference carried on the task.",
+          properties: {
+            kind: { type: "string", enum: ["github_issue"] },
+            id: { type: "integer", description: "Issue number." },
+            url: { type: "string", description: "Canonical issue URL." },
+          },
+          required: ["kind", "id", "url"],
+        },
+        transition: {
+          type: "object",
+          properties: {
+            from: { type: "string", description: "Prior status (optional)." },
+            to: { type: "string", description: "New status." },
+          },
+          required: ["to"],
+        },
+        assignee: { type: "string", description: "Optional agent name for the 'picked up' comment." },
+        task_id: { type: "string", description: "Optional Crawfish task id for the close comment." },
+      },
+      required: ["external_ref", "transition"],
+    },
+  },
 ] as const;
 
 // ---------- Dispatcher ----------
@@ -142,7 +303,42 @@ export async function dispatchGithubInbound(
   name: string,
   args: unknown,
   opts: GithubIngestOptions = {},
-): Promise<GithubIngestEnvelope> {
+): Promise<GithubIngestEnvelope | MirrorEnvelope> {
+  if (name === "inbound_github_mirror") {
+    const a = (args ?? {}) as {
+      external_ref?: { kind?: string; id?: number; url?: string };
+      transition?: { from?: string; to?: string };
+      assignee?: string;
+      task_id?: string;
+    };
+    if (a.external_ref == null || typeof a.external_ref !== "object") {
+      return {
+        tokens_used: 0,
+        error: { code: "invalid_argument", message: "external_ref is required" },
+      };
+    }
+    if (a.transition == null || typeof a.transition.to !== "string") {
+      return {
+        tokens_used: 0,
+        error: { code: "invalid_argument", message: "transition.to is required" },
+      };
+    }
+    const ext = a.external_ref;
+    const res = mirrorStatusToGithub(
+      {
+        kind: typeof ext.kind === "string" ? ext.kind : "",
+        id: typeof ext.id === "number" ? ext.id : -1,
+        url: typeof ext.url === "string" ? ext.url : "",
+      },
+      { from: a.transition.from, to: a.transition.to },
+      { ...opts, assignee: a.assignee, taskId: a.task_id },
+    );
+    if ("error" in res) {
+      return { tokens_used: 0, error: res.error };
+    }
+    return { tokens_used: 0, ok: true, action: res.action, gh_output: res.gh_output };
+  }
+
   if (name !== "inbound_github_ingest") {
     return {
       tokens_used: 0,

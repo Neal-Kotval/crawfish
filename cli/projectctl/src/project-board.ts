@@ -24,6 +24,8 @@ export type ProjectBoardEventType =
   | "task_removed_from_cycle"
   | "task_added_to_epic"
   | "task_removed_from_epic"
+  | "task_linked"
+  | "task_unlinked"
   | "cycle_created"
   | "cycle_updated"
   | "cycle_closed"
