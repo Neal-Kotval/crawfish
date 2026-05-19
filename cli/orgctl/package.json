@@ -11,7 +11,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/test/contract.test.js dist-test/test/criteria.test.js dist-test/test/budget.test.js dist-test/test/triage.test.js dist-test/test/planner.test.js dist-test/test/inbound-github.test.js dist-test/test/inbound-notion-pages.test.js"
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/test/contract.test.js dist-test/test/criteria.test.js dist-test/test/budget.test.js dist-test/test/triage.test.js dist-test/test/planner.test.js dist-test/test/inbound-github.test.js dist-test/test/inbound-notion-pages.test.js dist-test/test/apply.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
