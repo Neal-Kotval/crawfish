@@ -8,7 +8,8 @@ import {
   fetchRepoMetadata,
   type RepoMetadata,
 } from "../lib/github.js";
-import { syncProjectIssues, NothingToSync } from "../lib/sync.js";
+import { syncProjectIssues, NothingToSync, IntegrationNotConnected } from "../lib/sync.js";
+import { requireMember } from "../lib/rbac.js";
 
 export const projectsRouter = Router({ mergeParams: true });
 
@@ -25,23 +26,6 @@ const AdoptBody = z.object({
 });
 
 const Body = z.union([AdoptBody, CloneBody]);
-
-type RequireMemberResult =
-  | { ok: true; orgId: string; userId: string }
-  | { ok: false; status: number; code: string };
-
-async function requireMember(req: Request, orgIdParam: string): Promise<RequireMemberResult> {
-  const userId = req.userId;
-  if (!userId) return { ok: false, status: 401, code: "unauthenticated" };
-  const org = await db.org.findFirst({
-    where: { OR: [{ id: orgIdParam }, { name: orgIdParam }] },
-    select: { id: true },
-  });
-  if (!org) return { ok: false, status: 404, code: "not_found" };
-  const m = await db.orgMember.findUnique({ where: { orgId_userId: { orgId: org.id, userId } } });
-  if (!m) return { ok: false, status: 404, code: "not_found" };
-  return { ok: true, orgId: org.id, userId };
-}
 
 projectsRouter.get("/", async (req, res) => {
   const ctx = await requireMember(req, (req.params as { orgId: string }).orgId);
@@ -261,6 +245,8 @@ projectsRouter.post("/:pid/sync", async (req, res) => {
     return res.json(result);
   } catch (err) {
     if (err instanceof NothingToSync) return httpError(res, 400, "nothing_to_sync", "");
+    if (err instanceof IntegrationNotConnected)
+      return httpError(res, 409, "linear_not_connected", "");
     if (err instanceof GithubNotConnected)
       return httpError(res, 409, "github_disconnected", "");
     return httpError(res, 502, "sync_error", String(err));

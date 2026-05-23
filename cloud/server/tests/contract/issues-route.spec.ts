@@ -87,4 +87,11 @@ describe("non-member gets 404 on GET …/issues and POST …/sync", () => {
       .set("X-User-Id", "issroute-outsider");
     expect(res.status).toBe(404);
   });
+
+  it("rejects an outsider on GET …/integrations", async () => {
+    const res = await request(app)
+      .get(`/api/orgs/${orgId}/integrations`)
+      .set("X-User-Id", "issroute-outsider");
+    expect(res.status).toBe(404);
+  });
 });

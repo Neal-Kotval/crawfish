@@ -34,11 +34,15 @@ import { deviceLinkRouter } from "./routes/deviceLink.js";
 import { invitesRouter, publicInvitesRouter } from "./routes/invites.js";
 import { projectsRouter } from "./routes/projects.js";
 import { githubRouter, dashGithubRouter } from "./routes/github.js";
+import { integrationsRouter, linearCallbackRouter } from "./routes/integrations.js";
 
 // Public routes (no user auth required) — mounted before authMiddleware.
 app.use("/api/health", healthRouter);
 app.use("/api/device-link", deviceLinkRouter); // POST is anon; GET poll is anon; POST /:code/redeem requires user auth (handled in-route).
 app.use("/api/invites", publicInvitesRouter);
+// Linear OAuth callback: public (browser redirect carries no auth header);
+// recovers identity from the signed `state`. MUST be before authMiddleware.
+app.use("/api/integrations/linear/callback", linearCallbackRouter);
 
 // Dash-sync route: accepts X-Crawfish-Token (aud-scoped JWT). Mounted as its
 // own sub-app so the dash-sync middleware only fires here, not on user routes.
@@ -54,6 +58,7 @@ app.use("/api", authMiddleware);
 app.use("/api/github", githubRouter);
 app.use("/api/orgs/:orgId/invites", invitesRouter);
 app.use("/api/orgs/:orgId/projects", projectsRouter);
+app.use("/api/orgs/:orgId/integrations", integrationsRouter);
 app.use("/api/orgs", orgsRouter);
 app.use("/api/me", meRouter);
 
