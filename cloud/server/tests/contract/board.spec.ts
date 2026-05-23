@@ -159,6 +159,38 @@ describe("acceptance-criteria evidence guard (Phase 5)", () => {
   });
 });
 
+describe("token budget breach (Phase 5)", () => {
+  it("flips escalated + emits budget_breach once when spend crosses the budget", async () => {
+    const created = await asFounder("post", `${base()}/tasks`).send({
+      title: "Budgeted",
+      tokenBudget: 100,
+    });
+    const tid = created.body.id;
+
+    const under = await asFounder("post", `${base()}/tasks/${tid}/usage`).send({ tokens: 50 });
+    expect(under.status).toBe(200);
+    expect(under.body).toMatchObject({ tokensSpent: 50, escalated: false });
+
+    const over = await asFounder("post", `${base()}/tasks/${tid}/usage`).send({ tokens: 60 });
+    expect(over.body).toMatchObject({ tokensSpent: 110, escalated: true });
+
+    // further spend doesn't re-fire the breach
+    await asFounder("post", `${base()}/tasks/${tid}/usage`).send({ tokens: 10 });
+
+    const feed = await asFounder("get", `${base()}/activity`);
+    const breaches = feed.body.filter((a: { kind: string }) => a.kind === "budget_breach");
+    expect(breaches).toHaveLength(1);
+    expect(breaches[0].payload).toMatchObject({ spent: 110, budget: 100 });
+  });
+
+  it("never breaches a task with no budget set", async () => {
+    const created = await asFounder("post", `${base()}/tasks`).send({ title: "No budget" });
+    const res = await asFounder("post", `${base()}/tasks/${created.body.id}/usage`).send({ tokens: 999999 });
+    expect(res.status).toBe(200);
+    expect(res.body.escalated).toBe(false);
+  });
+});
+
 describe("board events hub (SSE fan-out)", () => {
   it("delivers events to project subscribers, scoped by project, and stops after unsubscribe", () => {
     const got: string[] = [];

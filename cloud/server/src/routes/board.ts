@@ -19,6 +19,7 @@ import {
   createEpicSchema,
   createCriterionSchema,
   updateCriterionSchema,
+  recordUsageSchema,
   type ActivityKind,
 } from "../domain/contract.js";
 
@@ -207,6 +208,42 @@ boardRouter.patch("/:pid/tasks/:taskId/criteria/:cid", async (req, res) => {
   });
   if (!existing) return httpError(res, 404, "not_found", "");
   const updated = await db.acceptanceCriterion.update({ where: { id: existing.id }, data: parsed.data });
+  return res.json(updated);
+});
+
+// ─── Token budget (Phase 5 — record spend + breach → escalated) ──────────────
+
+boardRouter.post("/:pid/tasks/:taskId/usage", async (req, res) => {
+  const p = req.params as Params & { taskId: string };
+  const ctx = await requireRole(req, p.orgId, "member");
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+  const parsed = recordUsageSchema.safeParse(req.body);
+  if (!parsed.success) return httpError(res, 400, "invalid_body", parsed.error.message);
+
+  const task = await db.task.findFirst({
+    where: { id: p.taskId, project: { id: p.pid, orgId: ctx.orgId } },
+  });
+  if (!task) return httpError(res, 404, "not_found", "");
+
+  const tokensSpent = task.tokensSpent + parsed.data.tokens;
+  // Breach fires once, on the transition from under-budget to >=100%.
+  const breached =
+    task.tokenBudget != null && tokensSpent >= task.tokenBudget && !task.escalated;
+
+  const updated = await db.task.update({
+    where: { id: task.id },
+    data: { tokensSpent, ...(breached ? { escalated: true } : {}) },
+  });
+
+  if (breached) {
+    await logActivity({
+      projectId: task.projectId,
+      taskId: task.id,
+      actorMemberId: ctx.memberId,
+      kind: "budget_breach",
+      payload: { spent: tokensSpent, budget: task.tokenBudget },
+    });
+  }
   return res.json(updated);
 });
 

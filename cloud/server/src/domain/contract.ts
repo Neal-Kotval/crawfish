@@ -124,3 +124,8 @@ export const updateCriterionSchema = z.object({
   met: z.boolean().optional(),
   evidence: z.string().max(10_000).nullable().optional(),
 });
+
+// Agent/runtime reports incremental token spend against a task's budget.
+export const recordUsageSchema = z.object({
+  tokens: z.number().int().nonnegative(),
+});
