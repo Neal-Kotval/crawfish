@@ -1,17 +1,19 @@
 # Roadmap: Crawfish
 
 > This is the GSD-structured derivation of the authoritative root `/Users/nealkotval/crawfish/ROADMAP.md`. It does not replace it. All pre-pivot paths from source docs are translated to the monorepo layout (`cloud/`, `desktop/`, `cli/`, `web/`).
+>
+> **Reshaped 2026-05-23 per [ADR-003](decisions/ADR-003-canonical-domain-model.md) (cloud-canonical).** Cloud Postgres is the single source of truth for the org/board/task domain; the desktop Dash is an **online thin client** (no offline board, no CRDT). This supersedes ADR-001 (disk JSONL journal). M0 is no longer local-first; the board is built in the cloud (M1), not on disk. The moat is the hosted org-OS, not the on-disk filesystem.
 
 ## Overview
 
-Crawfish ships in four milestones. **M0** delivers the preserved local-first MVP — a standalone Dash that gets a developer from crawfish.dev to an agent-authored PR in fifteen minutes, plus a thin web sync layer and a verification pass. **M1** builds the Linear-grade agent board (the NOW slice): cycles, criteria, budgets, routing, triage, decomposition, and structured search. **M2** adds the knowledge substrate and cost-discipline pillar — org filesystem + librarian, optimizer pack, skills backbone, packaged craws, and the native GOAP orchestration runtime that makes the org-OS thesis defensible. **M3** is the parallel paid track: the hosted Orchestrator that turns issues into CI-verified, checkpoint-gated PRs for mid-market engineering teams, built up O0→O7 from a durable workflow engine through to public launch.
+Crawfish ships in four milestones. **M0** delivers a **cloud-first onboarding** MVP — sign in, get an auto-provisioned workspace, import a repo, and watch an agent open a real PR, in under fifteen minutes (no card, MIT). **M1** builds the **canonical cloud domain model and the Linear-grade agent board on it** (the NOW slice): the `Task`/`Cycle`/`Epic`/`AcceptanceCriterion`/`TaskLink`/`Activity` entities + roles in cloud Postgres, then cycles, criteria, budgets, routing, triage, decomposition, and structured search surfaced in `cloud/platform`. **M2** adds the knowledge substrate and cost-discipline pillar — org knowledge service + librarian, optimizer pack, skills backbone, packaged craws, and the native GOAP orchestration runtime. **M3** is the parallel paid track: the hosted Orchestrator that turns issues into CI-verified, checkpoint-gated PRs for mid-market engineering teams, built up O0→O7 — **blocked on ADR-002** (durable workflow engine) and built directly on the M1 cloud domain model.
 
 ## Milestones
 
-- 📋 **M0 — Local-First MVP** - Phases 1-3 (preserved earlier milestone; ships first)
-- 📋 **M1 — Linear-Grade Agent Board (NOW)** - Phases 4-7
+- 📋 **M0 — Cloud-First Onboarding MVP** - Phases 1-3 (ships first; cloud-first per ADR-003)
+- 📋 **M1 — Cloud Domain Model + Linear-Grade Board (NOW)** - Phases 4-7 (built on cloud Postgres)
 - 📋 **M2 — Knowledge Substrate & Optimizers (NEXT/LATER)** - Phases 8-11
-- 📋 **M3 — Hosted Orchestrator (parallel paid track, O0–O7)** - Phases 12-19
+- ⛔ **M3 — Hosted Orchestrator (parallel paid track, O0–O7)** - Phases 12-19 — **BLOCKED on ADR-002**
 
 ## Phases
 
@@ -19,10 +21,10 @@ Crawfish ships in four milestones. **M0** delivers the preserved local-first MVP
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Standalone Dash MVP** - Local-first one-surface Canvas; 15-min crawfish.dev → agent PR
-- [ ] **Phase 2: Thin Web Platform Sync** - Clerk auth, org sync, device-link, read-only online canvas, invite-by-email
-- [ ] **Phase 3: MVP Verification & Hardening** - Playwright e2e + server contract tests + Wave-2 review doc
-- [ ] **Phase 4: Cycles, Epics, Activity & Member ACL** - Board foundation with agents as first-class members
+- [ ] **Phase 1: Cloud-First Onboarding MVP** - Sign in → auto-provisioned workspace → import repo → agent opens a PR, in 15 min
+- [ ] **Phase 2: Web Platform Org/Project Surface** - Clerk auth, org/project model, GitHub connect, invite-by-email (cloud is canonical)
+- [ ] **Phase 3: MVP Verification & Hardening** - Playwright e2e + server contract tests + review doc, cloud surfaces
+- [ ] **Phase 4: Cloud Domain Model + Cycles, Epics, Activity & Member ACL** - Canonical Task/Cycle/Epic/Activity entities + roles in cloud Postgres; agents as first-class members
 - [ ] **Phase 5: Acceptance Criteria, Budget & Preflight** - Evidence guard, live token-budget bar, agent self-attestation
 - [ ] **Phase 6: Capability Routing, AI Triage & Auto-Decomposition** - Smart task assignment and epic breakdown
 - [ ] **Phase 7: Linked-Task Graph & FTS5 Search** - Link kinds, structured search, external-ref ingestion
@@ -30,7 +32,7 @@ Crawfish ships in four milestones. **M0** delivers the preserved local-first MVP
 - [ ] **Phase 9: Diagnoses Engine & Optimizer Pack** - Cost-manager, dynamic model switching, 2σ regression alerts
 - [ ] **Phase 10: Skills Backbone, Craws Packaging & Test/Visual Agents** - Installable skills, craw manifest+policy, per-PR visual auditor
 - [ ] **Phase 11: Native Orchestration Runtime (GOAP MVP)** - Plain-English goal → A* plan tree, replanning
-- [ ] **Phase 12: Orchestrator Workflow Engine Foundation (O0)** - Durable engine choice (ADR-002), skeleton, worktree isolation, dep-bumper spike
+- [ ] **Phase 12: Orchestrator Workflow Engine Foundation (O0)** ⛔ BLOCKED — Durable engine choice (ADR-002, OPEN), skeleton, worktree isolation, dep-bumper spike
 - [ ] **Phase 13: Intake → Plan → Execute → CI → Merge (O1)** - End-to-end checkpoint-gated PR pipeline
 - [ ] **Phase 14: Craw Library, Classifier & Eval Harness (O2)** - Curated library, auto-classifier, routing rules, eval
 - [ ] **Phase 15: Live Dashboard & Failure Handling (O3)** - Per-craw SSE, team view, replay, failure taxonomy
@@ -41,50 +43,56 @@ Crawfish ships in four milestones. **M0** delivers the preserved local-first MVP
 
 ## Phase Details
 
-### Phase 1: Standalone Dash MVP
-**Goal**: A developer downloads the standalone Dash and gets an agent to open a real PR with no platform, auth, or backend involved.
+### Phase 1: Cloud-First Onboarding MVP
+> **Reshaped per ADR-003.** No longer local-first / "platform dark." The 15-minute hire→PR promise is preserved, but it runs through the cloud platform + an account, not a disk-only Dash. The on-disk `.crawfish/` is an agent working directory, not the org of record.
+**Goal**: A developer signs in to the cloud platform, gets an auto-provisioned workspace, connects a repo, and watches an agent open a real PR — in under fifteen minutes, no card.
 **Depends on**: Nothing (first phase)
 **Requirements**: MVP-01, MVP-02, MVP-03
 **Success Criteria** (what must be TRUE):
-  1. User launches Dash and sees exactly one surface (Canvas); Board/Sessions/Knowledge/Diagnoses are hidden
-  2. User completes a first-run wizard that writes an org to disk, and Canvas reads it back and persists drag operations
-  3. User can run the Hire stream and watch a spawned agent open a real PR end-to-end
-  4. The full crawfish.dev → download → PR flow is recordable in under 15 minutes
+  1. A new user signs in (Clerk / GitHub) and lands on an auto-provisioned workspace (`cloud/server` `ensureUserHasWorkspace`) — no manual "create an org" step
+  2. User connects a GitHub repo as a Project (the org/project model in cloud Postgres is the source of truth)
+  3. User triggers a "hire / run agent" action; agent execution runs (locally via Dash or server-side) and streams its trace to the cloud; a real PR opens end-to-end
+  4. The full crawfish.dev → sign in → connect repo → PR flow is recordable in under 15 minutes
 **Plans**: TBD
 **UI hint**: yes
 
-### Phase 2: Thin Web Platform Sync
-**Goal**: A user can sign in to the web platform, link their desktop device, and view a read-only mirror of their local org, and invite teammates by email.
+### Phase 2: Web Platform Org/Project Surface
+> **Reshaped per ADR-003.** Cloud is canonical, so this is no longer a "sync mirror of a local org" — the platform org/project model *is* the org of record. Device-link survives only to let a desktop client authenticate against its cloud workspace (not to upload a local org as truth). Largely already shipped (`cloud/server` orgs/projects/invites/deviceLink + `cloud/platform`).
+**Goal**: A user signs in, sees their workspace's projects (canonical in cloud Postgres), connects GitHub repos, and invites teammates by email.
 **Depends on**: Phase 1
 **Requirements**: MVP-04, MVP-05, MVP-06
 **Success Criteria** (what must be TRUE):
-  1. User signs in through the Clerk auth gate and lands on their org
-  2. User links a desktop device via device code and the local org syncs to the platform (Postgres + Prisma on Neon)
-  3. User views a read-only online canvas that mirrors the local org
+  1. User signs in through the Clerk auth gate (dev shim honored in non-prod) and lands on their workspace
+  2. The org/project model is canonical in cloud Postgres (Neon in prod); a desktop client authenticates against it via device-link rather than uploading a local org
+  3. User connects a GitHub repo as a Project and sees it in `cloud/platform`
   4. User invites a teammate by email and the teammate can redeem the invite (valid / mismatched / expired states handled)
   5. A visitor on the marketing site is offered the correct platform download with a GitHub-release fallback
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 3: MVP Verification & Hardening
-**Goal**: The Wave 1/Wave 2 MVP surfaces are trustworthy — covered by end-to-end and contract tests with a documented review pass. No new features.
+> **Reshaped per ADR-003.** Targets the cloud surfaces (no local-canvas / Hire-on-disk paths).
+**Goal**: The cloud-first MVP surfaces are trustworthy — covered by end-to-end and contract tests with a documented review pass. No new features.
 **Depends on**: Phase 2
 **Requirements**: MVP-07
 **Success Criteria** (what must be TRUE):
-  1. `npx playwright test` is green across the platform, marketing, and dash-web suites (auth gate, onboarding, OrgPicker, read-only canvas, invite redeem states, device-link, Hire stream)
-  2. Server contract tests (`npm test` via supertest) are green for health, orgs CRUD+RBAC, invites CRUD+redeem+mismatch+expiry, device-link
-  3. A Wave-2 code-review doc exists at `docs/reviews/REVIEW-WAVE2.md` with each severity bucket addressed
+  1. `npx playwright test` is green across the platform + marketing suites (auth gate, cloud onboarding, project connect, issues view, invite redeem states, device-link auth)
+  2. Server contract tests (`npm test` via supertest) are green for health, orgs CRUD+RBAC, projects, issues sync, integrations, invites CRUD+redeem+mismatch+expiry, device-link
+  3. A code-review doc exists at `docs/reviews/REVIEW-WAVE2.md` with each severity bucket addressed
 **Plans**: TBD
 
-### Phase 4: Cycles, Epics, Activity & Member ACL
-**Goal**: Users run a Linear-grade board where agents are first-class workspace members, work is organized into cycles and epics, and activity is visible.
-**Depends on**: Phase 3
+> **M1 framing (ADR-003).** Phases 4–7 build the Linear-grade board **on the cloud canonical domain model**, not the disk board. Phase 4 establishes the foundation: the `Task`/`Cycle`/`Epic`/`AcceptanceCriterion`/`TaskLink`/`Activity` entities in `cloud/server` Prisma, the canonical `TaskStatus` enum (`triage→backlog→in_progress→in_review→blocked→done→canceled` + `escalated` flag), the `owner|admin|member|viewer` role model with a write-gate, and the `@crawfish/contracts` shared types + extended `docs/specs/org-contract.md`. The shipped disk-board work (NOW-W1..W5 in `desktop/lens`/`cli/orgctl`) is reference, not the build target. Realtime (SSE) is `cloud/server`'s responsibility (audit B3).
+
+### Phase 4: Cloud Domain Model + Cycles, Epics, Activity & Member ACL
+**Goal**: The cloud canonical domain model exists (Task/Cycle/Epic/Activity + roles) and users run a board where agents are first-class workspace members, work is organized into cycles and epics, and activity is visible.
+**Depends on**: Phase 3 · [ADR-003](decisions/ADR-003-canonical-domain-model.md)
 **Requirements**: REQ-linear-grade-board, REQ-tier1-personas
 **Success Criteria** (what must be TRUE):
-  1. User can create cycles and epics and drag tasks into a cycle with budget rollup
-  2. Agents appear as first-class members of the workspace (billed as free members per Linear convention)
-  3. User sees a live activity feed of board changes
-  4. Member access is governed by an ACL, and each board feature documents which Tier-1 persona it lights up
+  1. Cloud Prisma defines `Task`/`Cycle`/`Epic`/`Activity` with the canonical `TaskStatus` enum (`escalated` as a flag); migration applies; `@crawfish/contracts` exports the shared types
+  2. User can create cycles and epics and assign tasks into a cycle with budget rollup, surfaced in `cloud/platform`
+  3. Agents appear as first-class members of the workspace (free members per Linear convention)
+  4. User sees a live activity feed of board changes (cloud SSE)
+  5. Member access is governed by the `owner|admin|member|viewer` role write-gate (closes the audit H4 viewer-can-write hole), and each board feature documents which Tier-1 persona it lights up
 **Plans**: TBD
 **UI hint**: yes
 
@@ -262,11 +270,13 @@ Crawfish ships in four milestones. **M0** delivers the preserved local-first MVP
 
 **Execution Order:**
 Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19.
-M3 (Phases 12–19) is a parallel paid track whose only hard prerequisite is the M1 board (Phase 7); it may proceed alongside M2 (Phases 8–11) given resourcing.
+M3 (Phases 12–19) is a parallel paid track; per [ADR-003](decisions/ADR-003-canonical-domain-model.md) it builds directly on the M1 cloud domain model (its hard prerequisite is Phase 4's canonical entities + Phase 7) and is **BLOCKED on ADR-002** (durable workflow engine, OPEN) until Phase 12's first success criterion is met. It may proceed alongside M2 (Phases 8–11) once unblocked.
+
+**Reshape note (2026-05-23, ADR-003):** M0 redefined cloud-first; M1 now leads with the cloud canonical domain model (Phase 4); M3 marked blocked. Migration owed (tracked in STATE.md): desktop board ownership → cloud, remove dash first-run org quiz, deprecate lens board endpoints, author `@crawfish/contracts`, rewrite GRAND_PLAN §3.3 + ROADMAP-MVP Wave 1.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Standalone Dash MVP | M0 | 0/TBD | Not started | - |
+| 1. Cloud-First Onboarding MVP | M0 | 0/TBD | Not started | - |
 | 2. Thin Web Platform Sync | M0 | 0/TBD | Not started | - |
 | 3. MVP Verification & Hardening | M0 | 0/TBD | Not started | - |
 | 4. Cycles, Epics, Activity & Member ACL | M1 | 0/TBD | Not started | - |
@@ -277,7 +287,7 @@ M3 (Phases 12–19) is a parallel paid track whose only hard prerequisite is the
 | 9. Diagnoses Engine & Optimizer Pack | M2 | 0/TBD | Not started | - |
 | 10. Skills, Craws Packaging & Test/Visual Agents | M2 | 0/TBD | Not started | - |
 | 11. Native Orchestration Runtime (GOAP MVP) | M2 | 0/TBD | Not started | - |
-| 12. Orchestrator Workflow Engine Foundation (O0) | M3 | 0/TBD | Not started | - |
+| 12. Orchestrator Workflow Engine Foundation (O0) | M3 | 0/TBD | ⛔ Blocked (ADR-002) | - |
 | 13. Intake → Plan → Execute → CI → Merge (O1) | M3 | 0/TBD | Not started | - |
 | 14. Craw Library, Classifier & Eval Harness (O2) | M3 | 0/TBD | Not started | - |
 | 15. Live Dashboard & Failure Handling (O3) | M3 | 0/TBD | Not started | - |
@@ -285,11 +295,11 @@ M3 (Phases 12–19) is a parallel paid track whose only hard prerequisite is the
 | 17. Billing, RBAC, Audit & Analytics (O5) | M3 | 0/TBD | Not started | - |
 | 18. Onboarding Polish, Notifications & Ops (O6) | M3 | 0/TBD | Not started | - |
 | 19. Public Launch, Craw Authoring & Integrations Edge (O7) | M3 | 0/TBD | Not started | - |
-| 20. Cloud Issue Ingestion (Linear + GitHub) | M0/M1 (pulled fwd, depends Phase 2) | 0/4 | Planned | - |
+| 20. Cloud Issue Ingestion (Linear + GitHub) | M0/M1 (pulled fwd, depends Phase 2) | 3/4 | In progress (Waves 1–3 done; Wave 4 paused) | - |
 
 ### Phase 20: Cloud Issue Ingestion — Linear + GitHub connectors with Postgres Issue model, Linear-Team to Project mapping, OAuth integrations, and project issues UI in cloud/platform
 
-> **Milestone note:** Pulled forward into the M0/M1 cloud-platform line. It extends Phase 2 (`cloud/platform` + `cloud/server` org/project model, which already auto-provisions one workspace per user and binds each Project 1:1 to a GitHub repo). It is sequenced ahead of M3's on-disk inbound work (Phase 13 / O1), and the cloud `Issue` model it introduces is the source of truth that Phase 13's webhook/poller can later feed.
+> **Milestone note (updated per ADR-003):** Pulled forward into the M0/M1 cloud-platform line; extends Phase 2. The cloud `Issue` model is a **provider mirror** (GitHub/Linear), distinct from the authored `Task` board built in Phase 4 — an `Issue` may be linked to or *promoted into* a `Task`. (The `provider="native"` value is retired per ADR-003.) Phase 13's webhook/poller feeds the same cloud model. **Status:** Waves 1–3 (schema + GitHub + Linear sync) implemented + tested on branch `feat/cloud-issue-ingestion`; Wave 4 (Board+Projects nav + onboarding reconciliation) paused pending the Phase 4 domain model.
 
 **Goal**: From the cloud platform, a user connects GitHub and Linear to their workspace and auto-loads issues into a per-Project issues view — GitHub issues mapping by repo (the existing 1:1 `Project.githubRepo` binding) and Linear issues mapping by Team (each Linear Team → one Crawfish Project), persisted in a new Postgres `Issue` model and re-syncable idempotently.
 **Requirements**: REQ-knowledge-connectors, REQ-orch-issue-intake
