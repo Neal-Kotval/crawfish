@@ -1,0 +1,34 @@
+{
+  "source_path": "/Users/nealkotval/crawfish/docs/roadmap/ROADMAP-MVP.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Crawfish — MVP roadmap",
+  "summary": "Two-wave MVP build plan: Wave 1 local-first standalone Dash (platform dark), Wave 2 thin web platform sync layer, with per-task implementation contracts and Definition-of-Done.",
+  "scope": [
+    "MVP scope (Wave 1 + Wave 2)",
+    "marketing site (crawfish-web)",
+    "Dash desktop app (crawfish-dash)",
+    "web platform (crawfish-platform)",
+    "first-run onboarding wizard",
+    "canvas (disk-backed agents)",
+    "Claude Code SDK agent hire flow",
+    "Tauri shell (deep-link, window-state)",
+    "Clerk auth",
+    "org sync API (Postgres + Prisma on Neon/Vercel)",
+    "device-link flow",
+    "read-only online canvas",
+    "invite-by-email",
+    "agent metadata sync"
+  ],
+  "cross_refs": [
+    "ROADMAP-FUNCTIONALITY.md",
+    "crawfish-platform/src/onboarding/OnboardingFlow.tsx",
+    "crawfish-dash/web/src/wizards/first-run/",
+    "Canvas.tsx",
+    "crawfish-starter-app/"
+  ],
+  "locked": false,
+  "precedence": 1,
+  "notes": "Type forced by MANIFEST_TYPE=SPEC (authoritative); manifest_override=true. PRECEDENCE=1 stored. PREDATES MONOREPO PIVOT — references stale paths crawfish-web/, crawfish-dash/, crawfish-platform/ instead of active web/, desktop/dash/, cloud/platform/. SCOPE CONFLICTS with active ROADMAP.md: (1) Wave 1 asserts 'the platform is dark' / 'no platform, no auth, no backend' — active roadmap treats org-layer/platform as the thesis; (2) MVP hides Board/Sessions/Knowledge/Diagnoses dash surfaces (one-surface dash) which the long roadmap restores; (3) declares multi-cursor, billing, public session permalinks, org roles/ACL out of MVP. Document is also part-PRD (brand promise, success metric, day-by-day schedule, hard-cuts table) but per-task implementation contracts (file paths, API endpoints, schema fields, Tauri commands) dominate, consistent with SPEC. Source-path hash computed offline; available hashing tool absent so slug uniqueness relied upon to avoid collision."
+}

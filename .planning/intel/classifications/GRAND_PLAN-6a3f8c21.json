@@ -1,0 +1,33 @@
+{
+  "source_path": "/Users/nealkotval/crawfish/docs/roadmap/GRAND_PLAN.md",
+  "type": "PRD",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Crawfish — Grand Plan",
+  "summary": "Long-horizon 18-24 month product vision for Crawfish as the operating system for companies running on AI agents, organized around target personas.",
+  "scope": [
+    "agent organization platform",
+    "org filesystem",
+    "knowledge librarian (contextual-bandit router)",
+    "native orchestration runtime",
+    "CrawfishTask schema",
+    "flow graph / org chart",
+    "token metering",
+    "diagnoses engine",
+    "runtime adapters",
+    "org templates",
+    "adoption wizards",
+    "personas (founder, CEO, engineer, platform/DevOps, eng manager, enterprise gates)"
+  ],
+  "cross_refs": [
+    "../../PRODUCT.md",
+    "../../ROADMAP.md",
+    "../product/BRAINSTORM.md",
+    "../product/DESIGN.md",
+    "../product/INTEGRATIONS.md",
+    "../ops/AGENT-TEAMS.md"
+  ],
+  "locked": false,
+  "precedence": 2,
+  "notes": ""
+}

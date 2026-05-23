@@ -1,0 +1,32 @@
+{
+  "source_path": "/Users/nealkotval/crawfish/docs/roadmap/ORCHESTRATOR-STAGES.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Crawfish Orchestrator — development stages",
+  "summary": "Sequences the Crawfish orchestrator build into numbered stages O0-O7 with concrete deliverables, file paths, reuse-vs-build calls, and per-stage exit gates.",
+  "scope": [
+    "orchestrator subsystem (queue/worker/workflow)",
+    "durable workflow engine (ADR-002)",
+    "runtime adapter shim (claude-code)",
+    "curated craws (dep-bumper, test-backfill, lint-cleaner, type-annotator)",
+    "worktree isolation utility",
+    "inbound receivers (Linear webhook, GitHub Issues poller)",
+    "plan + pre-merge checkpoint workflows",
+    "auto-classifier service + per-workspace eval harness",
+    "per-task budget cap enforcement",
+    "CI gate + cancel/retry primitives",
+    "execution dashboard widget + routing rules UI",
+    "escalation policy + onboarding walkthrough"
+  ],
+  "cross_refs": [
+    "./ORCHESTRATOR-ONEPAGER.md",
+    "./ORCHESTRATOR-USER-STORIES.md",
+    "../../ROADMAP.md",
+    ".planning/decisions/ADR-002-orchestrator-workflow-engine.md",
+    "docs/orchestrator/design-partner-onboarding.md"
+  ],
+  "locked": false,
+  "precedence": 1,
+  "notes": "Manifest-declared SPEC (precedence 1). Content reads as a staged implementation plan with file-path deliverables and exit gates rather than a pure API/schema spec, but manifest type is authoritative. Required reading agents/gsd-doc-classifier.md was not present at the given path; classifier instructions were available from the system prompt."
+}

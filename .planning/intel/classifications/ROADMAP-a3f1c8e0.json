@@ -1,0 +1,38 @@
+{
+  "source_path": "/Users/nealkotval/crawfish/ROADMAP.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Crawfish — Development Roadmap",
+  "summary": "Dated, authoritative week-shaped build schedule where every item is a named deliverable with files, definition-of-done, and dependency.",
+  "scope": [
+    "crawfish-lens",
+    "crawfish-dash",
+    "crawfish-org",
+    "crawfish-orgctl",
+    "crawfish-opt",
+    "crawfish-opt-codebase",
+    "agent board (Linear-grade)",
+    "RAG indexing",
+    "token-discipline pack",
+    "founder dashboard",
+    "Orchestrator track (O0-O7)",
+    "crawfish.dev marketing/web portal",
+    "multi-LLM runtimes",
+    "GitHub bridge"
+  ],
+  "cross_refs": [
+    "./docs/roadmap/GRAND_PLAN.md",
+    "./PRODUCT.md",
+    "./docs/product/DESIGN.md",
+    "./docs/product/INTEGRATIONS.md",
+    "./docs/product/BRAINSTORM.md",
+    "./docs/ops/AGENT-TEAMS.md",
+    "./docs/roadmap/ORCHESTRATOR-STAGES.md",
+    "./docs/roadmap/ORCHESTRATOR-ONEPAGER.md",
+    "./docs/roadmap/ORCHESTRATOR-USER-STORIES.md"
+  ],
+  "locked": false,
+  "precedence": 0,
+  "notes": "MANIFEST_TYPE=SPEC and MANIFEST_PRECEDENCE=0 provided; treated as authoritative per process. Content is a build schedule with per-item DoD/files/dependencies (implementation contracts the system must honor), consistent with the SPEC declaration. Required reading file agents/gsd-doc-classifier.md did not exist at the given path; classifier role was applied from system prompt. Source hash derived from canonical POSIX path; no execution tool available to verify SHA-256 — slug 'ROADMAP' is unique at repo root."
+}

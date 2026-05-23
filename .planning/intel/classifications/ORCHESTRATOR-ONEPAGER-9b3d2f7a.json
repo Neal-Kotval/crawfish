@@ -1,0 +1,34 @@
+{
+  "source_path": "/Users/nealkotval/crawfish/docs/roadmap/ORCHESTRATOR-ONEPAGER.md",
+  "type": "PRD",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Crawfish Orchestrator — v1 one-pager",
+  "summary": "Product one-pager for the hosted Orchestrator: Linear/GitHub Issues in, multi-craw collaboration, CI-verified PR out, with human checkpoints, targeting mid-market eng teams.",
+  "scope": [
+    "hosted orchestrator service",
+    "auto-classification eligibility",
+    "craw routing",
+    "durable queue + workers",
+    "runtime adapters / execution",
+    "CI-as-truth verification",
+    "human checkpoints (plan + merge)",
+    "PR comment loop",
+    "live execution dashboard",
+    "Stripe billing (seat + usage)",
+    "RBAC + audit log",
+    "Linear / GitHub Issues integration"
+  ],
+  "cross_refs": [
+    "./GRAND_PLAN.md",
+    "../../ROADMAP.md",
+    "./ORCHESTRATOR-STAGES.md",
+    "../../CLAUDE.md",
+    "cli/orgctl/src/inbound/github-issues.ts",
+    "cli/orgctl/src/inbound/notion-pages.ts",
+    "cli/projectctl/src/router.ts"
+  ],
+  "locked": false,
+  "precedence": 2,
+  "notes": ""
+}

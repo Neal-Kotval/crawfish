@@ -1,0 +1,23 @@
+{
+  "source_path": "/Users/nealkotval/crawfish/docs/roadmap/ROADMAP-WAVE3.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Wave 3 — verification, hardening, and code review",
+  "summary": "Test and review plan adding end-to-end Playwright suites, cloud-API contract tests, and a code-review sweep over Wave 2 across five MVP surfaces.",
+  "scope": [
+    "crawfish-platform e2e suite",
+    "crawfish-web e2e suite",
+    "crawfish-dash web e2e suite",
+    "crawfish-server contract tests",
+    "auth/RBAC/invite/device-link flows",
+    "Wave 2 code review"
+  ],
+  "cross_refs": [
+    "docs/reviews/REVIEW-WAVE2.md",
+    "dev.sh"
+  ],
+  "locked": false,
+  "precedence": 1,
+  "notes": "Manifest declared type SPEC (authoritative); heuristic/LLM classification skipped. Document is a verification/test plan with concrete contracts (test suites, endpoint behaviors, definition of done) consistent with SPEC."
+}
