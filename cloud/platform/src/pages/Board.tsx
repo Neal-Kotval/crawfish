@@ -243,6 +243,26 @@ function TaskCard({ task, onMove }: { task: Task; onMove: (t: Task, s: TaskStatu
         <span style={{ fontSize: 13 }}>{task.title}</span>
         {task.escalated && <Pill tone="danger">escalated</Pill>}
       </div>
+      {task.tokenBudget != null && task.tokenBudget > 0 && (
+        <div>
+          <div
+            className="cf-mono"
+            style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--ink-mute)", marginBottom: 3 }}
+          >
+            <span>{task.tokensSpent.toLocaleString()} / {task.tokenBudget.toLocaleString()} tok</span>
+            <span>{Math.round((task.tokensSpent / task.tokenBudget) * 100)}%</span>
+          </div>
+          <div style={{ height: 4, borderRadius: 2, background: "var(--rule-3)", overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.min(100, (task.tokensSpent / task.tokenBudget) * 100)}%`,
+                background: task.escalated ? "var(--danger)" : "var(--accent)",
+              }}
+            />
+          </div>
+        </div>
+      )}
       {/* Status lives in the column header; the select is the sole control to move it. */}
       <select
         value={task.status}
