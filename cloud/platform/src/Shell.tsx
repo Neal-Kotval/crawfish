@@ -182,6 +182,19 @@ export function Shell() {
                   onClick={() => navigate("/")}
                 />
               )}
+              {/* Root context with a single workspace: the sidebar would
+                  otherwise be an empty 232px slab. Surface a labelled jump
+                  into the org canvas so the chrome reads as intentional. */}
+              {orgs.length === 1 && !inOrg && (
+                <>
+                  <Eyebrow style={{ padding: "0 6px", marginBottom: 6 }}>Workspace</Eyebrow>
+                  <SideItem
+                    icon={Icons.canvas}
+                    label={orgs[0].name}
+                    onClick={() => navigate(`/orgs/${orgs[0].name}/canvas`)}
+                  />
+                </>
+              )}
             </div>
 
             <div style={{ marginTop: "auto" }}>

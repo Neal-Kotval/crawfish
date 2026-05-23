@@ -10,9 +10,13 @@
    etc.) keep compiling. Migrate components off the shim wave-by-wave;
    the shim block is marked DEPRECATED and will be deleted in Wave 5.
 
-   No dark mode — the brand is warm-paper-only by design. The legacy
-   :root[data-theme="dark"] block has been retired; if data-theme="dark"
-   is set it falls through to the light tokens (same warm paper). */
+   Dark mode — warm-dark. Espresso-paper backgrounds keep the brand's
+   warmth at night; the vermillion accent is brightened a step so it stays
+   legible on dark. The default :root is still warm paper (so the marketing
+   site is unaffected); the dash + platform apps set data-theme="dark" on
+   <html> and persist the choice in localStorage. The dark token block at
+   line ~222 overrides the BASE tokens so the whole --cf-* shim follows.
+   (This reverses the earlier "warm-paper-only" decision for the apps.) */
 
 :root {
   /* ─── Paper & ink ─────────────────────────────────────────────────── */
@@ -219,8 +223,80 @@
   --cf-font-serif:   var(--ff-display); /* retired Instrument Serif → Space Grotesk */
 }
 
-/* Dark mode retired. data-theme="dark" inherits light tokens. */
-:root[data-theme="dark"] { /* intentionally empty */ }
+/* ─── Dark mode (warm-dark) ───────────────────────────────────────────────
+   Overriding the base --paper/--ink/--accent/etc. tokens cascades through the
+   entire --cf-* shim below, so individual --cf-* tokens only need restating
+   when they hard-code a light-ink rgba literal (those don't cascade). */
+:root[data-theme="dark"] {
+  /* Paper & ink — warm charcoal / espresso */
+  --paper:      #1b1916;
+  --paper-2:    #141210;
+  --surface:    #222019;
+  --surface-2:  #2a261d;
+  --surface-3:  #1e1b15;
+
+  --ink:        #f1ecde;
+  --ink-soft:   #d2cbb9;
+  --ink-mute:   #9c9484;
+  --ink-faint:  #6d6757;
+
+  --rule:       rgba(241, 236, 222, 0.12);
+  --rule-2:     rgba(241, 236, 222, 0.07);
+  --rule-3:     rgba(241, 236, 222, 0.22);
+
+  /* Accent (vermillion) — brightened a step for legibility on dark */
+  --accent:        #e35a3c;
+  --accent-hover:  #f06b4d;
+  --accent-soft:   #4a2218;
+  --accent-tint:   #321a13;
+
+  /* Semantic state — brightened so small text passes AA on dark surfaces */
+  --good:    #5cb585;
+  --good-bg: #1a2a20;
+  --bad:     #e0654f;
+  --warn:    #d9a84a;
+  --warn-bg: #2c2615;
+  --danger:  #e0654f;
+
+  /* Paper-on-ink text is already a warm cream — reads fine on dark too. */
+  --ink-on:    #f1ecde;
+
+  /* Scrim — on dark a true-dark overlay reads better than warm-ink. */
+  --scrim:     rgba(0, 0, 0, 0.62);
+
+  /* Shadows — deeper / higher-contrast against dark surfaces. */
+  --shadow-sm:  0 1px 0 rgba(0,0,0,0.30), 0 1px 2px rgba(0,0,0,0.35);
+  --shadow-md:  0 1px 0 rgba(0,0,0,0.30), 0 4px 12px rgba(0,0,0,0.42);
+  --shadow-lg:  0 1px 0 rgba(0,0,0,0.30), 0 12px 32px rgba(0,0,0,0.55);
+
+  /* --cf-* shim tokens that hard-code a light-ink rgba and so don't cascade */
+  --cf-bg-hover:  rgba(241, 236, 222, 0.06);
+}
+
+/* ── Dark-mode fixes for --ink-backed cfp-* surfaces ──────────────────────
+   The "ink" surface variants (pills, buttons, canvas nodes) hard-code a
+   near-white text color (#f7f3ea) because in LIGHT mode they paint white
+   text on the dark --ink fill. In DARK mode --ink flips to a near-white
+   (#f1ecde), so that white-on-white text disappears. Flip the text to the
+   dark page color so the "ink" surface keeps its high-contrast, theme-
+   inverting role. Additive; light mode + base tokens untouched. Benefits
+   both platform and dash (both consume these cfp-* classes). */
+:root[data-theme="dark"] .cfp-pill--ink {
+  color: var(--paper);
+}
+:root[data-theme="dark"] .cfp-btn--ink {
+  color: var(--paper);
+}
+:root[data-theme="dark"] .cfp-btn--ink:hover {
+  background: #fff;
+}
+:root[data-theme="dark"] .cfp-node--you {
+  color: var(--paper);
+}
+:root[data-theme="dark"] .cfp-node--you .cfp-node__avatar {
+  background: rgba(27, 25, 22, 0.16);
+  border-color: rgba(27, 25, 22, 0.22);
+}
 
 * { box-sizing: border-box; }
 
@@ -920,7 +996,7 @@ code, pre, kbd, samp {
 .cf-chip--warning { background: rgba(151, 79, 12, 0.10); color: var(--cf-warning); border-color: rgba(151, 79, 12, 0.30); }
 .cf-chip--danger  { background: rgba(191, 38, 0, 0.10); color: var(--cf-danger); border-color: rgba(191, 38, 0, 0.30); }
 .cf-chip--mono    { font-family: var(--cf-font-mono); font-size: 11px; }
-:root[data-theme="dark"] .cf-chip--accent  { color: var(--cf-accent-hover); border-color: rgba(76, 154, 255, 0.45); }
+:root[data-theme="dark"] .cf-chip--accent  { color: var(--cf-accent-hover); border-color: rgba(227, 90, 60, 0.45); }
 :root[data-theme="dark"] .cf-chip--success { background: rgba(87, 217, 163, 0.14); color: var(--cf-success); border-color: rgba(87, 217, 163, 0.35); }
 :root[data-theme="dark"] .cf-chip--warning { background: rgba(255, 196, 0, 0.14); color: var(--cf-warning); border-color: rgba(255, 196, 0, 0.35); }
 :root[data-theme="dark"] .cf-chip--danger  { background: rgba(255, 116, 82, 0.14); color: var(--cf-danger); border-color: rgba(255, 116, 82, 0.40); }
@@ -2800,13 +2876,13 @@ code, pre, kbd, samp {
   background: rgba(255, 251, 236, 0.78);
   box-shadow: var(--cf-shadow-lg);
 }
-/* Glass over the dark forest needs more opacity to keep text readable. */
+/* Glass over warm-dark espresso needs more opacity to keep text readable. */
 :root[data-theme="dark"] .cf-glass {
-  background: rgba(36, 53, 48, 0.62);
-  border-color: rgba(94, 125, 110, 0.45);
+  background: rgba(34, 32, 25, 0.72);
+  border-color: rgba(241, 236, 222, 0.14);
 }
 :root[data-theme="dark"] .cf-glass--strong {
-  background: rgba(36, 53, 48, 0.82);
+  background: rgba(34, 32, 25, 0.88);
 }
 /* Subtle inner highlight to sell the curved-paper feel */
 .cf-glass::before {
@@ -3599,6 +3675,16 @@ textarea:focus-visible {
 .cfp-btn--danger { color: var(--danger); }
 .cfp-btn--ghost { background: transparent; border-color: transparent; }
 .cfp-btn--sm { padding: 5px 10px; font-size: 12px; }
+
+/* ── Invite-by-email form (OrgMembers / team tab) ─────────────────────────
+   A 3-up row (email · role · submit) on wide screens; stacks on narrow so
+   the submit button never clips off the right edge at 375px. */
+.cfp-invite-form { display: flex; gap: 8px; align-items: stretch; }
+.cfp-invite-form > .cfp-invite-form__email { flex: 1; min-width: 0; }
+@media (max-width: 520px) {
+  .cfp-invite-form { flex-wrap: wrap; }
+  .cfp-invite-form > .cfp-invite-form__email { flex: 1 1 100%; }
+}
 .cfp-btn--lg { padding: 9px 16px; font-size: 14px; }
 
 /* ── DiagnosisCard ──────────────────────────────────────────────────── */

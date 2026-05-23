@@ -67,10 +67,19 @@ to dark mode with neon accents.
 Instrument Serif has been **retired**. If you see `.cf-serif` in the
 codebase, it now resolves to Space Grotesk.
 
-**No dark mode.** The brand is warm-paper-only. Dark mode is a feature
-of cool-neutral systems; warming the ink and paper is the design point.
-The `data-theme="dark"` attribute is honored as a no-op fallthrough to
-light tokens so legacy code keeps rendering.
+**Dark mode — warm-dark.** Warm paper is the brand baseline and the
+marketing site stays light; the **signed-in apps (dash + platform) default
+to a *warm*-dark theme** (users can switch back to light in Settings →
+Appearance). The dark theme uses espresso-paper backgrounds (`--paper: #1b1916`) with the vermillion
+accent brightened a step (`--accent: #e35a3c`) so it stays legible on dark.
+It is not a cool-neutral inversion — warming the ink and paper is still the
+design point, at night too. Users switch via **Settings → Appearance**; the
+choice persists in `localStorage` (`cf-theme`) and is applied as
+`data-theme="dark"` on `<html>`. The dark token block in
+`ui/tokens/globals.css` (`:root[data-theme="dark"]`) overrides the base
+`--paper`/`--ink`/`--accent` tokens, so the whole `--cf-*` shim follows.
+The apps default to dark; the marketing site is unaffected.
+(This reverses the earlier "warm-paper-only, dark is a no-op" stance.)
 
 **No glassmorphism, no neon, no gradient washes.** The body background
 is solid `--paper`. Elevation comes from low-opacity neutral shadows

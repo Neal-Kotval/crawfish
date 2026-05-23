@@ -21,6 +21,7 @@ import { Projects, type Project } from "./Projects";
 import { ProjectIssues } from "./ProjectIssues";
 import { Connections } from "./Connections";
 import { Board } from "./Board";
+import { OrgSettings } from "./OrgSettings";
 import { ImportModal } from "./ImportModal";
 
 function Surface({ title, eyebrow, body }: { title: string; eyebrow: string; body: string }) {
@@ -69,7 +70,7 @@ export function OrgRoute() {
     case "connections":
       return <Connections orgId={org} />;
     case "settings":
-      return <Surface eyebrow={`${org} · settings`} title="Org settings" body="Name, default runtime, policy presets. Connect issue trackers on the Connections tab." />;
+      return <OrgSettings org={org} />;
     default:
       return <Surface eyebrow={`${org}`} title="Unknown surface" body={`No surface named "${tab}".`} />;
   }

@@ -141,6 +141,7 @@ export function Board({ orgId }: { orgId: string }) {
             <select
               value={pid ?? ""}
               onChange={(e) => setPid(e.target.value)}
+              aria-label="Select project"
               className="cf-mono"
               style={{ fontSize: 12, padding: "6px 8px", background: "var(--surface-2)", color: "var(--ink)", border: "1px solid var(--rule-3)", borderRadius: "var(--r-md)" }}
             >
@@ -175,6 +176,7 @@ export function Board({ orgId }: { orgId: string }) {
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && onCreate()}
               placeholder="New task title…"
+              aria-label="New task title"
               style={{ flex: 1, maxWidth: 420, fontSize: 14, padding: "8px 12px", background: "var(--surface-2)", color: "var(--ink)", border: "1px solid var(--rule-3)", borderRadius: "var(--r-md)" }}
             />
             <button type="button" onClick={onCreate} disabled={busy || !newTitle.trim()} className="cfp-btn cfp-btn--primary" style={{ cursor: busy || !newTitle.trim() ? "default" : "pointer" }}>

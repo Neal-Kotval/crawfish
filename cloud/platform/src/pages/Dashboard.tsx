@@ -390,7 +390,10 @@ function InstallCard({
           padding: "10px 14px",
           borderRadius: "var(--r-sm)",
           background: primary ? "var(--accent)" : "var(--ink)",
-          color: primary ? "#fff" : "var(--ink-on)",
+          // The ink-fill variant inverts with the theme (dark fill in light
+          // mode, light fill in dark mode) — paint text with --paper so it
+          // stays readable in both. --ink-on is light-only and vanished here.
+          color: primary ? "#fff" : "var(--paper)",
           border: `1px solid ${primary ? "var(--accent)" : "var(--ink)"}`,
         }}
       >

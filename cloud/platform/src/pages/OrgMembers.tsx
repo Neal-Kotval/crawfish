@@ -202,22 +202,19 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
         <Eyebrow>Invite by email</Eyebrow>
         <form
           onSubmit={onSubmit}
-          style={{
-            marginTop: 10,
-            display: "flex",
-            gap: 8,
-            alignItems: "stretch",
-          }}
+          className="cfp-invite-form"
+          style={{ marginTop: 10 }}
         >
           <input
             type="email"
             required
+            aria-label="Invite teammate by email"
             placeholder="teammate@company.com"
             value={emailDraft}
             onChange={(e) => setEmailDraft(e.target.value)}
             disabled={submitting}
+            className="cfp-invite-form__email"
             style={{
-              flex: 1,
               padding: "10px 12px",
               fontSize: 14,
               fontFamily: "inherit",
@@ -231,6 +228,7 @@ export function OrgMembers({ orgSlug }: { orgSlug: string }) {
             value={roleDraft}
             onChange={(e) => setRoleDraft(e.target.value as InviteRole)}
             disabled={submitting}
+            aria-label="Invite role"
             style={{
               padding: "10px 12px",
               fontSize: 14,

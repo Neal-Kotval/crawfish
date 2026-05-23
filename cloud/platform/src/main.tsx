@@ -30,7 +30,12 @@ import { LinkRedeem } from "./pages/Link";
 import { InviteAccept } from "./pages/InviteAccept";
 import { CLERK_ENABLED, CLERK_KEY } from "./lib/clerk";
 import { RequireAuth } from "./lib/useAuth";
+import { applyTheme } from "./lib/theme";
 import "@crawfish/ui/tokens/globals.css";
+
+// Apply the persisted theme (default: dark) before React mounts so the first
+// paint is already correct — no flash of the light theme.
+applyTheme();
 
 const tree = (
   <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
