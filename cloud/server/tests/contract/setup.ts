@@ -19,6 +19,12 @@ import supertest from "supertest";
 // X-User-Id header path. Unsetting here keeps the intent explicit.
 process.env.CLERK_SECRET_KEY = "";
 process.env.NODE_ENV = "test";
+// Isolate the test DB from the dev DB. The harness force-resets the database
+// in beforeAll; pointing it at a dedicated file means running tests no longer
+// wipes `dev.db` (or disrupts a running `npm run dev` server). Set before the
+// db-push execSync (which inherits process.env) and before src/index.js
+// constructs PrismaClient.
+process.env.DATABASE_URL = "file:./test.db";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
