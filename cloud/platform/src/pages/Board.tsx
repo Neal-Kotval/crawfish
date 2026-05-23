@@ -8,6 +8,7 @@
  * feed shows recent board changes.
  */
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Eyebrow } from "@crawfish/ui/components/Eyebrow";
 import { Pill } from "@crawfish/ui/components/Pill";
 import { formatApiError } from "@crawfish/ui/lib/formatApiError";
@@ -17,6 +18,7 @@ import {
   createTask,
   updateTask,
   listActivity,
+  streamBoard,
   TASK_STATUSES,
   type ProjectSummary,
   type Task,
@@ -55,6 +57,7 @@ export function Board({ orgId }: { orgId: string }) {
   const [newTitle, setNewTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [live, setLive] = useState(false);
 
   // Load projects once, default-select the first.
   useEffect(() => {
@@ -82,10 +85,20 @@ export function Board({ orgId }: { orgId: string }) {
       .catch((e) => setState({ kind: "error", message: formatApiError(e).body }));
   }
 
+  // Load + subscribe to the live stream for the selected project. Any board
+  // event (from this user or another) triggers a refetch.
   useEffect(() => {
-    if (pid) reload(pid);
+    if (!pid) return;
+    reload(pid);
+    const ctrl = new AbortController();
+    streamBoard(orgId, pid, () => reload(pid), ctrl.signal);
+    setLive(true);
+    return () => {
+      ctrl.abort();
+      setLive(false);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pid]);
+  }, [pid, orgId]);
 
   async function onCreate() {
     if (!pid || !newTitle.trim()) return;
@@ -123,6 +136,7 @@ export function Board({ orgId }: { orgId: string }) {
           Board
         </h1>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {live && <Pill tone="accent">● live</Pill>}
           {projects && projects.length > 0 && (
             <select
               value={pid ?? ""}
@@ -142,8 +156,13 @@ export function Board({ orgId }: { orgId: string }) {
       </div>
 
       {projects && projects.length === 0 && (
-        <div style={{ padding: 28, border: "1px dashed var(--rule-3)", borderRadius: "var(--r-lg)", background: "var(--paper)", color: "var(--ink-soft)", fontSize: 14 }}>
-          No projects yet. Add a project first, then its board appears here.
+        <div style={{ padding: 28, border: "1px dashed var(--rule-3)", borderRadius: "var(--r-lg)", background: "var(--paper)", textAlign: "center" }}>
+          <p style={{ color: "var(--ink-soft)", fontSize: 14, marginBottom: 16 }}>
+            No projects yet. The board lives inside a project — add one to get started.
+          </p>
+          <Link to={`/orgs/${orgId}/projects`} className="cfp-btn cfp-btn--primary" style={{ textDecoration: "none" }}>
+            Go to Projects →
+          </Link>
         </div>
       )}
 

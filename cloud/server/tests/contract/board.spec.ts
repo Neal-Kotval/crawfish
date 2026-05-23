@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import { app, db } from "../../src/index.js";
+import { publishBoard, subscribeBoard } from "../../src/lib/events.js";
 
 // Exercises the canonical board (ADR-003): tasks/cycles/epics/activity,
 // the role write-gate, and activity emission. No provider/fetch involved.
@@ -121,5 +122,22 @@ describe("canonical board — cycles & epics", () => {
     const epic = await asFounder("post", `${base()}/epics`).send({ title: "Launch" });
     expect(epic.status).toBe(201);
     expect(epic.body).toMatchObject({ title: "Launch", status: "backlog" });
+  });
+});
+
+describe("board events hub (SSE fan-out)", () => {
+  it("delivers events to project subscribers, scoped by project, and stops after unsubscribe", () => {
+    const got: string[] = [];
+    const unsub = subscribeBoard("proj-x", (ev) => got.push(ev.kind));
+    publishBoard("proj-x", { kind: "task_created", at: new Date().toISOString() });
+    publishBoard("proj-y", { kind: "status_changed", at: new Date().toISOString() }); // other channel
+    unsub();
+    publishBoard("proj-x", { kind: "status_changed", at: new Date().toISOString() }); // after unsub
+    expect(got).toEqual(["task_created"]);
+  });
+
+  it("non-member gets 404 on the live stream", async () => {
+    const res = await request(app).get(`${base()}/stream`).set("X-User-Id", "board1-outsider");
+    expect(res.status).toBe(404);
   });
 });

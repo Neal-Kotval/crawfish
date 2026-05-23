@@ -11,6 +11,7 @@ import { Router } from "express";
 import { db } from "../index.js";
 import { httpError } from "../lib/errors.js";
 import { requireMember, requireRole } from "../lib/rbac.js";
+import { publishBoard, subscribeBoard } from "../lib/events.js";
 import {
   createTaskSchema,
   updateTaskSchema,
@@ -39,6 +40,13 @@ async function logActivity(args: {
       kind: args.kind,
       payload: JSON.stringify(args.payload ?? {}),
     },
+  });
+  // Fan out to live SSE subscribers (best-effort, in-process).
+  publishBoard(args.projectId, {
+    kind: args.kind,
+    taskId: args.taskId ?? null,
+    payload: args.payload ?? {},
+    at: new Date().toISOString(),
   });
 }
 
@@ -214,6 +222,37 @@ boardRouter.post("/:pid/epics", async (req, res) => {
     },
   });
   return res.status(201).json(epic);
+});
+
+// ─── Live stream (SSE) ─────────────────────────────────────────────────────────
+
+boardRouter.get("/:pid/stream", async (req, res) => {
+  const p = req.params as Params;
+  const ctx = await requireMember(req, p.orgId);
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+  const project = await findProject(ctx.orgId, p.pid);
+  if (!project) return httpError(res, 404, "not_found", "");
+
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no", // disable proxy buffering
+  });
+  res.flushHeaders?.();
+  res.write(": connected\n\n");
+
+  const unsubscribe = subscribeBoard(project.id, (ev) => {
+    res.write(`event: board\ndata: ${JSON.stringify(ev)}\n\n`);
+  });
+  // Heartbeat keeps the connection alive through idle periods / proxies.
+  const heartbeat = setInterval(() => res.write(": ping\n\n"), 25_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+    res.end();
+  });
 });
 
 // ─── Activity feed ─────────────────────────────────────────────────────────────

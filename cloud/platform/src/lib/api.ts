@@ -304,6 +304,50 @@ export async function listActivity(orgId: string, pid: string): Promise<Activity
   return unwrap<Activity[]>(await apiFetch(`${projBase(orgId, pid)}/activity`));
 }
 
+export type BoardEvent = { kind: string; taskId: string | null; payload: unknown; at: string };
+
+/**
+ * Subscribe to a project's live board stream (SSE over fetch, so it carries the
+ * dev/Clerk auth headers EventSource can't set). Calls `onEvent` per board
+ * event; returns nothing — pass an AbortSignal and abort it to disconnect.
+ */
+export function streamBoard(
+  orgId: string,
+  pid: string,
+  onEvent: (ev: BoardEvent) => void,
+  signal: AbortSignal,
+): void {
+  void (async () => {
+    try {
+      const res = await apiFetch(`${projBase(orgId, pid)}/stream`, { signal });
+      if (!res.ok || !res.body) return;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let sep: number;
+        while ((sep = buf.indexOf("\n\n")) >= 0) {
+          const frame = buf.slice(0, sep);
+          buf = buf.slice(sep + 2);
+          const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+          if (dataLine) {
+            try {
+              onEvent(JSON.parse(dataLine.slice(5).trim()) as BoardEvent);
+            } catch {
+              /* ignore malformed frame */
+            }
+          }
+        }
+      }
+    } catch {
+      /* aborted or network drop — caller re-subscribes on next mount */
+    }
+  })();
+}
+
 // ─── Invites ──────────────────────────────────────────────────────────────
 
 export type InviteRole = "owner" | "contributor";
