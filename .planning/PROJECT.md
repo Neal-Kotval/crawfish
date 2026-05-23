@@ -63,10 +63,12 @@ A developer can install Crawfish and, within fifteen minutes, have a spawned age
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Preserve local-first MVP as an earlier milestone rather than retire it | User chose to keep the proven 15-min-to-PR thesis as a shippable earlier surface; ROADMAP.md precedence-0 would otherwise auto-supersede it | — Pending |
-| Orchestrator (O0–O7) runs as a parallel paid track on top of free MIT substrate | Funds the GRAND_PLAN org-OS vision without abandoning local-first thesis | — Pending |
-| Durable workflow engine (Temporal vs Inngest vs Restate; reject BullMQ/pg-boss) | Required for crash-safe, idempotent execution; choice deferred to ADR-002 (O0 deliverable) | — Pending (OPEN — ADR-002 not yet authored) |
-| Board data model = per-project file-backed board + JSONL event journal | Ratified by ADR-001 (referenced by GRAND_PLAN §3.2; ADR doc not in ingest set) | — Pending |
+| **Canonical domain model = cloud Postgres; desktop is an online thin client** | ADR-003 (2026-05-23): resolves audit blocker B1 (4 forked board stores). Cloud owns org/board/task/issue/member; no offline board, no CRDT. | ✓ Accepted (ADR-003) |
+| M0 redefined as cloud-first onboarding (NOT local-first / platform-dark) | Consequence of ADR-003; the 15-min hire→PR promise stays, but account-based, not disk-based | ✓ Accepted (supersedes the earlier "preserve local-first" decision) |
+| Moat reframed: hosted org-OS (orchestration + knowledge/eval data), not the on-disk filesystem | Consequence of ADR-003; GRAND_PLAN §3.3 to be rewritten | ✓ Accepted |
+| Orchestrator (O0–O7) runs as a parallel paid track on the hosted platform | Funds the GRAND_PLAN org-OS vision | — Pending |
+| Durable workflow engine (Temporal vs Inngest vs Restate; reject BullMQ/pg-boss) | Required for crash-safe, idempotent execution; choice deferred to ADR-002 (O0 deliverable). Now drives Postgres state transitions per ADR-003. | — Pending (OPEN — ADR-002 not yet authored) |
+| ~~Board data model = per-project file-backed board + JSONL event journal (ADR-001)~~ | **SUPERSEDED by ADR-003** — disk journal is no longer canonical; `.crawfish/` is an agent working directory | ✗ Superseded |
 | Translate all pre-pivot paths to monorepo layout when emitting deliverables | Source docs predate the pivot; avoids building against dead paths | ✓ Good |
 
 ---
