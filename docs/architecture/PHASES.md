@@ -111,7 +111,7 @@ Note on current-vs-target: a meaningful slice of board work (cycles, criteria, A
 ### Phase 5: Acceptance Criteria, Budget & Preflight
 **Milestone:** M1 · **Status:** In progress (evidence guard done) · **Depends on:** Phase 4
 
-> **Done so far:** acceptance-criteria evidence guard — `POST/PATCH /:pid/tasks/:taskId/criteria` + a guard on the task PATCH that rejects a `done` transition with `criteria_missing_evidence` until every criterion is `met` (`routes/board.ts`, contract schemas, tests). **Pending:** live token-budget bar + breach→`escalated`/`budget_breach` (reuse the SSE hub), and agent preflight self-attestation.
+> **Done so far:** (1) acceptance-criteria evidence guard — `POST/PATCH /:pid/tasks/:taskId/criteria` + a guard on the task PATCH that rejects a `done` transition with `criteria_missing_evidence` until every criterion is `met`; (2) token-budget breach — `POST /:pid/tasks/:taskId/usage` records spend; crossing `tokenBudget` (≥100%) flips `escalated` and emits a `budget_breach` activity over SSE (once). `routes/board.ts`, contract schemas, tests (85 green). **Pending:** the live budget *bar* in the board UI, and agent preflight self-attestation.
 
 **Goal:** Tasks cannot be marked done without evidence, token spend is visible and enforced, and agents self-attest before acting.
 
