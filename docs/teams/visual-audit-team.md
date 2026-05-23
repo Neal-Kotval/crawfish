@@ -30,7 +30,7 @@ For their surface, every teammate produces **three artifacts in this order**:
 
 1. **`docs/ui-audits/2026-05-18-<surface>.md`** — scorecard + blockers + majors + polish + mock-data inventory + consistency gaps + recommendations. Mirror the format of [`2026-05-18-org-workspace.md`](../ui-audits/2026-05-18-org-workspace.md) verbatim.
 2. **A code redesign of every P1 blocker** in their owned files. Big redesigns are allowed and encouraged where the surface is broken (e.g. Dash Canvas's seed-data leak from the prior audit). Big redesigns must:
-   - Stay inside the brand: warm paper, vermillion, three typefaces, no dark mode, no glassmorphism. See [`DESIGN.md`](../product/DESIGN.md).
+   - Stay inside the brand: warm paper (or warm-dark in the apps), vermillion, three typefaces, no glassmorphism. See [`DESIGN.md`](../product/DESIGN.md).
    - Use existing `@crawfish/ui` components and `ui/tokens/globals.css` classes — **never** hex literals, **never** new component-scoped `.css` files.
    - Type-check clean (`npx tsc --noEmit` from the submodule root) before claiming done.
    - Be committed in small, atomic commits with messages like `audit(<surface>): fix Canvas seed-data leak (P1)`.
