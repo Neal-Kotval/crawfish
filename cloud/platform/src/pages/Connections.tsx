@@ -121,7 +121,7 @@ export function Connections({ orgId }: { orgId: string }) {
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Pill tone={it.connected ? "accent" : "ink"}>
+                <Pill tone={it.connected ? "accent" : "neutral"}>
                   {it.connected ? "connected" : "disconnected"}
                 </Pill>
                 {it.provider === "linear" && !it.connected && (

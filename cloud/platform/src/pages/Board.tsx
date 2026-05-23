@@ -36,13 +36,6 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   canceled: "Canceled",
 };
 
-function statusTone(s: TaskStatus): "ink" | "warn" | "accent" | "danger" {
-  if (s === "done") return "accent";
-  if (s === "blocked") return "danger";
-  if (s === "in_progress" || s === "in_review") return "warn";
-  return "ink";
-}
-
 type Load =
   | { kind: "loading" }
   | { kind: "error"; message: string }
@@ -205,7 +198,7 @@ export function Board({ orgId }: { orgId: string }) {
               {TASK_STATUSES.map((s) => {
                 const col = tasks.filter((t) => t.status === s);
                 return (
-                  <div key={s} style={{ flex: "0 0 220px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div key={s} style={{ flex: "1 0 200px", minWidth: 200, display: "flex", flexDirection: "column", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px" }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)" }}>{STATUS_LABEL[s]}</span>
                       <span className="cf-mono" style={{ fontSize: 11, color: "var(--ink-mute)" }}>{col.length}</span>
@@ -250,20 +243,18 @@ function TaskCard({ task, onMove }: { task: Task; onMove: (t: Task, s: TaskStatu
         <span style={{ fontSize: 13 }}>{task.title}</span>
         {task.escalated && <Pill tone="danger">escalated</Pill>}
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-        <Pill tone={statusTone(task.status)}>{STATUS_LABEL[task.status]}</Pill>
-        <select
-          value={task.status}
-          onChange={(e) => onMove(task, e.target.value as TaskStatus)}
-          aria-label="Move task"
-          className="cf-mono"
-          style={{ fontSize: 11, padding: "2px 4px", background: "var(--paper)", color: "var(--ink-soft)", border: "1px solid var(--rule-3)", borderRadius: "var(--r-sm)" }}
-        >
-          {TASK_STATUSES.map((s) => (
-            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-          ))}
-        </select>
-      </div>
+      {/* Status lives in the column header; the select is the sole control to move it. */}
+      <select
+        value={task.status}
+        onChange={(e) => onMove(task, e.target.value as TaskStatus)}
+        aria-label="Move task"
+        className="cf-mono"
+        style={{ fontSize: 11, padding: "3px 6px", width: "100%", background: "var(--paper)", color: "var(--ink-soft)", border: "1px solid var(--rule-3)", borderRadius: "var(--r-sm)" }}
+      >
+        {TASK_STATUSES.map((s) => (
+          <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+        ))}
+      </select>
     </div>
   );
 }

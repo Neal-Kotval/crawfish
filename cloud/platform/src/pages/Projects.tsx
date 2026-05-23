@@ -201,7 +201,7 @@ function Body({
   );
 }
 
-function statusTone(s: Project["cloneStatus"]): "ink" | "warn" | "accent" | "danger" {
+function statusTone(s: Project["cloneStatus"]): "neutral" | "warn" | "accent" | "danger" {
   switch (s) {
     case "cloned":
       return "accent";
@@ -212,7 +212,7 @@ function statusTone(s: Project["cloneStatus"]): "ink" | "warn" | "accent" | "dan
       return "danger";
     case "local_only":
     default:
-      return "ink";
+      return "neutral";
   }
 }
 
