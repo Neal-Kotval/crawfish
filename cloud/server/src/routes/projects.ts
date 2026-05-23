@@ -8,6 +8,7 @@ import {
   fetchRepoMetadata,
   type RepoMetadata,
 } from "../lib/github.js";
+import { syncProjectIssues, NothingToSync } from "../lib/sync.js";
 
 export const projectsRouter = Router({ mergeParams: true });
 
@@ -214,6 +215,56 @@ projectsRouter.get("/:pid/files/:filename", async (req, res) => {
   res.setHeader("Content-Type", contentType);
   res.setHeader("Cache-Control", "no-store");
   return res.status(200).send(body);
+});
+
+// GET /:pid/issues — list synced issues for a project (member-only). Labels
+// are stored JSON-encoded; parsed back to an array for the response.
+projectsRouter.get("/:pid/issues", async (req, res) => {
+  const params = req.params as { orgId: string; pid: string };
+  const ctx = await requireMember(req, params.orgId);
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+
+  const project = await db.project.findFirst({ where: { id: params.pid, orgId: ctx.orgId } });
+  if (!project) return httpError(res, 404, "not_found", "");
+
+  const issues = await db.issue.findMany({
+    where: { projectId: project.id },
+    orderBy: [{ externalUpdatedAt: "desc" }, { createdAt: "desc" }],
+  });
+  return res.json(
+    issues.map((i) => ({
+      ...i,
+      labels: ((): string[] => {
+        try {
+          const v = JSON.parse(i.labels) as unknown;
+          return Array.isArray(v) ? (v as string[]) : [];
+        } catch {
+          return [];
+        }
+      })(),
+    })),
+  );
+});
+
+// POST /:pid/sync — pull issues from the project's connected provider and
+// upsert them. Idempotent. GitHub is wired; Linear lands in a later wave.
+projectsRouter.post("/:pid/sync", async (req, res) => {
+  const params = req.params as { orgId: string; pid: string };
+  const ctx = await requireMember(req, params.orgId);
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+
+  const project = await db.project.findFirst({ where: { id: params.pid, orgId: ctx.orgId } });
+  if (!project) return httpError(res, 404, "not_found", "");
+
+  try {
+    const result = await syncProjectIssues(db, project, ctx.userId);
+    return res.json(result);
+  } catch (err) {
+    if (err instanceof NothingToSync) return httpError(res, 400, "nothing_to_sync", "");
+    if (err instanceof GithubNotConnected)
+      return httpError(res, 409, "github_disconnected", "");
+    return httpError(res, 502, "sync_error", String(err));
+  }
 });
 
 projectsRouter.delete("/:pid", async (req, res) => {

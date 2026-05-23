@@ -76,6 +76,43 @@ export async function fetchRepoByName(
   return { id: j.id, full_name: j.full_name, default_branch: j.default_branch, private: j.private };
 }
 
+export interface GithubIssue {
+  node_id: string;
+  number: number;
+  title: string;
+  body: string | null;
+  state: string; // "open" | "closed"
+  html_url: string;
+  labels: Array<{ name?: string } | string>;
+  assignee: { login: string } | null;
+  updated_at: string;
+  // Present ONLY on pull requests. The /issues endpoint returns PRs too, so
+  // its presence is how we exclude them.
+  pull_request?: unknown;
+}
+
+/**
+ * List a repo's issues (state=all), excluding pull requests. Single page of up
+ * to 100; callers paginate by incrementing `page` until a short page returns.
+ */
+export async function listRepoIssues(
+  token: string,
+  fullName: string,
+  page = 1,
+): Promise<GithubIssue[]> {
+  const url = `https://api.github.com/repos/${fullName}/issues?state=all&per_page=100&page=${page}`;
+  const r = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "crawfish-server",
+    },
+  });
+  if (!r.ok) throw new Error(`github ${r.status}`);
+  const arr = (await r.json()) as GithubIssue[];
+  return arr.filter((i) => i.pull_request === undefined);
+}
+
 export async function listUserRepos(token: string, page: number): Promise<RepoSummary[]> {
   const url = `https://api.github.com/user/repos?sort=updated&per_page=30&page=${page}`;
   const r = await fetch(url, {

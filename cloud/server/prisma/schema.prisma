@@ -31,6 +31,7 @@ model Org {
   deviceCodes    DeviceLinkCode[]
   invites        Invite[]
   projects       Project[]
+  integrations   Integration[]
 }
 
 model OrgMember {
@@ -116,9 +117,56 @@ model Project {
   cloneError      String?
   localPath       String?
   deviceId        String?
+  linearTeamId    String?
+  linearTeamKey   String?
   createdById     String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  issues          Issue[]
 
   @@unique([orgId, githubRepoId], name: "org_repo_unique")
+}
+
+// Per-org, per-provider OAuth connection. Holds the access/refresh tokens used
+// to pull issues from GitHub and Linear. Tokens are plaintext this phase
+// (encryption-at-rest is a tracked follow-up); never serialize them in an API
+// response, never log them.
+model Integration {
+  id                    String   @id @default(cuid())
+  org                   Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId                 String
+  provider              String                       // "github" | "linear" (enforced in app-layer zod)
+  accessToken           String
+  refreshToken          String?
+  externalWorkspaceId   String?                      // Linear org id
+  externalWorkspaceName String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([orgId, provider])
+}
+
+// An issue synced from a provider into a Project. sqlite has no array/JSON
+// type, so `labels` is a JSON-encoded string. Idempotent re-sync upserts on
+// the (projectId, provider, externalId) compound key.
+model Issue {
+  id                String    @id @default(cuid())
+  project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId         String
+  provider          String                          // "github" | "linear" | "native"
+  externalId        String                          // stable provider node id (unique-key component)
+  externalKey       String                          // human id: "ENG-123" (Linear) | "#42" (GitHub)
+  number            Int?
+  title             String
+  body              String?
+  state             String                          // normalized "open" | "closed"
+  url               String?
+  labels            String    @default("[]")        // JSON-encoded array of label names
+  assigneeExternal  String?
+  externalUpdatedAt DateTime?
+  syncedAt          DateTime
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([projectId, provider, externalId])
 }
