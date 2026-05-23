@@ -228,7 +228,8 @@ serves `/:pid/{tasks,cycles,epics,activity}` with the role write-gate and activi
 (Phase 4), and `cloud/platform/src/pages/Board.tsx` renders the kanban (project picker, statuses,
 add-task, status moves, activity feed) — surfaced in the sidebar nav with **Projects**. The legacy
 disk write paths (orgctl `board.ts` / lens board endpoints) are being demoted per ADR-003. Still
-pending on cloud: `TaskLink`/criteria handlers (Phases 7/5) and realtime SSE.
+pending on cloud: `TaskLink`/criteria handlers (Phases 7/5). Realtime SSE is wired (§7) — the
+board updates live and an issue can be **promoted to a board Task** from the issues view.
 
 ### 6d. Hosted Orchestrator (M3)
 **Blocked on ADR-002** (durable workflow engine — OPEN). The target flow: issue intake →
@@ -241,12 +242,17 @@ models) — no journal-replay/materializer needed. It is the paid wedge; M3 is *
 
 ## 7. Realtime
 
-`cloud/server` has **no SSE/WebSocket transport today** (audit B3). The only streaming in the
-codebase is lens's disk-board SSE (`…/board/stream`), which lives in a different process/repo
-and is being demoted (§4). Per ADR-003, realtime is **`cloud/server`'s responsibility** and is
-required by **Phase 5** (live token-budget bar) and **Phase 15** (per-craw SSE). An earlier
-assumption that the cloud Orchestrator could reuse lens SSE is explicitly wrong (different
-process). This transport is owed.
+`cloud/server` now has **SSE realtime for the board** (audit B3, addressed Phase 4):
+`lib/events.ts` is an in-process event hub keyed by `projectId`; `logActivity` (in `routes/board.ts`)
+fans out to it; and `GET /api/orgs/:orgId/projects/:pid/stream` is a membership-gated
+`text/event-stream` endpoint with heartbeat + cleanup. The platform consumes it via
+`streamBoard()` (`lib/api.ts`) — a **fetch-based** SSE reader, used because `EventSource` can't
+attach the dev/Clerk auth headers; `Board.tsx` refetches on each event. Per ADR-003 this is
+`cloud/server`'s responsibility (the lens disk-board SSE is a different process, being demoted).
+
+**Limits / owed:** the hub is **single-process** — a multi-instance deployment needs Redis pub/sub
+or Postgres `LISTEN/NOTIFY` behind the same publish/subscribe surface. Phase 15's per-craw streams
+build on this. Phase 5's live token-budget bar can reuse the same hub (emit a `budget_breach` event).
 
 ---
 
@@ -274,9 +280,10 @@ process). This transport is owed.
   dash board → cloud-API client; remove dash first-run org quiz; deprecate/proxy lens board +
   cycles endpoints; repurpose orgctl/projectctl board writers to cloud clients or execution
   scratch. Part of the shipped NOW-W1..W5 disk-board work is reworked.
-- **Cloud board realtime + remaining handlers.** Phase 4 shipped `routes/board.ts`
-  (tasks/cycles/epics/activity + write-gate) and the `Board.tsx` UI in the nav; still missing:
-  SSE/WebSocket transport (§7) and `TaskLink`/`AcceptanceCriterion` handlers (Phases 7/5).
+- **Cloud board remaining handlers.** Phase 4 shipped `routes/board.ts`
+  (tasks/cycles/epics/activity + write-gate), the `Board.tsx` UI in the nav, and **SSE realtime**
+  (§7). Still missing: `TaskLink`/`AcceptanceCriterion` handlers (Phases 7/5), and a
+  **multi-instance backing** for the SSE hub (Redis/Postgres NOTIFY) before horizontal scale.
 - **RBAC write-gate** is wired for the board router (`requireRole`, Phase 4); the projects and
   integrations routers are still membership-only and should adopt it. Dev-auth shim over-broad (§5).
 - **`@crawfish/contracts` extraction.** `contract.ts` is the single contract today but lives in
