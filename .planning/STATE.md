@@ -46,6 +46,10 @@ Recent decisions affecting current work:
 - Orchestrator (M3, Phases 12–19, O0–O7) is a parallel paid track on top of free MIT substrate; its hard prerequisite is the M1 board (Phase 7)
 - All pre-pivot paths translated to monorepo layout (cloud/, desktop/, cli/, web/)
 
+### Roadmap Evolution
+
+- Phase 20 added (2026-05-22): Cloud Issue Ingestion — Linear + GitHub connectors with a Postgres `Issue` model, Linear-Team→Project mapping, OAuth integrations, and a project issues UI in `cloud/platform`. Pulled forward into the cloud-platform line; depends on Phase 2. Design forks resolved: (1) keep auto-provisioned one-workspace-per-user + teams [already shipped in `lib/workspace.ts`]; (2) issues live in a new cloud Postgres `Issue` model; (3) Linear Team → Crawfish Project mapping.
+
 ### Pending Todos
 
 None yet.

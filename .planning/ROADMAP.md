@@ -285,6 +285,25 @@ M3 (Phases 12–19) is a parallel paid track whose only hard prerequisite is the
 | 17. Billing, RBAC, Audit & Analytics (O5) | M3 | 0/TBD | Not started | - |
 | 18. Onboarding Polish, Notifications & Ops (O6) | M3 | 0/TBD | Not started | - |
 | 19. Public Launch, Craw Authoring & Integrations Edge (O7) | M3 | 0/TBD | Not started | - |
+| 20. Cloud Issue Ingestion (Linear + GitHub) | M0/M1 (pulled fwd, depends Phase 2) | 0/TBD | Not started | - |
+
+### Phase 20: Cloud Issue Ingestion — Linear + GitHub connectors with Postgres Issue model, Linear-Team to Project mapping, OAuth integrations, and project issues UI in cloud/platform
+
+> **Milestone note:** Pulled forward into the M0/M1 cloud-platform line. It extends Phase 2 (`cloud/platform` + `cloud/server` org/project model, which already auto-provisions one workspace per user and binds each Project 1:1 to a GitHub repo). It is sequenced ahead of M3's on-disk inbound work (Phase 13 / O1), and the cloud `Issue` model it introduces is the source of truth that Phase 13's webhook/poller can later feed.
+
+**Goal**: From the cloud platform, a user connects GitHub and Linear to their workspace and auto-loads issues into a per-Project issues view — GitHub issues mapping by repo (the existing 1:1 `Project.githubRepo` binding) and Linear issues mapping by Team (each Linear Team → one Crawfish Project), persisted in a new Postgres `Issue` model and re-syncable idempotently.
+**Requirements**: REQ-knowledge-connectors, REQ-orch-issue-intake
+**Depends on:** Phase 2
+**Success Criteria** (what must be TRUE):
+  1. The Prisma schema gains an `Integration` model (per-org, per-provider OAuth token store, `@@unique([orgId, provider])`) and an `Issue` model scoped to `Project` with `@@unique([projectId, provider, externalId])`; `Project` gains `linearTeamId` / `linearTeamKey`. The migration applies cleanly.
+  2. A user connects GitHub (reusing the existing Clerk GitHub OAuth token) and runs a sync that upserts that Project's repo issues into `Issue`; re-running the sync is idempotent (no duplicates).
+  3. A user completes a Linear OAuth connect, selects which Linear Team binds to a given Project, and runs a sync that upserts that Team's issues into `Issue` carrying Linear project/cycle as metadata/labels.
+  4. The `cloud/platform` project page lists issues from `GET /api/orgs/:id/projects/:pid/issues` with state/labels, and a "Sync now" control triggers ingestion and reflects updated counts.
+  5. Issue state, title, labels, and external key/url round-trip from the provider into the cloud DB and render in the UI.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 20 to break down)
 
 ---
 *Roadmap created: 2026-05-22 from doc ingest (mode: new-project-from-ingest)*
