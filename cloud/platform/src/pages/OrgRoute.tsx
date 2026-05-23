@@ -20,6 +20,7 @@ import { OrgMembers } from "./OrgMembers";
 import { Projects, type Project } from "./Projects";
 import { ProjectIssues } from "./ProjectIssues";
 import { Connections } from "./Connections";
+import { Board } from "./Board";
 import { ImportModal } from "./ImportModal";
 
 function Surface({ title, eyebrow, body }: { title: string; eyebrow: string; body: string }) {
@@ -54,7 +55,7 @@ export function OrgRoute() {
     case "projects":
       return <ProjectsSurface org={org} />;
     case "board":
-      return <Surface eyebrow={`${org} · board`} title="Board" body="Shared kanban board for human + agent tickets." />;
+      return <Board orgId={org} />;
     case "sessions":
       return <Surface eyebrow={`${org} · sessions`} title="Sessions" body="Cross-team transcripts with public permalinks for sharing a session externally." />;
     case "knowledge":

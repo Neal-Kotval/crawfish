@@ -213,6 +213,97 @@ export async function syncProject(orgId: string, projectId: string): Promise<Syn
   return unwrap<SyncResult>(res);
 }
 
+// ─── Board (canonical Task board — ADR-003) ─────────────────────────────────
+// Mirrors cloud/server/src/domain/contract.ts. (Pending @crawfish/contracts
+// extraction, this is the platform's copy of the canonical vocabulary.)
+
+export const TASK_STATUSES = [
+  "triage",
+  "backlog",
+  "in_progress",
+  "in_review",
+  "blocked",
+  "done",
+  "canceled",
+] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export type Task = {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  escalated: boolean;
+  cycleId: string | null;
+  epicId: string | null;
+  assigneeId: string | null;
+  tokenBudget: number | null;
+  tokensSpent: number;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Cycle = {
+  id: string;
+  name: string;
+  status: "upcoming" | "active" | "completed";
+  startsAt: string | null;
+  endsAt: string | null;
+};
+
+export type Epic = { id: string; title: string; description: string | null; status: TaskStatus };
+
+export type Activity = {
+  id: string;
+  taskId: string | null;
+  actorMemberId: string | null;
+  kind: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
+const projBase = (orgId: string, pid: string) =>
+  `/api/orgs/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(pid)}`;
+
+export async function listTasks(orgId: string, pid: string): Promise<Task[]> {
+  return unwrap<Task[]>(await apiFetch(`${projBase(orgId, pid)}/tasks`));
+}
+
+export async function createTask(
+  orgId: string,
+  pid: string,
+  body: { title: string; status?: TaskStatus; description?: string },
+): Promise<Task> {
+  return unwrap<Task>(
+    await apiFetch(`${projBase(orgId, pid)}/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+export async function updateTask(
+  orgId: string,
+  pid: string,
+  taskId: string,
+  patch: Partial<{ title: string; status: TaskStatus; escalated: boolean; assigneeId: string | null }>,
+): Promise<Task> {
+  return unwrap<Task>(
+    await apiFetch(`${projBase(orgId, pid)}/tasks/${encodeURIComponent(taskId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }),
+  );
+}
+
+export async function listActivity(orgId: string, pid: string): Promise<Activity[]> {
+  return unwrap<Activity[]>(await apiFetch(`${projBase(orgId, pid)}/activity`));
+}
+
 // ─── Invites ──────────────────────────────────────────────────────────────
 
 export type InviteRole = "owner" | "contributor";
