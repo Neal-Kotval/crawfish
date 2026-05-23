@@ -109,7 +109,9 @@ Note on current-vs-target: a meaningful slice of board work (cycles, criteria, A
 **Notes:** This is the foundation phase — it builds the cloud canonical domain model that **supersedes the disk board** and closes audit H1 (cloud Prisma was a sync-mirror, not a domain model). It gates the rest of M1 and the paused Phase 20 Wave 4. Requires the new SSE transport in `cloud/server` (audit B3).
 
 ### Phase 5: Acceptance Criteria, Budget & Preflight
-**Milestone:** M1 · **Status:** Not started · **Depends on:** Phase 4
+**Milestone:** M1 · **Status:** In progress (evidence guard done) · **Depends on:** Phase 4
+
+> **Done so far:** acceptance-criteria evidence guard — `POST/PATCH /:pid/tasks/:taskId/criteria` + a guard on the task PATCH that rejects a `done` transition with `criteria_missing_evidence` until every criterion is `met` (`routes/board.ts`, contract schemas, tests). **Pending:** live token-budget bar + breach→`escalated`/`budget_breach` (reuse the SSE hub), and agent preflight self-attestation.
 
 **Goal:** Tasks cannot be marked done without evidence, token spend is visible and enforced, and agents self-attest before acting.
 
