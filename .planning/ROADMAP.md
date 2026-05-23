@@ -285,7 +285,7 @@ M3 (Phases 12–19) is a parallel paid track whose only hard prerequisite is the
 | 17. Billing, RBAC, Audit & Analytics (O5) | M3 | 0/TBD | Not started | - |
 | 18. Onboarding Polish, Notifications & Ops (O6) | M3 | 0/TBD | Not started | - |
 | 19. Public Launch, Craw Authoring & Integrations Edge (O7) | M3 | 0/TBD | Not started | - |
-| 20. Cloud Issue Ingestion (Linear + GitHub) | M0/M1 (pulled fwd, depends Phase 2) | 0/TBD | Not started | - |
+| 20. Cloud Issue Ingestion (Linear + GitHub) | M0/M1 (pulled fwd, depends Phase 2) | 0/4 | Planned | - |
 
 ### Phase 20: Cloud Issue Ingestion — Linear + GitHub connectors with Postgres Issue model, Linear-Team to Project mapping, OAuth integrations, and project issues UI in cloud/platform
 
@@ -300,10 +300,13 @@ M3 (Phases 12–19) is a parallel paid track whose only hard prerequisite is the
   3. A user completes a Linear OAuth connect, selects which Linear Team binds to a given Project, and runs a sync that upserts that Team's issues into `Issue` carrying Linear project/cycle as metadata/labels.
   4. The `cloud/platform` project page lists issues from `GET /api/orgs/:id/projects/:pid/issues` with state/labels, and a "Sync now" control triggers ingestion and reflects updated counts.
   5. Issue state, title, labels, and external key/url round-trip from the provider into the cloud DB and render in the UI.
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 20 to break down)
+- [ ] 20-01-PLAN.md — Prisma schema (Integration + Issue + Project.linearTeam*), apply migration, Wave 0 test scaffolds
+- [ ] 20-02-PLAN.md — GitHub vertical slice: listRepoIssues (PR-filtered) + syncProjectIssues + issues/sync routes (idempotent, RBAC)
+- [ ] 20-03-PLAN.md — Linear slice: OAuth+GraphQL client (refresh-on-401), integrations routes + public callback, team-mapping sync (OAuth-app checkpoint)
+- [ ] 20-04-PLAN.md — cloud/platform UI: Connections panel + Project Issues view (Sync now, Team picker), OrgRoute wiring
 
 ---
 *Roadmap created: 2026-05-22 from doc ingest (mode: new-project-from-ingest)*
