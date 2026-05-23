@@ -125,6 +125,40 @@ describe("canonical board — cycles & epics", () => {
   });
 });
 
+describe("acceptance-criteria evidence guard (Phase 5)", () => {
+  it("blocks done while a criterion is unmet, then allows it once met", async () => {
+    const created = await asFounder("post", `${base()}/tasks`).send({ title: "Guarded" });
+    const tid = created.body.id;
+    const crit = await asFounder("post", `${base()}/tasks/${tid}/criteria`).send({
+      kind: "test",
+      description: "unit tests pass",
+    });
+    expect(crit.status).toBe(201);
+    expect(crit.body).toMatchObject({ kind: "test", met: false });
+
+    const blocked = await asFounder("patch", `${base()}/tasks/${tid}`).send({ status: "done" });
+    expect(blocked.status).toBe(400);
+    expect(blocked.body.error.code).toBe("criteria_missing_evidence");
+
+    const met = await asFounder("patch", `${base()}/tasks/${tid}/criteria/${crit.body.id}`).send({
+      met: true,
+      evidence: JSON.stringify({ run: "vitest", exit: 0 }),
+    });
+    expect(met.status).toBe(200);
+    expect(met.body.met).toBe(true);
+
+    const ok = await asFounder("patch", `${base()}/tasks/${tid}`).send({ status: "done" });
+    expect(ok.status).toBe(200);
+    expect(ok.body.status).toBe("done");
+  });
+
+  it("allows done when a task has no criteria", async () => {
+    const created = await asFounder("post", `${base()}/tasks`).send({ title: "Free" });
+    const ok = await asFounder("patch", `${base()}/tasks/${created.body.id}`).send({ status: "done" });
+    expect(ok.status).toBe(200);
+  });
+});
+
 describe("board events hub (SSE fan-out)", () => {
   it("delivers events to project subscribers, scoped by project, and stops after unsubscribe", () => {
     const got: string[] = [];

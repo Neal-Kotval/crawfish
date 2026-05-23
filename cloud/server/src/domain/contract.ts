@@ -113,3 +113,14 @@ export const createEpicSchema = z.object({
   description: z.string().max(10_000).optional(),
   status: taskStatusSchema.optional(),
 });
+
+export const createCriterionSchema = z.object({
+  kind: criterionKindSchema,
+  description: z.string().min(1).max(2_000),
+});
+
+export const updateCriterionSchema = z.object({
+  description: z.string().min(1).max(2_000).optional(),
+  met: z.boolean().optional(),
+  evidence: z.string().max(10_000).nullable().optional(),
+});

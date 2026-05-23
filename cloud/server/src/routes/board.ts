@@ -17,6 +17,8 @@ import {
   updateTaskSchema,
   createCycleSchema,
   createEpicSchema,
+  createCriterionSchema,
+  updateCriterionSchema,
   type ActivityKind,
 } from "../domain/contract.js";
 
@@ -129,6 +131,22 @@ boardRouter.patch("/:pid/tasks/:taskId", async (req, res) => {
   });
   if (!existing) return httpError(res, 404, "not_found", "");
 
+  // Evidence guard (Phase 5): a task can only move to `done` once every
+  // acceptance criterion is met. Unmet criteria → 400 criteria_missing_evidence.
+  if (parsed.data.status === "done" && existing.status !== "done") {
+    const unmet = await db.acceptanceCriterion.count({
+      where: { taskId: existing.id, met: false },
+    });
+    if (unmet > 0) {
+      return httpError(
+        res,
+        400,
+        "criteria_missing_evidence",
+        `${unmet} acceptance criterion(s) not met`,
+      );
+    }
+  }
+
   const updated = await db.task.update({ where: { id: existing.id }, data: parsed.data });
 
   // Emit activity for the meaningful transitions.
@@ -150,6 +168,45 @@ boardRouter.patch("/:pid/tasks/:taskId", async (req, res) => {
       payload: { assigneeId: parsed.data.assigneeId },
     });
   }
+  return res.json(updated);
+});
+
+// ─── Acceptance criteria (Phase 5 — evidence guard) ──────────────────────────
+
+async function taskInOrg(orgId: string, pid: string, taskId: string) {
+  return db.task.findFirst({ where: { id: taskId, project: { id: pid, orgId } }, select: { id: true } });
+}
+
+// Add an acceptance criterion to a task.
+boardRouter.post("/:pid/tasks/:taskId/criteria", async (req, res) => {
+  const p = req.params as Params & { taskId: string };
+  const ctx = await requireRole(req, p.orgId, "member");
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+  const task = await taskInOrg(ctx.orgId, p.pid, p.taskId);
+  if (!task) return httpError(res, 404, "not_found", "");
+  const parsed = createCriterionSchema.safeParse(req.body);
+  if (!parsed.success) return httpError(res, 400, "invalid_body", parsed.error.message);
+  const criterion = await db.acceptanceCriterion.create({
+    data: { taskId: task.id, kind: parsed.data.kind, description: parsed.data.description },
+  });
+  return res.status(201).json(criterion);
+});
+
+// Update a criterion (mark met + attach evidence).
+boardRouter.patch("/:pid/tasks/:taskId/criteria/:cid", async (req, res) => {
+  const p = req.params as Params & { taskId: string; cid: string };
+  const ctx = await requireRole(req, p.orgId, "member");
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+  const task = await taskInOrg(ctx.orgId, p.pid, p.taskId);
+  if (!task) return httpError(res, 404, "not_found", "");
+  const parsed = updateCriterionSchema.safeParse(req.body);
+  if (!parsed.success) return httpError(res, 400, "invalid_body", parsed.error.message);
+  const existing = await db.acceptanceCriterion.findFirst({
+    where: { id: p.cid, taskId: task.id },
+    select: { id: true },
+  });
+  if (!existing) return httpError(res, 404, "not_found", "");
+  const updated = await db.acceptanceCriterion.update({ where: { id: existing.id }, data: parsed.data });
   return res.json(updated);
 });
 
