@@ -123,6 +123,10 @@ model Project {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   issues          Issue[]
+  tasks           Task[]
+  cycles          Cycle[]
+  epics           Epic[]
+  activities      Activity[]
 
   @@unique([orgId, githubRepoId], name: "org_repo_unique")
 }
@@ -153,7 +157,7 @@ model Issue {
   id                String    @id @default(cuid())
   project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId         String
-  provider          String                          // "github" | "linear" | "native"
+  provider          String                          // "github" | "linear" (provider mirror; authored work is a Task)
   externalId        String                          // stable provider node id (unique-key component)
   externalKey       String                          // human id: "ENG-123" (Linear) | "#42" (GitHub)
   number            Int?
@@ -169,4 +173,103 @@ model Issue {
   updatedAt         DateTime  @updatedAt
 
   @@unique([projectId, provider, externalId])
+}
+
+// ─── Canonical board domain model (ADR-003) ─────────────────────────────────
+// Cloud Postgres is the source of truth. `Task` is the authored work item;
+// distinct from `Issue` (external provider mirror). Statuses/roles are the
+// canonical vocabularies enforced in src/domain/contract.ts (sqlite has no
+// enum type). All board entities are project-scoped.
+
+// A time-boxed iteration (sprint) for a project.
+model Cycle {
+  id        String   @id @default(cuid())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  name      String
+  status    String   @default("upcoming")   // upcoming | active | completed
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tasks     Task[]
+}
+
+// A larger body of work grouping tasks.
+model Epic {
+  id          String  @id @default(cuid())
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  title       String
+  description String?
+  status      String   @default("backlog")  // canonical TaskStatus
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tasks       Task[]
+}
+
+// The authored board work item. `status` is the canonical TaskStatus;
+// `escalated` is an orthogonal flag (ADR-003) so budget breaches never write
+// a status the board rejects.
+model Task {
+  id            String   @id @default(cuid())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId     String
+  title         String
+  description   String?
+  status        String   @default("triage")  // triage|backlog|in_progress|in_review|blocked|done|canceled
+  escalated     Boolean  @default(false)
+  cycle         Cycle?   @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  cycleId       String?
+  epic          Epic?    @relation(fields: [epicId], references: [id], onDelete: SetNull)
+  epicId        String?
+  assigneeId    String?                       // OrgMember.id (human or agent member)
+  tokenBudget   Int?
+  tokensSpent   Int      @default(0)
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  criteria      AcceptanceCriterion[]
+  linksFrom     TaskLink[] @relation("LinkFrom")
+  linksTo       TaskLink[] @relation("LinkTo")
+  activities    Activity[]
+}
+
+// Acceptance criterion on a task (Phase 5 builds the evidence guard on this).
+model AcceptanceCriterion {
+  id          String   @id @default(cuid())
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId      String
+  kind        String                          // test | manual | spec_match
+  description String
+  met         Boolean  @default(false)
+  evidence    String?                         // JSON-encoded payload when met
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Typed link between two tasks (Phase 7 renders the graph on this).
+model TaskLink {
+  id         String  @id @default(cuid())
+  fromTask   Task    @relation("LinkFrom", fields: [fromTaskId], references: [id], onDelete: Cascade)
+  fromTaskId String
+  toTask     Task    @relation("LinkTo", fields: [toTaskId], references: [id], onDelete: Cascade)
+  toTaskId   String
+  kind       String                           // blocks | depends_on | duplicates | relates_to | subtask_of
+  createdAt  DateTime @default(now())
+
+  @@unique([fromTaskId, toTaskId, kind])
+}
+
+// Append-only activity feed entry. `payload` is a JSON-encoded string (sqlite).
+model Activity {
+  id            String   @id @default(cuid())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId     String
+  task          Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId        String?
+  actorMemberId String?                        // OrgMember.id; null = system
+  kind          String                         // task_created | status_changed | assigned | ...
+  payload       String   @default("{}")        // JSON-encoded
+  createdAt     DateTime @default(now())
 }
