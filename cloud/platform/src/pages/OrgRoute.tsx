@@ -69,7 +69,7 @@ export function OrgRoute() {
     case "connections":
       return <Connections orgId={org} />;
     case "settings":
-      return <Connections orgId={org} />;
+      return <Surface eyebrow={`${org} · settings`} title="Org settings" body="Name, default runtime, policy presets. Connect issue trackers on the Connections tab." />;
     default:
       return <Surface eyebrow={`${org}`} title="Unknown surface" body={`No surface named "${tab}".`} />;
   }
