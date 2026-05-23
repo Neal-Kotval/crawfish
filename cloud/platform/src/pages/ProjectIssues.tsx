@@ -10,6 +10,7 @@
  * (T-20-10).
  */
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Eyebrow } from "@crawfish/ui/components/Eyebrow";
 import { Pill } from "@crawfish/ui/components/Pill";
 import { formatApiError } from "@crawfish/ui/lib/formatApiError";
@@ -18,6 +19,7 @@ import {
   syncProject,
   listLinearTeams,
   selectLinearTeam,
+  createTask,
   type Issue,
   type LinearTeam,
 } from "../lib/api";
@@ -84,6 +86,18 @@ export function ProjectIssues({
       await selectLinearTeam(orgId, { projectId: project.id, teamId: team.id, teamKey: team.key });
       setBoundTeamKey(team.key);
       setNotice(`Bound Linear team ${team.key}. Click Sync now to pull its issues.`);
+    } catch (e) {
+      setNotice(formatApiError(e).body);
+    }
+  }
+
+  // Promote a synced issue onto the board as an authored Task (ADR-003:
+  // Issue is the provider mirror; Task is the authored work item).
+  async function addToBoard(issue: Issue) {
+    setNotice(null);
+    try {
+      await createTask(orgId, project.id, { title: issue.title });
+      setNotice(`Added “${issue.title}” to the board (Triage). Open the Board to work it.`);
     } catch (e) {
       setNotice(formatApiError(e).body);
     }
@@ -168,7 +182,11 @@ export function ProjectIssues({
         >
           <p style={{ fontSize: 14, color: "var(--ink-soft)", marginBottom: 12 }}>
             This project isn't bound to an issue source. Bind a Linear team to sync its issues
-            (Linear must be connected on the Connections page first).
+            (Linear must be connected on the{" "}
+            <Link to={`/orgs/${orgId}/connections`} style={{ color: "var(--accent)" }}>
+              Connections
+            </Link>{" "}
+            page first).
           </p>
           {teams === null ? (
             <button type="button" onClick={loadTeams} className="cfp-btn" style={{ cursor: "pointer" }}>
@@ -196,12 +214,18 @@ export function ProjectIssues({
         </div>
       )}
 
-      <Body state={state} />
+      <Body state={state} onAddToBoard={addToBoard} />
     </main>
   );
 }
 
-function Body({ state }: { state: LoadState }) {
+function Body({
+  state,
+  onAddToBoard,
+}: {
+  state: LoadState;
+  onAddToBoard: (issue: Issue) => void;
+}) {
   if (state.kind === "loading") {
     return (
       <div className="cf-mono" style={{ color: "var(--ink-mute)", fontSize: 12 }}>
@@ -245,13 +269,14 @@ function Body({ state }: { state: LoadState }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {state.issues.map((i) => (
-        <IssueRow key={i.id} issue={i} />
+        <IssueRow key={i.id} issue={i} onAddToBoard={onAddToBoard} />
       ))}
     </div>
   );
 }
 
-function IssueRow({ issue }: { issue: Issue }) {
+function IssueRow({ issue, onAddToBoard }: { issue: Issue; onAddToBoard: (i: Issue) => void }) {
+  const [added, setAdded] = useState(false);
   return (
     <div
       style={{
@@ -294,6 +319,19 @@ function IssueRow({ issue }: { issue: Issue }) {
           {issue.assigneeExternal}
         </span>
       )}
+      <button
+        type="button"
+        onClick={() => {
+          onAddToBoard(issue);
+          setAdded(true);
+        }}
+        disabled={added}
+        className="cfp-btn cfp-btn--sm"
+        title="Create a board task from this issue"
+        style={{ cursor: added ? "default" : "pointer", whiteSpace: "nowrap" }}
+      >
+        {added ? "Added ✓" : "→ Board"}
+      </button>
     </div>
   );
 }

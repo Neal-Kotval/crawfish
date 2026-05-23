@@ -19,10 +19,11 @@ import { useClerk } from "@clerk/clerk-react";
 import { CLERK_ENABLED } from "./lib/clerk";
 
 const NAV = [
-  { key: "canvas",    label: "Canvas",    icon: Icons.canvas },
-  { key: "projects",  label: "Projects",  icon: Icons.code },
-  { key: "board",     label: "Board",     icon: Icons.board },
-  { key: "sessions",  label: "Sessions",  icon: Icons.sessions },
+  { key: "canvas",      label: "Canvas",      icon: Icons.canvas },
+  { key: "projects",    label: "Projects",    icon: Icons.code },
+  { key: "board",       label: "Board",       icon: Icons.board },
+  { key: "connections", label: "Connections", icon: Icons.bolt },
+  { key: "sessions",    label: "Sessions",    icon: Icons.sessions },
   { key: "knowledge", label: "Knowledge", icon: Icons.knowledge },
   { key: "diagnoses", label: "Diagnoses", icon: Icons.diagnoses },
 ];
