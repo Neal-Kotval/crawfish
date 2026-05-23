@@ -93,7 +93,7 @@ Note on current-vs-target: a meaningful slice of board work (cycles, criteria, A
 ### Phase 4: Cloud Domain Model + Cycles, Epics, Activity & Member ACL
 **Milestone:** M1 · **Status:** In progress (foundation done) · **Depends on:** Phase 3 + [ADR-003](../../.planning/decisions/ADR-003-canonical-domain-model.md)
 
-> **Done so far:** Prisma `Task`/`Cycle`/`Epic`/`AcceptanceCriterion`/`TaskLink`/`Activity` + migration; `cloud/server/src/domain/contract.ts` (canonical `TaskStatus`/roles/zod); `routes/board.ts` (tasks/cycles/epics/activity) with the `requireRole` write-gate (viewer read / member write) and activity emission; contract tests green. **Pending:** SSE realtime, budget rollup, agents-as-members surfacing, `@crawfish/contracts` package extraction, and the cloud board UI.
+> **Done so far:** Prisma `Task`/`Cycle`/`Epic`/`AcceptanceCriterion`/`TaskLink`/`Activity` + migration; `cloud/server/src/domain/contract.ts` (canonical `TaskStatus`/roles/zod); `routes/board.ts` (tasks/cycles/epics/activity) with the `requireRole` write-gate (viewer read / member write) and activity emission; contract tests green; **cloud board UI** (`cloud/platform/src/pages/Board.tsx` — project picker + kanban-by-status + add-task + status moves + activity feed) wired into the sidebar nav alongside **Projects** (API verified live; browser render not yet Playwright-checked). **Pending:** SSE realtime, drag-drop, budget rollup, agents-as-members surfacing, `@crawfish/contracts` package extraction.
 
 **Goal:** The cloud canonical domain model exists (Task/Cycle/Epic/Activity + roles) and users run a board where agents are first-class members, work is organized into cycles and epics, and activity is visible.
 

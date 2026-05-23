@@ -225,9 +225,10 @@ issues are read-mostly mirrors — they are **not** the board (§3).
 append-only feed. `AcceptanceCriterion` rows back the Phase 5 evidence guard; `TaskLink` rows
 back the Phase 7 graph. **Status:** the cloud board write paths exist — `routes/board.ts`
 serves `/:pid/{tasks,cycles,epics,activity}` with the role write-gate and activity emission
-(Phase 4). The legacy disk write paths (orgctl `board.ts` / lens board endpoints) are being
-demoted per ADR-003. Still pending on cloud: a cloud UI for the board, `TaskLink`/criteria
-handlers (Phases 5/7), and realtime SSE.
+(Phase 4), and `cloud/platform/src/pages/Board.tsx` renders the kanban (project picker, statuses,
+add-task, status moves, activity feed) — surfaced in the sidebar nav with **Projects**. The legacy
+disk write paths (orgctl `board.ts` / lens board endpoints) are being demoted per ADR-003. Still
+pending on cloud: `TaskLink`/criteria handlers (Phases 7/5) and realtime SSE.
 
 ### 6d. Hosted Orchestrator (M3)
 **Blocked on ADR-002** (durable workflow engine — OPEN). The target flow: issue intake →
@@ -274,8 +275,8 @@ process). This transport is owed.
   cycles endpoints; repurpose orgctl/projectctl board writers to cloud clients or execution
   scratch. Part of the shipped NOW-W1..W5 disk-board work is reworked.
 - **Cloud board realtime + remaining handlers.** Phase 4 shipped `routes/board.ts`
-  (tasks/cycles/epics/activity + write-gate); still missing: SSE/WebSocket transport (§7),
-  `TaskLink`/`AcceptanceCriterion` handlers (Phases 7/5), and a cloud board UI.
+  (tasks/cycles/epics/activity + write-gate) and the `Board.tsx` UI in the nav; still missing:
+  SSE/WebSocket transport (§7) and `TaskLink`/`AcceptanceCriterion` handlers (Phases 7/5).
 - **RBAC write-gate** is wired for the board router (`requireRole`, Phase 4); the projects and
   integrations routers are still membership-only and should adopt it. Dev-auth shim over-broad (§5).
 - **`@crawfish/contracts` extraction.** `contract.ts` is the single contract today but lives in
