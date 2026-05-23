@@ -33,6 +33,7 @@ import { orgsRouter, meRouter, dashAgentsRouter } from "./routes/orgs.js";
 import { deviceLinkRouter } from "./routes/deviceLink.js";
 import { invitesRouter, publicInvitesRouter } from "./routes/invites.js";
 import { projectsRouter } from "./routes/projects.js";
+import { boardRouter } from "./routes/board.js";
 import { githubRouter, dashGithubRouter } from "./routes/github.js";
 import { integrationsRouter, linearCallbackRouter } from "./routes/integrations.js";
 
@@ -58,6 +59,7 @@ app.use("/api", authMiddleware);
 app.use("/api/github", githubRouter);
 app.use("/api/orgs/:orgId/invites", invitesRouter);
 app.use("/api/orgs/:orgId/projects", projectsRouter);
+app.use("/api/orgs/:orgId/projects", boardRouter); // /:pid/{tasks,cycles,epics,activity}
 app.use("/api/orgs/:orgId/integrations", integrationsRouter);
 app.use("/api/orgs", orgsRouter);
 app.use("/api/me", meRouter);
