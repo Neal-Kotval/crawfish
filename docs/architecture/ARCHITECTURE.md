@@ -183,12 +183,16 @@ Both real paths call `ensureUserHasWorkspace` (auto-provision, §6a).
 
 **RBAC.** `requireMember(req, orgIdParam)` resolves the org by **id-or-name**, confirms the
 caller is an `OrgMember`, and **collapses both unauthorized and unknown-org to 404** so the API
-never leaks org existence (the 403→404 collapse). It is the single membership guard, used by
-the projects and integrations routers.
+never leaks org existence (the 403→404 collapse). It returns the member's `role` + `memberId`.
+`requireRole(req, orgIdParam, min)` builds on it to enforce the **canonical write-gate** (ADR-003):
+a non-member still collapses to 404, but a member whose role is below `min` gets **403 `forbidden`**.
+Roles are normalized via `contract.ts` (`founder→owner`, `contributor→member`). Both guards live in
+`lib/rbac.ts` and are shared by the projects, integrations, and board routers.
 
-**Current-vs-target:** `requireMember` today is **membership-only** — it does not yet enforce
-the role write-gate. The canonical `roleAtLeast` gate exists in `contract.ts` but is not yet
-wired into the guard. Phase 4 ("Member ACL") closes this (audit H4).
+**Status:** the write-gate is **wired** as of Phase 4 — the board routes (`routes/board.ts`) require
+`>= member` for mutations (`POST/PATCH` tasks, cycles, epics) and allow `viewer+` for reads,
+closing audit H4. Older routers (projects, integrations) are still membership-only and should adopt
+`requireRole` for their mutations as a follow-up.
 
 ---
 
@@ -219,8 +223,11 @@ issues are read-mostly mirrors — they are **not** the board (§3).
 `escalated` toggled orthogonally. Every meaningful mutation appends an `Activity` row
 (`task_created | status_changed | assigned | linked | labeled | budget_breach | …`), giving an
 append-only feed. `AcceptanceCriterion` rows back the Phase 5 evidence guard; `TaskLink` rows
-back the Phase 7 graph. **Current:** these write paths run on the **disk** side (orgctl
-`board.ts` / lens board endpoints), not yet on cloud — the cloud tables exist without handlers.
+back the Phase 7 graph. **Status:** the cloud board write paths exist — `routes/board.ts`
+serves `/:pid/{tasks,cycles,epics,activity}` with the role write-gate and activity emission
+(Phase 4). The legacy disk write paths (orgctl `board.ts` / lens board endpoints) are being
+demoted per ADR-003. Still pending on cloud: a cloud UI for the board, `TaskLink`/criteria
+handlers (Phases 5/7), and realtime SSE.
 
 ### 6d. Hosted Orchestrator (M3)
 **Blocked on ADR-002** (durable workflow engine — OPEN). The target flow: issue intake →
@@ -266,9 +273,11 @@ process). This transport is owed.
   dash board → cloud-API client; remove dash first-run org quiz; deprecate/proxy lens board +
   cycles endpoints; repurpose orgctl/projectctl board writers to cloud clients or execution
   scratch. Part of the shipped NOW-W1..W5 disk-board work is reworked.
-- **Cloud board route handlers + realtime.** The canonical `Task`/`Cycle`/`Epic`/`Activity`
-  tables exist in `schema.prisma` but lack API handlers; SSE/WebSocket transport is absent (§7).
-- **RBAC write-gate not yet wired** into `requireMember` (§5); dev-auth shim over-broad (§5).
+- **Cloud board realtime + remaining handlers.** Phase 4 shipped `routes/board.ts`
+  (tasks/cycles/epics/activity + write-gate); still missing: SSE/WebSocket transport (§7),
+  `TaskLink`/`AcceptanceCriterion` handlers (Phases 7/5), and a cloud board UI.
+- **RBAC write-gate** is wired for the board router (`requireRole`, Phase 4); the projects and
+  integrations routers are still membership-only and should adopt it. Dev-auth shim over-broad (§5).
 - **`@crawfish/contracts` extraction.** `contract.ts` is the single contract today but lives in
   `cloud/server`; ADR-003 calls for extracting it to a shared package once a second tier (the
   desktop thin client) needs it, and extending `docs/specs/org-contract.md` to span all tiers.

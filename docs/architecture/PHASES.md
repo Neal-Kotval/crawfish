@@ -91,7 +91,9 @@ Note on current-vs-target: a meaningful slice of board work (cycles, criteria, A
 > **M1 framing (ADR-003).** Phases 4–7 build the Linear-grade board **on the cloud canonical domain model**, not the disk board. Phase 4 establishes the foundation; the shipped disk-board work (NOW-W1..W5 in `desktop/lens` / `cli/orgctl`) is reference, not the build target. Realtime (SSE) is `cloud/server`'s responsibility (audit B3). M1 is **not safely buildable until B1/H1/H2 are settled** — ADR-003 settles B1 and H2; Phase 4 closes H1.
 
 ### Phase 4: Cloud Domain Model + Cycles, Epics, Activity & Member ACL
-**Milestone:** M1 · **Status:** Not started · **Depends on:** Phase 3 + [ADR-003](../../.planning/decisions/ADR-003-canonical-domain-model.md)
+**Milestone:** M1 · **Status:** In progress (foundation done) · **Depends on:** Phase 3 + [ADR-003](../../.planning/decisions/ADR-003-canonical-domain-model.md)
+
+> **Done so far:** Prisma `Task`/`Cycle`/`Epic`/`AcceptanceCriterion`/`TaskLink`/`Activity` + migration; `cloud/server/src/domain/contract.ts` (canonical `TaskStatus`/roles/zod); `routes/board.ts` (tasks/cycles/epics/activity) with the `requireRole` write-gate (viewer read / member write) and activity emission; contract tests green. **Pending:** SSE realtime, budget rollup, agents-as-members surfacing, `@crawfish/contracts` package extraction, and the cloud board UI.
 
 **Goal:** The cloud canonical domain model exists (Task/Cycle/Epic/Activity + roles) and users run a board where agents are first-class members, work is organized into cycles and epics, and activity is visible.
 

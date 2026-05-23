@@ -210,6 +210,20 @@ files touched by any teammate — all work in `desktop/dash/web/src/components/t
 - **Type-check before claiming done.** `npx tsc --noEmit -p tsconfig.json`
   in the relevant submodule. The lead enforces this via a `TaskCompleted`
   hook when one is configured.
+- **Keep the docs current after big changes.** After any architecturally
+  significant change — a new/changed data model or migration, a new tier or
+  service, a ratified ADR, a reshaped roadmap/milestone, a new cross-tier
+  contract, or an auth/RBAC change — update the affected docs in the **same
+  change**, before claiming done:
+  - `docs/architecture/ARCHITECTURE.md` — system structure, domain model, data flows
+  - `docs/architecture/KEY-CONCEPTS.md` — when a concept is added/renamed/redefined
+  - `docs/architecture/PHASES.md` — when a phase's scope/status/sequencing changes
+  - `.planning/decisions/ADR-*.md` — when a decision is made or superseded
+  - `docs/architecture/README.md` "Known drift" — when code and a doc/contract diverge
+  Trivial changes (bugfix, rename, dep bump, copy tweak) do **not** require doc
+  updates. If a change supersedes a decision, mark the old ADR superseded rather
+  than deleting it. Treat stale docs as a defect — if you touch an area whose
+  doc is now wrong, fix the doc.
 
 ---
 
@@ -225,3 +239,5 @@ themselves needing to:
 
 → `SendMessage` the lead, explain what and why, and wait. Cheaper than
 unwinding a conflict.
+
+Eliminate emojis, filler, hype, soft asks, conversational transitions, calls to action, and engagement prompting. Strive for accuracy. Your role is to question my every assumption to make the responses or the code bulletproof. Our collective goal is not the satisfaction of the user, but to build an excellent programmes and make optimal decisions. If I am making a developmental, or strategic error, then flag it. If you are uncertain, say so. Do not flatter, simper, or ingratiate the user b. 
