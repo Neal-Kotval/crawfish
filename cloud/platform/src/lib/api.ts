@@ -134,6 +134,85 @@ export async function fetchOrg(id: string): Promise<Org> {
   return unwrap<Org>(res);
 }
 
+// ─── Integrations & Issues ──────────────────────────────────────────────────
+
+export type IntegrationProvider = "github" | "linear";
+
+export type Integration = {
+  provider: IntegrationProvider;
+  connected: boolean;
+  externalWorkspaceName: string | null;
+};
+
+export type LinearTeam = { id: string; key: string; name: string };
+
+export type Issue = {
+  id: string;
+  provider: string;
+  externalKey: string;
+  number: number | null;
+  title: string;
+  state: "open" | "closed";
+  url: string | null;
+  labels: string[]; // server parses the JSON-encoded column for us
+  assigneeExternal: string | null;
+  externalUpdatedAt: string | null;
+  syncedAt: string;
+};
+
+export type SyncResult = { provider: IntegrationProvider; synced: number };
+
+export async function listIntegrations(orgId: string): Promise<Integration[]> {
+  const res = await apiFetch(`/api/orgs/${encodeURIComponent(orgId)}/integrations`);
+  return unwrap<Integration[]>(res);
+}
+
+export async function connectProvider(
+  orgId: string,
+  provider: "linear",
+): Promise<{ authorizeUrl: string }> {
+  const res = await apiFetch(
+    `/api/orgs/${encodeURIComponent(orgId)}/integrations/${provider}/connect`,
+    { method: "POST" },
+  );
+  return unwrap<{ authorizeUrl: string }>(res);
+}
+
+export async function listLinearTeams(orgId: string): Promise<LinearTeam[]> {
+  const res = await apiFetch(`/api/orgs/${encodeURIComponent(orgId)}/integrations/linear/teams`);
+  return unwrap<LinearTeam[]>(res);
+}
+
+export async function selectLinearTeam(
+  orgId: string,
+  body: { projectId: string; teamId: string; teamKey: string },
+): Promise<unknown> {
+  const res = await apiFetch(
+    `/api/orgs/${encodeURIComponent(orgId)}/integrations/linear/select-team`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  return unwrap<unknown>(res);
+}
+
+export async function listIssues(orgId: string, projectId: string): Promise<Issue[]> {
+  const res = await apiFetch(
+    `/api/orgs/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}/issues`,
+  );
+  return unwrap<Issue[]>(res);
+}
+
+export async function syncProject(orgId: string, projectId: string): Promise<SyncResult> {
+  const res = await apiFetch(
+    `/api/orgs/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}/sync`,
+    { method: "POST" },
+  );
+  return unwrap<SyncResult>(res);
+}
+
 // ─── Invites ──────────────────────────────────────────────────────────────
 
 export type InviteRole = "owner" | "contributor";

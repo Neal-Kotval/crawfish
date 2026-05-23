@@ -17,7 +17,9 @@ import { formatApiError } from "@crawfish/ui/lib/formatApiError";
 import { useCurrentUser } from "../lib/useAuth";
 import { buildDashLink, dashLinkTarget, isDevDashEnabled } from "../lib/dashUrl";
 import { OrgMembers } from "./OrgMembers";
-import { Projects } from "./Projects";
+import { Projects, type Project } from "./Projects";
+import { ProjectIssues } from "./ProjectIssues";
+import { Connections } from "./Connections";
 import { ImportModal } from "./ImportModal";
 
 function Surface({ title, eyebrow, body }: { title: string; eyebrow: string; body: string }) {
@@ -63,8 +65,10 @@ export function OrgRoute() {
       return <OrgMembers orgSlug={org} />;
     case "billing":
       return <Surface eyebrow={`${org} · billing`} title="Billing" body="Monthly usage, per-agent budgets, plan, payment methods." />;
+    case "connections":
+      return <Connections orgId={org} />;
     case "settings":
-      return <Surface eyebrow={`${org} · settings`} title="Org settings" body="Name, domain, default runtime, policy presets, integrations." />;
+      return <Connections orgId={org} />;
     default:
       return <Surface eyebrow={`${org}`} title="Unknown surface" body={`No surface named "${tab}".`} />;
   }
@@ -320,9 +324,15 @@ function CanvasSurface({ org: orgSlug }: { org: string }) {
 
 function ProjectsSurface({ org }: { org: string }) {
   const [importOpen, setImportOpen] = useState(false);
+  const [selected, setSelected] = useState<Project | null>(null);
+
+  if (selected) {
+    return <ProjectIssues orgId={org} project={selected} onBack={() => setSelected(null)} />;
+  }
+
   return (
     <>
-      <Projects orgId={org} openImport={() => setImportOpen(true)} />
+      <Projects orgId={org} openImport={() => setImportOpen(true)} onOpenProject={setSelected} />
       {importOpen && (
         <ImportModal orgId={org} onClose={() => setImportOpen(false)} />
       )}

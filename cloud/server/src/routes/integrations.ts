@@ -18,7 +18,13 @@ import { httpError } from "../lib/errors.js";
 import { requireMember } from "../lib/rbac.js";
 import { getGithubToken } from "../lib/github.js";
 import { signOauthState, verifyOauthState } from "../lib/jwt.js";
-import { buildAuthorizeUrl, exchangeCode } from "../lib/linear.js";
+import {
+  buildAuthorizeUrl,
+  exchangeCode,
+  listTeams,
+  refreshAccessToken,
+  LinearTokenExpired,
+} from "../lib/linear.js";
 
 export const integrationsRouter = Router({ mergeParams: true });
 export const linearCallbackRouter = Router();
@@ -63,6 +69,39 @@ integrationsRouter.post("/linear/connect", async (req, res) => {
     return res.json({ authorizeUrl: buildAuthorizeUrl(state) });
   } catch (err) {
     return httpError(res, 500, "linear_not_configured", String(err));
+  }
+});
+
+// GET /api/orgs/:orgId/integrations/linear/teams — the team list for the
+// project picker. Refreshes the access token once on a 401.
+integrationsRouter.get("/linear/teams", async (req, res) => {
+  const ctx = await requireMember(req, (req.params as { orgId: string }).orgId);
+  if (!ctx.ok) return httpError(res, ctx.status, ctx.code, "");
+
+  const integration = await db.integration.findUnique({
+    where: { orgId_provider: { orgId: ctx.orgId, provider: "linear" } },
+  });
+  if (!integration) return httpError(res, 409, "linear_not_connected", "");
+
+  try {
+    let teams;
+    try {
+      teams = await listTeams(integration.accessToken);
+    } catch (err) {
+      if (err instanceof LinearTokenExpired && integration.refreshToken) {
+        const pair = await refreshAccessToken(integration.refreshToken);
+        await db.integration.update({
+          where: { id: integration.id },
+          data: { accessToken: pair.access_token, refreshToken: pair.refresh_token },
+        });
+        teams = await listTeams(pair.access_token);
+      } else {
+        throw err;
+      }
+    }
+    return res.json(teams);
+  } catch (err) {
+    return httpError(res, 502, "linear_error", String(err));
   }
 });
 

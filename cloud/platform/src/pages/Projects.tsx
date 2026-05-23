@@ -24,6 +24,8 @@ export type Project = {
   cloneStatus: "pending" | "cloning" | "cloned" | "local_only" | "error";
   cloneError: string | null;
   localPath: string | null;
+  linearTeamId: string | null;
+  linearTeamKey: string | null;
 };
 
 type LoadState =
@@ -35,9 +37,11 @@ type LoadState =
 export function Projects({
   orgId,
   openImport,
+  onOpenProject,
 }: {
   orgId: string;
   openImport: () => void;
+  onOpenProject?: (p: Project) => void;
 }) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
 
@@ -129,7 +133,7 @@ export function Projects({
         ) : null}
       </div>
 
-      <Body state={state} openImport={openImport} />
+      <Body state={state} openImport={openImport} onOpenProject={onOpenProject} />
     </main>
   );
 }
@@ -137,9 +141,11 @@ export function Projects({
 function Body({
   state,
   openImport,
+  onOpenProject,
 }: {
   state: LoadState;
   openImport: () => void;
+  onOpenProject?: (p: Project) => void;
 }) {
   if (state.kind === "loading") {
     return (
@@ -189,7 +195,7 @@ function Body({
       }}
     >
       {state.projects.map((p) => (
-        <ProjectCard key={p.id} p={p} />
+        <ProjectCard key={p.id} p={p} onOpen={onOpenProject} />
       ))}
     </div>
   );
@@ -214,9 +220,23 @@ function StatusBadge({ s }: { s: Project["cloneStatus"] }) {
   return <Pill tone={statusTone(s)}>{s.replace("_", " ")}</Pill>;
 }
 
-function ProjectCard({ p }: { p: Project }) {
+function ProjectCard({ p, onOpen }: { p: Project; onOpen?: (p: Project) => void }) {
+  const clickable = Boolean(onOpen);
   return (
     <div
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? () => onOpen!(p) : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpen!(p);
+              }
+            }
+          : undefined
+      }
       style={{
         padding: 16,
         border: "1px solid var(--rule-3)",
@@ -225,6 +245,7 @@ function ProjectCard({ p }: { p: Project }) {
         display: "flex",
         flexDirection: "column",
         gap: 8,
+        cursor: clickable ? "pointer" : "default",
       }}
     >
       <div
@@ -267,6 +288,9 @@ function ProjectCard({ p }: { p: Project }) {
         >
           {p.cloneError}
         </span>
+      ) : null}
+      {clickable ? (
+        <span style={{ fontSize: 12, color: "var(--accent)", marginTop: 2 }}>View issues →</span>
       ) : null}
     </div>
   );
