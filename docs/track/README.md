@@ -1,12 +1,29 @@
 # Orchestrator track — implementation briefs
 
 Per-surface implementation briefs for the hosted orchestrator MVP. Each `TRACK-N.md`
-turns one section of [`../roadmap/ORCHESTRATOR-USER-STORIES.md`](../roadmap/ORCHESTRATOR-USER-STORIES.md)
-(§1–§16) into a brief: overview, verbatim user stories, the O0–O7 coding tasks from
-[`../../ROADMAP.md`](../../ROADMAP.md) that implement it, and tech-stack considerations.
+turns one section of `ORCHESTRATOR-USER-STORIES.md` (§1–§16) into a brief: what the surface
+is, verbatim user stories, the O0–O7 coding tasks that implement it (grouped by component),
+the hard technical concepts explained with example code, gaps, and open questions.
 Section §17 (implementation status) is intentionally not a TRACK file.
 
 `TRACK-N.md` ← §N. The mapping is 1:1 and fixed.
+
+## How the briefs are organized — by component, not by role
+
+Stories and tasks are tagged by **where the code lives**, not by which persona benefits:
+
+- **PLAT** — the hosted platform. Backend `cloud/server/` (Express + Prisma + Postgres) and the signed-in web SPA `cloud/platform/` (React, Clerk auth). The bulk of the orchestrator is here.
+- **DASH** — the desktop dashboard `desktop/dash/` (React; proxies to the `desktop/lens` transcript reader). Dashboard widgets typically dual-ship in PLAT and DASH.
+- **CLI** — `cli/orgctl/` + `cli/projectctl/` (the craws, the worktree utility, the `budget.ts` / `stats.ts` / `triage.ts` primitives, the inbound adapters).
+- **OPS** — operational / docs work (runbooks, status page, on-call, published reference docs). Not a code submodule; the deliverable is a written artifact or a process.
+
+Open a brief and the `### PLAT` / `### DASH` / `### CLI` headers tell you which submodule to edit.
+
+> **Note on sources.** The briefs derive from `ORCHESTRATOR-USER-STORIES.md` and the O0–O7
+> tables in `ROADMAP.md`. Both of those live on the `feat/cloud-issue-ingestion` branch and are
+> **not on `main`** yet — so the briefs are on `main` but their source documents are not. The
+> `Source:` lines and relative links in each brief will not resolve on `main` until the
+> orchestrator roadmap docs are also brought over. Flag for the lead.
 
 ---
 
@@ -22,26 +39,26 @@ do not read ◐ as partial delivery of the orchestrator feature.
 The recent cloud-board work (Phase 5: token-budget bar, acceptance-criteria evidence guard,
 budget-breach escalation) is substrate for §4/§5/§3, not delivery of an orchestrator surface.
 
-| Phase | Surface | O-stages | Shipped? | Substrate |
-|---|---|---|---|---|
-| [TRACK-1](./TRACK-1.md) | Onboarding & account setup | O0.2, O1.1, O1.2, O2.7, O6.1 | ❌ | ◐ Clerk + GitHub App OAuth, `OrgMember` |
-| [TRACK-2](./TRACK-2.md) | Craw library & configuration | O0.4, O2.1–O2.3, O2.7, O2.9, O2.10, O7.2–O7.4 | ❌ | ◐ `craw.yaml` manifest (GRAND_PLAN §3.17) |
-| [TRACK-3](./TRACK-3.md) | Issue intake & auto-classification | O1.1, O1.2, O2.4, O2.5, O2.6 | ❌ | ◐ `inbound/{github-issues,notion-pages}.ts`, `triage.ts` |
-| [TRACK-4](./TRACK-4.md) | Plan checkpoint (gate 1) | O1.3, O6.2 | ❌ | — |
-| [TRACK-5](./TRACK-5.md) | Orchestration & execution | O0.2, O0.3, O0.5, O1.6, O1.8 | ❌ | ◐ `budget.ts`; engine pending ADR-002 |
-| [TRACK-6](./TRACK-6.md) | Live team-execution dashboard | O1.5, O3.1–O3.4 | ❌ | ◐ lens REST+SSE, lens replay |
-| [TRACK-7](./TRACK-7.md) | CI verification | O1.7, O3 test-gen/visual-auditor | ❌ | ◐ `inbound/github-issues.ts` |
-| [TRACK-8](./TRACK-8.md) | PR submission & merge checkpoint (gate 2) | O1.4 | ❌ | ◐ `github-issues.ts` mirror, GitHub merge API |
-| [TRACK-9](./TRACK-9.md) | PR-comment loop (auto-respond with budget) | O4.1–O4.8 | ❌ | ◐ JSONL audit substrate |
-| [TRACK-10](./TRACK-10.md) | Analytics & cost dashboards | O5.5, O6.10 | ❌ | ◐ `stats.ts`, cost-rollup widgets, GRAND_PLAN §3.6 |
-| [TRACK-11](./TRACK-11.md) | Failure handling & escalation | O3.5–O3.8, O6.2, O6.3 | ❌ | ◐ `budget.ts` `budget_breach` |
-| [TRACK-12](./TRACK-12.md) | Billing & seats | O5.1, O5.4, O5.5, O5.6 | ❌ | ◐ `OrgMember`; consumes PARALLEL TRACK D |
-| [TRACK-13](./TRACK-13.md) | Notifications | O6.4 | ❌ | — |
-| [TRACK-14](./TRACK-14.md) | Admin, audit & policy | O2.8, O5.2, O5.3, O5.8, O5.9 | ❌ | ◐ JSONL audit substrate |
-| [TRACK-15](./TRACK-15.md) | Eval & quality | O2.5, O2.10, O6.10 | ❌ | ◐ GRAND_PLAN §3.11 cost-manager alerting |
-| [TRACK-16](./TRACK-16.md) | Integrations & edge cases | O5.7, O6.5–O6.8 | ❌ | ◐ durable engine (O0.1) for §16.3/§16.4 |
+| Phase | Surface | Components | O-stages | Shipped? | Substrate |
+|---|---|---|---|---|---|
+| [TRACK-1](./TRACK-1.md) | Onboarding & account setup | PLAT · CLI | O0.2, O1.1, O1.2, O2.7, O6.1 | ❌ | ◐ Clerk + GitHub App OAuth, `OrgMember` |
+| [TRACK-2](./TRACK-2.md) | Craw library & configuration | CLI · PLAT · DASH | O0.4, O2.1–O2.3, O2.7, O2.9, O2.10, O7.2–O7.4 | ❌ | ◐ `craw.yaml` manifest (GRAND_PLAN §3.17) |
+| [TRACK-3](./TRACK-3.md) | Issue intake & auto-classification | PLAT · CLI | O1.1, O1.2, O2.4, O2.5, O2.6 | ❌ | ◐ `inbound/{github-issues,notion-pages}.ts`, `triage.ts` |
+| [TRACK-4](./TRACK-4.md) | Plan checkpoint (gate 1) | PLAT · DASH | O1.3, O6.2 | ❌ | — |
+| [TRACK-5](./TRACK-5.md) | Orchestration & execution | PLAT · CLI | O0.2, O0.3, O0.5, O1.6, O1.8 | ❌ | ◐ `budget.ts`; engine pending ADR-002 |
+| [TRACK-6](./TRACK-6.md) | Live team-execution dashboard | PLAT · DASH | O1.5, O3.1–O3.4 | ❌ | ◐ lens REST+SSE, lens replay |
+| [TRACK-7](./TRACK-7.md) | CI verification | PLAT · CLI | O1.7, O3 test-gen/visual-auditor | ❌ | ◐ `inbound/github-issues.ts` |
+| [TRACK-8](./TRACK-8.md) | PR submission & merge checkpoint (gate 2) | PLAT · CLI | O1.4 | ❌ | ◐ `github-issues.ts` mirror, GitHub merge API |
+| [TRACK-9](./TRACK-9.md) | PR-comment loop (auto-respond with budget) | PLAT · DASH | O4.1–O4.8 | ❌ | ◐ JSONL audit substrate |
+| [TRACK-10](./TRACK-10.md) | Analytics & cost dashboards | PLAT · DASH · CLI | O5.5, O6.10 | ❌ | ◐ `stats.ts`, cost-rollup widgets, GRAND_PLAN §3.6 |
+| [TRACK-11](./TRACK-11.md) | Failure handling & escalation | PLAT · DASH | O3.5–O3.8, O6.2, O6.3 | ❌ | ◐ `budget.ts` `budget_breach` |
+| [TRACK-12](./TRACK-12.md) | Billing & seats | PLAT | O5.1, O5.4, O5.5, O5.6 | ❌ | ◐ `OrgMember`; consumes PARALLEL TRACK D |
+| [TRACK-13](./TRACK-13.md) | Notifications | PLAT · DASH | O6.4 | ❌ | — |
+| [TRACK-14](./TRACK-14.md) | Admin, audit & policy | PLAT · DASH · CLI · OPS | O2.8, O5.2, O5.3, O5.8, O5.9 | ❌ | ◐ JSONL audit substrate |
+| [TRACK-15](./TRACK-15.md) | Eval & quality | PLAT · DASH · CLI | O2.5, O2.10, O6.10 | ❌ | ◐ GRAND_PLAN §3.11 cost-manager alerting |
+| [TRACK-16](./TRACK-16.md) | Integrations & edge cases | PLAT · OPS | O5.7, O6.5–O6.8 | ❌ | ◐ durable engine (O0.1) for §16.3/§16.4 |
 
-Legend: ✅ shipped · ❌ not started · ◐ reusable substrate exists (not delivery).
+Legend: ✅ shipped · ❌ not started · ◐ reusable substrate exists (not delivery). Components: PLAT = `cloud/server` + `cloud/platform` · DASH = `desktop/dash` · CLI = `cli/orgctl`/`projectctl` · OPS = docs/process.
 
 ---
 
