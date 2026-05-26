@@ -6,11 +6,13 @@
 >
 > Companion docs: [`PRODUCT.md`](./PRODUCT.md) · [`DESIGN.md`](./docs/product/DESIGN.md) · [`INTEGRATIONS.md`](./docs/product/INTEGRATIONS.md) · [`BRAINSTORM.md`](./docs/product/BRAINSTORM.md) · [`AGENT-TEAMS.md`](./docs/ops/AGENT-TEAMS.md).
 
-Last updated: 2026-05-16.
+Last updated: 2026-05-22.
+
+**Changelog (2026-05-22):** Added the **Orchestrator track (O0–O7)** as a new top-level workstream — a 44-week hosted-orchestrator build for mid-market eng teams. Sequenced parallel to the existing NOW/NEXT/LATER slices; pulls forward several items from PARALLEL TRACK D, LATER² weeks 19–24, and GRAND_PLAN Stage 2 §4.1/§4.4/§4.6/§4.10. Slip annotations added inline to affected LATER and LATER² weeks. Full detail in [`docs/roadmap/ORCHESTRATOR-STAGES.md`](./docs/roadmap/ORCHESTRATOR-STAGES.md); product spec in [`docs/roadmap/ORCHESTRATOR-ONEPAGER.md`](./docs/roadmap/ORCHESTRATOR-ONEPAGER.md); MVP user stories in [`docs/roadmap/ORCHESTRATOR-USER-STORIES.md`](./docs/roadmap/ORCHESTRATOR-USER-STORIES.md).
 
 ---
 
-## 0 · Status snapshot (2026-05-16)
+## 0 · Status snapshot (2026-05-22)
 
 ### Shipped
 - `crawfish-lens` — JSONL reader, REST + SSE, 8 diagnoses rules, OpenClaw adapter.
@@ -45,7 +47,8 @@ Next   (weeks 6–10) → P4.2-finish (RAG) + token-discipline pack + founder-da
 Later  (weeks 11–16)→ P5: Skills, IDE v0, Codespaces local, LLM Wiki        ──► Engineer-IC daily driver
 Later² (weeks 17–28)→ P6: Review, CI, CRDT, web-proxy, hosted opt-in        ──► Team-mode foundations
 
-⟂ Parallel (weeks 6–16) → crawfish.dev — marketing/download portal → web dashboard → collaboration → team mode/billing
+⟂ Parallel    (weeks 6–16) → crawfish.dev — marketing/download portal → web dashboard → collaboration → team mode/billing
+⟂ Orchestrator (weeks 6–49) → Hosted orchestrator for mid-market eng teams (O0–O7) — see §Orchestrator track below
 
 Stage 2 (m9–m24)   → §4 of GRAND_PLAN — hosted, RL fine-tunes, RBAC
 Stage 3 (m18+)     → §5 of GRAND_PLAN — enterprise, SOC2, on-prem
@@ -227,6 +230,8 @@ Reserved for slip from weeks 1–8, alpha invitee onboarding, telemetry opt-in p
 
 **Gate:** `crawfish space create eng-agent-1 && crawfish space exec eng-agent-1 -- npm test` works; container has `org-fs/` mounted, agent's policy bundle loaded, MCP tools wired.
 
+> **Slip note (2026-05-22):** This week slips ~3 weeks because the orchestrator track's O0.5 worktree-isolation work covers part of the surface but not the full Codespaces experience. Full Code-OSS Codespaces resumes after orchestrator stage O3.
+
 | # | Deliverable | Files |
 |---|---|---|
 | 8.1 | `crawfish space` CLI | `crawfish-orgctl/src/cli/space.ts` |
@@ -239,6 +244,8 @@ Reserved for slip from weeks 1–8, alpha invitee onboarding, telemetry opt-in p
 ### Week 14 — Crawfish IDE v0.1
 
 **Gate:** VS Code extension installs from `.vsix`; sidebar shows Sessions + Agents + Board; PreToolUse hook fires in-editor; status bar shows live token meter.
+
+> **Slip note (2026-05-22):** Slips ~4 weeks because dashboard components the IDE consumes are under heavy edit by the orchestrator team through O3. Resumes after O3 dashboard work stabilizes.
 
 | # | Deliverable | Files |
 |---|---|---|
@@ -348,11 +355,264 @@ crawfish-web/                # new repo — Next.js app router, deployed to Verc
 
 **End-of-parallel-track milestone:** `crawfish.dev/v1` — the marketing surface, the auth'd web dashboard, the collaboration features, and a working paid tier. This is what unlocks "small CEO with 5 humans + 30 agents" as a customer.
 
+> **Slip note (2026-05-22):** Track D (weeks 14–16, team mode + Stripe billing) is **consumed by Orchestrator stage O5** below — same Stripe + seat + audit work, sequenced as part of the orchestrator's multi-user readiness. Tracks A–C ship on the original schedule.
+
+---
+
+## ORCHESTRATOR TRACK · Weeks 6–49 — Hosted orchestrator for mid-market eng teams (runs alongside NEXT / LATER / LATER²)
+
+**Outcome:** A cloud-hosted service that connects to a customer's Linear or GitHub Issues, classifies which inbound tickets are eligible for autonomous handling, dispatches each one to a curated team of "craws" (specialist agent containers) running in isolated worktrees, verifies the result against CI, and produces a checkpoint-gated pull request. Reviewers approve the plan and the final merge; the system handles everything in between, including a budget-capped loop that addresses PR comments without infinite back-and-forth. Hybrid seat+usage pricing. Mid-market eng startups (10–50 engineers) as the v1 ICP.
+
+**Why this lives in its own track:** the orchestrator is a paid SaaS surface; the existing NOW/NEXT/LATER slices are local-first MIT. Putting it in a parallel track keeps the local-first commitments honest while making the SaaS investment visible and dated. Roughly 70% of the substrate already exists in v0.3 (board, triage, capability routing, criteria, budgets, GitHub mirror, runtime adapters, dash, partial cloud auth); the orchestrator is the SaaS framing on top.
+
+**Companion docs:** [`docs/roadmap/ORCHESTRATOR-ONEPAGER.md`](./docs/roadmap/ORCHESTRATOR-ONEPAGER.md) (1-page spec — ICP, wedge, architecture, scope, risks); [`docs/roadmap/ORCHESTRATOR-USER-STORIES.md`](./docs/roadmap/ORCHESTRATOR-USER-STORIES.md) (~95 stories across 17 surfaces); [`docs/roadmap/ORCHESTRATOR-STAGES.md`](./docs/roadmap/ORCHESTRATOR-STAGES.md) (full stage deliverables + file paths + slip-impact accounting).
+
+**Reuse vs. build summary:** see the per-stage tables in `ORCHESTRATOR-STAGES.md`. At a glance: orchestrator reuses the v0.3 board substrate (`cli/orgctl/src/board.ts`), capability router (`cli/projectctl/src/router.ts`), budget primitives (`cli/orgctl/src/budget.ts`), inbound adapter pattern (`cli/orgctl/src/inbound/`), runtime adapter contract (`desktop/lens/src/adapters/`), Prisma org/project models (`cloud/server/prisma/`), Clerk auth, GitHub OAuth, and lens SSE infrastructure. It builds: the durable workflow engine, the checkpoint workflows, the auto-classifier, the live team-execution dashboard, the PR-comment bot, the curated craw library, the worktree-isolation utility (pulled forward from LATER² weeks 23–24), Stripe billing (pulled forward from PARALLEL TRACK D), and basic RBAC + audit log.
+
+### Pre-stage — substrate readiness (covered by NOW weeks 1–5)
+
+**Gate:** v0.3 tag cut; board substrate (cycles, criteria, capability routing, activity feed, FTS5 search) is feature-complete. The orchestrator depends on this; O0 cannot start until this gate is green.
+
+### O0 — foundation choices + end-to-end spike (weeks 6–8)
+
+**Gate:** ADR-002 (workflow engine: Temporal vs. Inngest vs. Restate) merged. End-to-end spike script in CI produces a draft PR on a sandbox repo without manual intervention, using the existing `claude-code` adapter and one new dep-bumper craw.
+
+| # | Deliverable | Files |
+|---|---|---|
+| O0.1 | ADR-002 — durable workflow engine | `.planning/decisions/ADR-002-orchestrator-workflow-engine.md` |
+| O0.2 | Cloud-server orchestrator skeleton | `cloud/server/src/orchestrator/{queue,worker,workflow,types}.ts` |
+| O0.3 | Worker runtime adapter shim | `cloud/server/src/orchestrator/adapters/claude-code.ts` |
+| O0.4 | First curated craw (dep-bumper) | `cli/orgctl/src/craws/dep-bumper/{craw.yaml,SKILL.md,impl.ts}` |
+| O0.5 | Worktree isolation utility (pulled forward from LATER² wk 23–24 worktree half) | `cli/orgctl/src/worktree/{spawn,merge,cleanup}.ts` |
+| O0.6 | End-to-end spike script | `scripts/spike-orchestrator-e2e.ts` |
+
+### O1 — single-craw PR loop, first design partners (weeks 9–14)
+
+**Gate:** Five design partners actively using the orchestrator against their own repos with the dep-bumper craw. ≥20 PRs merged across partners. P50 ticket-to-draft-PR latency <15 minutes. Zero P0 incidents in last 7 days.
+
+| # | Deliverable | Files |
+|---|---|---|
+| O1.1 | Linear webhook receiver | `cloud/server/src/inbound/linear.ts` |
+| O1.2 | GitHub Issues poller | `cloud/server/src/inbound/github-issues-poller.ts` |
+| O1.3 | Plan checkpoint workflow (gate 1) | `cloud/server/src/orchestrator/checkpoints/plan.ts` |
+| O1.4 | Pre-merge checkpoint workflow (gate 2) | `cloud/server/src/orchestrator/checkpoints/merge.ts` |
+| O1.5 | Basic execution dashboard widget | `cloud/platform/src/pages/Orchestrator.tsx` + `desktop/dash/web/src/routes/Orchestrator.tsx` |
+| O1.6 | Per-task budget cap enforcement | `cloud/server/src/orchestrator/budget.ts` (wraps existing `cli/orgctl/src/budget.ts`) |
+| O1.7 | CI gate (GitHub Actions) | `cloud/server/src/orchestrator/ci.ts` |
+| O1.8 | Cancel + retry primitives | dashboard + workflow |
+| O1.9 | Design-partner onboarding runbook | `docs/orchestrator/design-partner-onboarding.md` |
+| O1.10 | Integration test suite | `cloud/server/test/orchestrator/*.test.ts` |
+
+### O2 — curated craw library + auto-classifier v1 (weeks 15–18)
+
+**Gate:** Four craws live (dep-bumper + test-backfill + lint-cleaner + type-annotator) with published bench scores. Auto-classifier shipped with eval harness. Ten design partners. Classifier precision ≥80% on aggregated eval set. ≥100 PRs merged across partners.
+
+| # | Deliverable | Files |
+|---|---|---|
+| O2.1 | test-backfill craw | `cli/orgctl/src/craws/test-backfill/` |
+| O2.2 | lint-cleaner craw | `cli/orgctl/src/craws/lint-cleaner/` |
+| O2.3 | type-annotator craw | `cli/orgctl/src/craws/type-annotator/` |
+| O2.4 | Auto-classifier service (Haiku-class) | `cloud/server/src/classifier/{index,prompts,eval}.ts` |
+| O2.5 | Per-workspace eval harness | `cloud/server/src/classifier/eval-harness.ts` + dashboard |
+| O2.6 | Label-only fallback toggle | dashboard + workflow |
+| O2.7 | Per-craw routing rules UI | `cloud/platform/src/pages/RoutingRules.tsx` |
+| O2.8 | Per-craw file-path allow/deny lists | dashboard + worker (defence-toolcall pattern from GRAND_PLAN §3.16) |
+| O2.9 | Craw version pinning + rollback | dashboard |
+| O2.10 | Bench fixtures per craw | `bench/craws/{dep-bumper,test-backfill,lint-cleaner,type-annotator}/` |
+
+### O3 — live team-execution dashboard + multi-craw collab (weeks 19–22)
+
+**Gate:** Dashboard shows live multi-craw view (mostly 1-of-1 in v1 but infra in place). Replay mode works for all v0.3+ tasks. Failure taxonomy applied to all failed tasks for last 7 days. Auto-disable verified on synthetic failure-rate spike.
+
+| # | Deliverable | Files |
+|---|---|---|
+| O3.1 | Multi-craw collab primitive (impl + tester + reviewer in one worktree) | `cloud/server/src/orchestrator/team.ts` |
+| O3.2 | Per-craw SSE stream + aggregation | `cloud/server/src/orchestrator/stream.ts` |
+| O3.3 | Team execution view (vertical lane per craw) | `cloud/platform/src/pages/TaskRun.tsx` + `desktop/dash/web/src/routes/TaskRun.tsx` |
+| O3.4 | Replay mode (reuse lens replay primitives) | shared with O3.3 |
+| O3.5 | Failure categorization taxonomy | `cloud/server/src/orchestrator/failure-taxonomy.ts` |
+| O3.6 | Failure dashboard widget | dashboard |
+| O3.7 | Auto-disable craw on failure-rate spike | `cloud/server/src/orchestrator/craw-health.ts` |
+| O3.8 | Manual-takeover detection | `cloud/server/src/orchestrator/takeover-detector.ts` |
+
+### O4 — PR-comment loop with budget + halt heuristics (weeks 23–26)
+
+**Gate:** PR-bot ships behind a per-workspace flag; turn-on rate among 10 design partners ≥60% within 2 weeks; zero PRs require emergency manual disable in 7-day window after enablement.
+
+| # | Deliverable | Files |
+|---|---|---|
+| O4.1 | Bot identity + mention listener | `cloud/server/src/orchestrator/pr-bot/listener.ts` |
+| O4.2 | Comment-resolution state machine | `cloud/server/src/orchestrator/pr-bot/state-machine.ts` |
+| O4.3 | Per-PR revision + token cap (defaults: 5 revisions, $10) | shared with O4.2 |
+| O4.4 | Conflict-with-reviewer detector | `cloud/server/src/orchestrator/pr-bot/conflict-detector.ts` |
+| O4.5 | Out-of-scope detector | `cloud/server/src/orchestrator/pr-bot/scope-detector.ts` |
+| O4.6 | Auto-respond mode toggle (mention-only / respond-to-all / off) | dashboard |
+| O4.7 | Bot reply templates (standardized) | `cloud/server/src/orchestrator/pr-bot/templates.ts` |
+| O4.8 | Audit trail per revision | reuses existing JSONL audit substrate |
+
+### O5 — multi-user, RBAC, billing, audit (weeks 27–30)
+
+**Gate:** Stripe webhook live; first paying team signed (one of the existing design partners); RBAC matrix doc + UI shipped; audit log queryable in dashboard. SOC2 readiness checklist drafted (Stage 3 work begins).
+
+**Consumes PARALLEL TRACK D weeks 14–16** — Stripe + seat + audit work is the same deliverable, sequenced here instead.
+
+| # | Deliverable | Files |
+|---|---|---|
+| O5.1 | Stripe Connect integration (humans bill, agents don't) | `cloud/server/src/billing/{stripe,seats,usage}.ts` |
+| O5.2 | RBAC roles + permission matrix | `cloud/server/src/auth/rbac.ts` + `docs/orchestrator/rbac-matrix.md` |
+| O5.3 | Audit log projection + UI (90-day default retention) | `cloud/server/src/audit/{index,query}.ts` + `cloud/platform/src/pages/AuditLog.tsx` |
+| O5.4 | Seat enforcement | shared with O5.1 |
+| O5.5 | Usage metering above per-seat allowance | shared with O5.1 |
+| O5.6 | Monthly budget cap + pause | `cloud/server/src/billing/budget-cap.ts` |
+| O5.7 | Invite flow polish | existing `cloud/server` Invite model + new UI |
+| O5.8 | Per-craw + per-org network egress policy | `cloud/server/src/policy/egress.ts` |
+| O5.9 | Workspace-wide kill switch | dashboard + workflow |
+
+### O6 — closed beta with 10–20 paying teams (weeks 31–36)
+
+**Gate:** 10–20 paying teams. Mean ticket-to-merged-PR <2h for boring & bounded tasks. P95 <8h. NPS ≥30 from design partners. MRR ≥$10k.
+
+| # | Deliverable | Files |
+|---|---|---|
+| O6.1 | Onboarding walkthrough (ends with real PR in <10min) | `cloud/platform/src/onboarding/orchestrator/` |
+| O6.2 | Escalation policy + UI (fallback reviewer chain) | dashboard |
+| O6.3 | Manual-takeover UX (hand off worktree gracefully) | dashboard + Linear/GitHub comments |
+| O6.4 | Notifications (in-app + email + one-way Slack webhook) | `cloud/server/src/notifications/` |
+| O6.5 | Support runbooks | `docs/orchestrator/support/{onboarding,common-failures,billing-questions}.md` |
+| O6.6 | Status page | hosted (statuspage.io or equivalent) |
+| O6.7 | First-line on-call rotation | internal — 1 engineer/week for 10–20 customer fleet |
+| O6.8 | Customer feedback channel | shared Linear/Slack per design partner |
+| O6.9 | Per-craw release notes + changelog | `docs/orchestrator/craws/<id>/CHANGELOG.md` |
+| O6.10 | Regression alert pipeline (2σ drop in success rate) | `cloud/server/src/quality/regression.ts` (uses cost-manager pattern) |
+
+### O7 — public beta + customer-authored craws v1 (weeks 37–44)
+
+**Gate:** Public signup live; ≥3 customers have authored their own craws; ≥30 paying teams; ARR ≥$50k. Begin GRAND_PLAN Stage 2 work in earnest (hosted RAG spike, RL data-export pipeline).
+
+| # | Deliverable | Files |
+|---|---|---|
+| O7.1 | Public signup + onboarding | `cloud/platform/` |
+| O7.2 | Customer-authored craw forking | `cloud/platform/src/pages/CrawEditor.tsx` + `cli/orgctl/src/craws/templates/` |
+| O7.3 | Craw authoring docs (5-page set + `craw test` CLI) | `docs/orchestrator/authoring-craws/` |
+| O7.4 | Per-workspace craw registry (private + curated together) | extends O5.7 |
+| O7.5 | Marketing site update (pricing, logos, positioning) | `web/` |
+| O7.6 | GRAND_PLAN Stage 2 prep begins (was LATER² week 28) | per [`GRAND_PLAN.md`](./docs/roadmap/GRAND_PLAN.md) §4 |
+| O7.7 | Closed-beta post-mortem | `docs/orchestrator/post-mortems/closed-beta-v1.md` |
+
+**End-of-orchestrator-track milestone:** v1.0 of the hosted orchestrator. Public signup open. 30+ paying teams. Stage 2 of GRAND_PLAN begins from a position of revenue rather than from scratch.
+
+### Resourcing assumption
+
+Two full-time engineers on the orchestrator (one backend + workflow, one frontend + dashboard + cloud-platform), separate from the existing lens + dash + ui team. With one engineer multiply timeline by ~1.8 (~78 weeks). With three engineers, compresses to ~33 weeks but requires tight coordination per [`CLAUDE.md`](./CLAUDE.md) ownership rules. Product designer needed part-time from O3 onward.
+
+### Open questions that gate O0
+
+Resolve before O0 closes; tracked in `ORCHESTRATOR-STAGES.md` §"Open questions":
+
+1. Hosting target (AWS / GCP / Fly.io) — constrains worker isolation model.
+2. Per-task token-cost ceiling — anchors O5 pricing; spike O0.6 should produce the measured input.
+3. Domain: same `crawfish.dev` or `orchestrator.crawfish.dev` — marketing decision.
+4. Single shared GitHub App vs. per-customer apps — ops vs. scale tradeoff.
+5. External craw contributor invitations before O7 customer-authored ships.
+6. Merge-approval policy: GitHub branch protection only, or orchestrator-layer override.
+
+---
+
+## GRAND_PLAN expansions · Weeks 10–36 — workstreams previously unscheduled
+
+**Why this section exists:** prior to 2026-05-22, several Stage-1 workstreams in [`docs/roadmap/GRAND_PLAN.md`](./docs/roadmap/GRAND_PLAN.md) §3 had narrative commitments and phase assignments in GRAND_PLAN §8 but no concrete weeks in `ROADMAP.md`. This block fills that gap. Each subsection sequences a single GRAND_PLAN workstream across P4 → P5 → P6, with each entry pointing at the week it lands. Slip-sensitive (these are added on top of the orchestrator track; if the orchestrator team isn't resourced per `ORCHESTRATOR-STAGES.md` §"Resourcing assumptions," several of these slip by 4–8 weeks).
+
+### §3.3.1 — The agentic brain (librarian)
+
+The single most-contested feature in the GRAND_PLAN per §6.12. Three versioned shippings; v1 is the minimum that makes the moat narrative concrete.
+
+| When | Deliverable | Files |
+|---|---|---|
+| Week 10 (P4) | **Brain v1** — query clustering (k-means + transformers.js CPU); LinUCB contextual bandit per cluster; cold-start priors (one Haiku call seeds arm probabilities); reward signal (citation, no re-prompt, task success); six MCP tools (`knowledge_route`, `knowledge_feedback`, `knowledge_explain`, `bundle_get`, `bundle_diff`, `bundle_pin`); spawn-time bundle composer + role-graph + per-role bundle UI in dash | `crawfish-lens/src/brain/{clusters,bandit,reward,bundle-composer,role-graph}.ts`; `~/.crawfish/orgs/<id>/brain/{clusters.json,bandits.sqlite,feedback.jsonl,bundles/<role>.json,role-graph.json}`; `crawfish-orgctl/src/tools/brain.ts`; `crawfish-dash/web/src/routes/Brain.tsx` |
+| Week 22 (P5) | **Brain v2** — LightGBM gradient-boosted ranker (within-source ordering, retrained nightly); PageRank over citation graph; LLM Wiki visualization (cluster name, arm distribution, arm-evolution graph, alternatives considered); bundle delta-propagation to running agents; bundle-pin human overrides | `crawfish-lens/src/brain/{ranker,pagerank,delta-propagation}.ts`; `ranker.lightgbm`, `pagerank.json` artifacts; `crawfish-dash/web/src/routes/Brain.tsx` (extend) |
+| Week 32 (P6) | **Brain v3** — two-tower neural retrieval (ONNX, CPU-trainable in 1h on a year of feedback); cluster auto-naming + drift detection (nightly Haiku reads sample queries per cluster); arm-evolution-over-time view; per-agent personalization layered on role bundles | `crawfish-lens/src/brain/{two-tower-train,drift,personalize}.ts`; `tower.onnx` artifact |
+
+**Persona priority (per GRAND_PLAN §3.3.1):** solo founder + engineer IC + manager + research lead + compliance.
+
+**Hard prerequisite:** §3.3 RAG (NEXT week 6) and three-zone org-fs layout. Brain v1 cannot start before RAG indexing is shipped and stable.
+
+### §3.14 — Native orchestration runtime
+
+The runtime Crawfish owns. Pluggable third-party runtimes (Claude Code, CMA, OpenClaw, Codex, Ruflo) remain available; from week 14 onward, native is the default for new orgs. ADR-001 (already in `.planning/decisions/`) pins the task data model the runtime shares.
+
+| When | Deliverable | Files |
+|---|---|---|
+| Week 11 (P5) | **Cap 1 — Swarm primitives.** Three topologies: hierarchical, mesh, adaptive. Per-task topology choice in task frontmatter or chosen by planner. | `crawfish-lens/src/runtime/swarm/{hierarchical,mesh,adaptive}.ts` |
+| Week 12 (P5) | **Cap 2 — GOAP planner.** Plain-English goal → state-space A* through actions with preconditions/effects → executable plan tree. Renders in Plan tab as collapsible tree with blocked branches + rollbacks highlighted. Replans on state change. | `crawfish-lens/src/runtime/planner/{goap,plan-tree,replan}.ts`; `crawfish-dash/web/src/routes/Plan.tsx` (extend) |
+| Week 13 (P5) | **Cap 3 — Agent scheduler.** Token-budget-aware dispatch. Capability-matched routing (reuses `cli/projectctl/src/router.ts` 70%-success-rate primitive). Per-agent concurrency limits. Backpressure when org-wide budget depleted. | `crawfish-lens/src/runtime/scheduler/{dispatch,backpressure}.ts` |
+| Week 14 (P5) | **Cap 7 — MCP-tool catalog.** `swarm_init`, `agent_spawn`, `task_orchestrate`, `goal_decompose`, `memory_store`, `memory_search`, `federation_send`, `trajectory_replay` registered in `cli/orgctl`. Schemas match converging Ruflo/CrewAI/MAF shapes where overlap exists. | `cli/orgctl/src/tools/runtime.ts` |
+| Week 25 (P6) | **Cap 4 — Agent memory.** Per-agent working memory + shared `org-fs/memory/<agent-id>/`. RVF-style snapshot/restore so a long-running agent can be paused, exported, resumed on another machine. | `crawfish-lens/src/runtime/memory/{working,snapshot,restore}.ts` |
+| Week 26 (P6) | **Cap 5 — Federation v0.** Two-node only. mDNS LAN discovery; signed-invite WAN; ed25519 challenge-response auth; typed message bus; PII pipeline in front of every outbound message. | `crawfish-lens/src/runtime/federation/{discover,auth,bus}.ts` |
+| Week 27 (P6) | **Cap 6 — Self-learning loop.** Every completed task writes a trajectory record (goal, plan, outcome, tokens, success/failure, fix-if-failed). Planner queries trajectories via the brain before A* search — past solutions become learned priors. | `crawfish-lens/src/runtime/trajectory/{record,query,replay}.ts`; `org-fs/agent-memory/trajectories/` |
+| Week 28 (P6) | **Cap 8 — Runtime adapter parity.** Native runtime implements same adapter contract (`crawfish-lens/src/adapters/`) as Claude Code / Codex / OpenClaw. Lens reads native transcripts the same way. Diagnoses rules fire unmodified. | `crawfish-lens/src/adapters/crawfish-native.ts` |
+
+**Risk per GRAND_PLAN §3.14 risk register:** Ruflo v3 ships better swarm intelligence before week 14; mitigation — keep Ruflo as first-class adapter. Federation v0 introduces security surface; mitigation — single-machine first, multi-machine gated on security audit.
+
+### §3.15 — Methodology packs
+
+Methodology lives one layer above the runtime (per §3.14 anti-feature list). Each pack is an org-template + skill-pack + role-graph + brain-bundle template.
+
+| When | Deliverable | Files |
+|---|---|---|
+| Week 15 (P5) | **SPARC + ADR** org templates. SPARC: 5-phase methodology (Specification → Pseudocode → Architecture → Refinement → Completion) with quality gates; 5 specialist agents + coordinator. ADR: every architectural choice → `org-fs/knowledge/adr/####-title.md`; supersedes relationships in entity graph. | `crawfish-dash/src/templates/{sparc,adr}/{org.json,members/,_skills/}`; `crawfish-orgctl/src/skills/{sparc.spec.write,sparc.architecture.diagram,sparc.refinement.review,adr.write,adr.supersede}/SKILL.md` |
+| Week 24 (P6) | **DDD + GTD-for-orgs + OKRs.** DDD: bounded contexts, aggregates, events, ACLs; domain modeler + integration architect agents. GTD: capture/clarify/organize/reflect/engage mapped onto board states. OKRs: hierarchy of objectives + key results decomposed into tasks; quarterly review cron. | `crawfish-dash/src/templates/{ddd,gtd,okrs}/`; `crawfish-orgctl/src/skills/{ddd.aggregate.scaffold,gtd.capture,okrs.rollup}/SKILL.md` |
+
+### §3.16 — AI Defence
+
+The five-module pipeline that gates every other workstream against prompt injection, PII leakage, secrets exposure, tool-call escalation, vulnerability bleed-through. Per §7 wiring policy: reimplemented natively (not forked from `ruflo-aidefence`) because every defence module hooks the diagnoses engine.
+
+| When | Deliverable | Files |
+|---|---|---|
+| Week 10 (P4) | **`defence-promptinject`** — pre-tool-call hook scans incoming text for instruction-override tokens, known jailbreak phrasings, suspicious embedded tool-call requests. Quarantine (`<untrusted>` wrap) or block. Default quarantine. | `crawfish-lens/src/defence/promptinject.ts` + `cli/orgctl/src/hooks/pre-tool-use.ts` |
+| Week 10 (P4) | **`defence-secrets`** — runs on transcript ingestion + Codespace shell history. Detects API keys, tokens, credentials, private keys via entropy + format match (GitHub secret-scanning patterns + org-customizable). Hits → `secrets-incidents.jsonl` + board task. Token hashed in transcript so trail is auditable but not replayable. | `crawfish-lens/src/defence/secrets.ts`; `~/.crawfish/orgs/<id>/secrets-incidents.jsonl` |
+| Week 16 (P5) | **`defence-pii`** — per-source-class PII detector on ingest + every retrieval. Tags chunks with `pii_class` metadata. Brain bundle composer + librarian router respect `pii_class` against agent's `allowed_pii_classes` policy. PII redacted at retrieval time (not ingest) so user can still audit what's there. | `crawfish-lens/src/defence/pii.ts`; extend `crawfish-lens/src/brain/bundle-composer.ts` |
+| Week 16 (P5) | **`defence-toolcall`** — PreToolUse hook (Claude Code's contract, adapted). Per-agent allowlist of MCP tools + per-tool argument patterns. Denied calls → diagnoses feed + click-to-approve. Egress denied by default; per-domain explicit allowlists. | `crawfish-lens/src/defence/toolcall.ts`; extend `cli/orgctl/src/hooks/pre-tool-use.ts` |
+| Week 27 (P6) | **`defence-cve` + unified Defence dashboard.** Nightly CVE scan across connected codebases; hits → `priority: high` board tasks; code-review agents pre-loaded with current CVE state via bundle composer. Dashboard surface in dash. | `crawfish-lens/src/defence/cve.ts`; `crawfish-dash/web/src/routes/Defence.tsx` |
+
+**Note:** §3.16 is the canonical example of the §7 "reimplement natively, steal the design" pattern. We do not depend on `ruflo-aidefence` as a library.
+
+### §3.17 — Craws as the packaging unit
+
+The unit of installation, distribution, and marketplace listing. Nine kinds (agent / skill / template / connector / optimizer / cron / methodology / defence / benchmark) ship under one manifest format.
+
+| When | Deliverable | Files |
+|---|---|---|
+| Week 17 (P5) | **`craw.yaml` manifest** + `craw add <id>` CLI + four kind handlers (agent, skill, template, optimizer — the kinds that already exist). ed25519 signing; signature verification at install; bundled benchmark required at submission. | `cli/orgctl/src/craws/{manifest,verify,install}.ts`; `bin/craw.js` (extend); `cli/orgctl/src/craws/handlers/{agent,skill,template,optimizer}.ts` |
+| Week 29 (P6) | **Five more kind handlers** — connector, cron, methodology, defence, benchmark. Each kind handler routes the install to the correct subsystem (connector → ingest pipeline; cron → crons.json; methodology → templates + skills + role-graph + brain bundle; defence → defence module registry; benchmark → bench fixtures). | `cli/orgctl/src/craws/handlers/{connector,cron,methodology,defence,benchmark}.ts` |
+| Week 30+ (Stage 2) | **Signed-distribution marketplace** — see GRAND_PLAN §4.9. PR-based submission, CI benchmark gating, install counts, reviews, compatibility matrix, paid distribution via Stripe Connect. | new repo `crawfish-marketplace/`; submission CI in umbrella `.github/workflows/marketplace-submit.yml` |
+
+### §3.18 — `craw init` first-run discovery
+
+The founder's first-60-seconds gesture. Multi-phase rollout per GRAND_PLAN sequencing.
+
+| When | Deliverable | Files |
+|---|---|---|
+| Week 5 (P3 finish) | **Local agent surface scan.** Walks `~/.claude/projects/`, `~/.claude/teams/`, `~/.openclaw/workspace/`, Cursor application support, `~/.codex/`. Each becomes a "discovered project" card with token spend, last activity, agent count, top files touched. Import-as-org flow. | `cli/projectctl/src/verbs/init.ts` (extend); `crawfish-dash/web/src/routes/Discover.tsx` |
+| Week 11 (P4) | **Code-repo scan + Obsidian-vault detection + Tier-1 connector one-clicks.** Walks `~/code/`, `~/projects/`, `~/Documents/`, git global config. Per repo, proposes a Crawfish org seeded from a relevant template. Detects Obsidian vaults non-destructively (symlink, not copy). One-click OAuth for Gmail/Slack/GitHub/Linear/Notion. | `cli/projectctl/src/discover/{repo-scan,obsidian-detect,connector-installer}.ts` |
+| Week 18 (P5) | **"Before Crawfish" cost baseline + recommended craws.** Reads last 30 days of Claude Code / OpenClaw / Codex transcripts. Computes compounding factor, top sinks, top recommendations. Surfaces as the §3.6 founder dashboard at first-run. Recommended craws list with estimated token savings per craw. | `cli/projectctl/src/discover/{cost-baseline,recommend}.ts`; integrates with §3.6 HomeDashboard |
+| Week 30 (P6) | **defence-secrets pre-scan + org-shape recommender.** Runs `defence-secrets` over discovered transcripts; surfaces leaked tokens/keys *before* the founder has even created an org. Haiku-class summarization of discovered surfaces → template recommendation ("`startup × b2b-saas` with the support-agent + engineering-agent + ops-agent triad"). | `cli/projectctl/src/discover/{secret-prescan,org-shape-recommender}.ts` |
+
+### §3.19 — Brain across all routing dimensions
+
+The brain (§3.3.1) generalizes from knowledge-routing to all five routing dimensions. v1–v2 land via §3.3.1. The remaining dimensions extend the substrate.
+
+| When | Deliverable | Files |
+|---|---|---|
+| Week 26 (P6) | **Task → agent routing promotion.** Promote `cli/projectctl/src/router.ts` (static capability matcher) to a bandit-backed dimension of the brain. Same `bandits.sqlite` substrate, new table per `<task-cluster, agent>` pair. Reward = agent completed within budget. Adds `route_task`, `route_feedback`, `route_explain`, `route_alternatives` MCP tools. | `crawfish-lens/src/brain/route-task.ts`; `cli/orgctl/src/tools/route.ts`; deprecate-but-keep `cli/projectctl/src/router.ts` as fallback |
+| Stage 2 | **Task → model and task → runtime routing** + the unified Brain dashboard (five dimensions side-by-side). See GRAND_PLAN §3.19 sequencing. | TBD — Stage 2 scope |
+
 ---
 
 ## LATER² · Weeks 17–28 — Stage 1 finish + Stage 2 prep
 
 ### Weeks 17–18 — Native code review (P6 start)
+
+> **Slip note (2026-05-22):** Slips ~4 weeks due to orchestrator parallel-track bandwidth on O3/O4 dashboard + PR-bot. The orchestrator's own PR loop covers the basic review case for craw-authored PRs from O1; this is the native review surface for human-authored code.
 
 | # | Deliverable | Files |
 |---|---|---|
@@ -365,6 +625,8 @@ crawfish-web/                # new repo — Next.js app router, deployed to Verc
 
 ### Weeks 19–20 — Test-generator + Visual-auditor agents (CI/CD)
 
+> **Accelerates (2026-05-22):** Test-gen + visual-auditor ship as additional orchestrator craws in **stage O3** (weeks 19–22 of orchestrator track) rather than as separate work. The deliverables below remain as the on-paper plan but are subsumed by the orchestrator craw work.
+
 | # | Deliverable | Files |
 |---|---|---|
 | 14.1 | Test-gen agent preinstall | `crawfish-dash/src/templates/_agents/test-generator/{member.md,policy.json}` |
@@ -373,6 +635,8 @@ crawfish-web/                # new repo — Next.js app router, deployed to Verc
 | 14.4 | Token-regression gate | `crawfish-lens/src/server/ci.ts:assertNoRegression` — fails PR if bench tokens climb >20% |
 
 ### Weeks 21–22 — Agent-web proxy MVP (track B of §3.7)
+
+> **Slip note (2026-05-22):** Slips ~4 weeks because the parallel-track engineer's bandwidth is consumed by orchestrator O3/O4.
 
 | # | Deliverable | Files |
 |---|---|---|
@@ -384,6 +648,8 @@ crawfish-web/                # new repo — Next.js app router, deployed to Verc
 
 ### Weeks 23–24 — CRDT + git-worktree isolation (agent-side)
 
+> **Split (2026-05-22):** Git-worktree isolation pulled forward to orchestrator stage **O0.5** (weeks 6–8). The Yjs CRDT layer for `org-fs/knowledge/` holds at the original timing — that work is local-first and not on the orchestrator path.
+
 | # | Deliverable | Files |
 |---|---|---|
 | 18.1 | Yjs-based CRDT for markdown in `org-fs/knowledge/` | `crawfish-orgctl/src/crdt/yjs.ts` |
@@ -392,6 +658,8 @@ crawfish-web/                # new repo — Next.js app router, deployed to Verc
 | 18.4 | Settings → Worktrees panel | `crawfish-dash/web/src/routes/Settings.tsx` (new sub-tab) |
 
 ### Weeks 25–27 — Communication-graph features (P3 finish + P5 extensions)
+
+> **Slip note (2026-05-22):** Slips ~6 weeks because of orchestrator parallel-track bandwidth.
 
 | # | Deliverable | Files |
 |---|---|---|
@@ -420,23 +688,39 @@ For navigation. Each GRAND_PLAN workstream maps to specific weeks above.
 | GRAND_PLAN §  | Weeks | Status |
 |---|---|---|
 | 3.1 Templates | 5, 11 (overlays via skills) | active |
-| 3.2 AI issue tracking — **Linear-grade board** | 1–5 (full); Stage 2 §4.6 for 24/7 triage | **active — front-loaded** |
-| 3.3 Local agent FS | 6 (RAG), 15 (Wiki), 23 (CRDT agent-side) | active |
+| 3.2 AI issue tracking — **Linear-grade board** | 1–5 (full); Stage 2 §4.6 for 24/7 triage covered by orchestrator track | **active — front-loaded** |
+| 3.3 Local agent FS | 6 (RAG), 15 (Wiki), 23 (CRDT agent-side; worktree-half pulled to O0.5) | active |
+| **3.3.1 Brain (librarian)** | **10 (v1), 22 (v2), 32 (v3)** | **scheduled — newly ratified 2026-05-22** |
 | 3.4 Skill backbone | 11, 12 | scheduled |
-| 3.5 Crawfish IDE | 14 | scheduled |
+| 3.5 Crawfish IDE | 14 → slipped ~4w to ~18 | scheduled (slipped) |
 | 3.6 Founder dash | 8 | scheduled |
-| 3.7 Web for agents (track A) | 7 (logs optimizer); track B at 21 | mixed |
-| 3.8 Local Codespaces | 13 | scheduled |
-| 3.9 Agent CI/CD | 19 | scheduled |
+| 3.7 Web for agents (track A) | 7 (logs optimizer); track B at 21 → slipped ~4w to ~25 | mixed |
+| 3.8 Local Codespaces | 13 → slipped ~3w to ~16; worktree-half pulled forward to O0.5 | scheduled (slipped) |
+| 3.9 Agent CI/CD | 19–20 → **accelerated, ships as orchestrator craws in O3** | scheduled (accelerated) |
 | 3.10 Cron recipes | 16 | scheduled |
 | 3.11 Token discipline | 7, 16 | active |
-| 3.12 Comms graph | 1 (per-task activity), 25 (org-level) | mixed |
+| 3.12 Comms graph | 1 (per-task activity), 25 (org-level) → slipped ~6w to ~31 | mixed |
 | 3.13 Dual analytics | 5, 8 | active |
+| **3.14 Native orchestration runtime** | **11–14 (caps 1+2+3+7), 25–28 (caps 4+5+6+8)** | **scheduled — newly ratified 2026-05-22** |
+| **3.15 Methodology packs** | **15 (SPARC + ADR), 24 (DDD + GTD + OKRs)** | **scheduled — newly ratified 2026-05-22** |
+| **3.16 AI Defence** | **10 (promptinject + secrets), 16 (pii + toolcall), 27 (cve + dashboard)** | **scheduled — newly ratified 2026-05-22** |
+| **3.17 Craws packaging** | **17 (manifest + 4 kinds), 29 (5 more kinds), 30+ marketplace (Stage 2)** | **scheduled — newly ratified 2026-05-22** |
+| **3.18 `craw init` discovery** | **5 (local scans), 11 (cloud connectors), 18 (cost baseline), 30 (secrets + recommender)** | **scheduled — newly ratified 2026-05-22** |
+| **3.19 Brain across all dimensions** | **26 (task → agent); model + runtime dimensions Stage 2** | **scheduled — newly ratified 2026-05-22** |
 | **NEW — Web dashboard + collab** (`crawfish.dev`) | Parallel Track 6–16 | **active** |
 | ↳ marketing + download portal (links to app + IDE) | 6–7 | scheduled |
 | ↳ authed web dashboard (tunneled lens) | 8–10 | scheduled |
 | ↳ collaboration (presence, comments, CRDT drawer, @mentions) | 11–13 | scheduled |
-| ↳ team mode + Stripe billing (humans = seats; agents free) | 14–16 | scheduled |
+| ↳ team mode + Stripe billing (humans = seats; agents free) | 14–16 → **consumed by orchestrator O5 (weeks 27–30)** | scheduled (consumed) |
+| **NEW — Hosted orchestrator track** | **6–44 (O0–O7)** | **active — newly ratified 2026-05-22** |
+| ↳ O0 foundation + spike | 6–8 | scheduled |
+| ↳ O1 single-craw PR loop + first design partners | 9–14 | scheduled |
+| ↳ O2 curated craw library + auto-classifier v1 | 15–18 | scheduled |
+| ↳ O3 live team-execution dashboard + multi-craw collab | 19–22 | scheduled |
+| ↳ O4 PR-comment loop with budget + halt heuristics | 23–26 | scheduled |
+| ↳ O5 multi-user + RBAC + billing + audit (consumes PARALLEL TRACK D) | 27–30 | scheduled |
+| ↳ O6 closed beta with 10–20 paying teams | 31–36 | scheduled |
+| ↳ O7 public beta + customer-authored craws v1 | 37–44 | scheduled |
 
 ---
 
@@ -482,12 +766,20 @@ Items called out in BRAINSTORM / GRAND_PLAN that are deliberately deferred and n
 
 - LangGraph adapter (INTEGRATIONS §LangGraph) — Stage 2.
 - Aider / Cline / Continue / Roo adapters — Stage 2 once SDK surface stabilizes.
-- Per-org RL fine-tunes (§4.3) — Stage 2, gated on revenue.
-- Hosted RAG + S3 backing — Stage 2.
-- SSO / SAML / OIDC — Stage 3 only.
-- Notification routing via SMTP — Stage 2 week 1 (hosted prereq).
+- Per-org RL fine-tunes (GRAND_PLAN §4.3) — Stage 2, gated on revenue.
+- Hosted RAG + S3 backing (GRAND_PLAN §4.1) — Stage 2 (note: the hosted *orchestrator* lands in O0–O5, but org-fs hosting stays Stage 2).
+- SSO / SAML / OIDC — Stage 3 only. (Basic RBAC + audit log pulled forward to orchestrator O5.)
+- ~~Notification routing via SMTP — Stage 2 week 1 (hosted prereq).~~ **Pulled forward to orchestrator O6.4 (email + in-app + one-way Slack webhook). PagerDuty/Discord/Teams remain deferred.**
 - AutoGen / CrewAI / Mastra SDK adapters — Stage 2 after `@crawfish/sdk` ships.
 - A separate desktop `crawfish-orchestrator` bundle (OpenClaw + lens + policy) — re-evaluate after week 8.
+- §3.19 task → model and task → runtime routing dimensions — Stage 2 (only task → agent dimension is in P6 at week 26).
+- Stage 2 §4.2 hosted Pilot Protocol — Stage 2 onward, gated on §3.7 Track B proxy maturity.
+- Stage 2 §4.5 manager-grade employee analytics — Stage 2.
+- Stage 2 §4.7 org knowledge layer at scale (Confluence / Notion / Drive / Slack-archive cross-source ingestion) — Stage 2; the orchestrator doesn't need it for v1.
+- Stage 2 §4.8 advanced agent generation (generate-an-agent / iterate-on-an-agent / A/B between versions) — Stage 2; orchestrator O7 ships *forking* curated craws but not full synthesis.
+- Stage 2 §4.9 paid marketplace + revenue share + verified-publisher tier — Stage 2. Free MIT marketplace ships earlier per §3.17 sequencing.
+- Stage 3 §5 compliance tier, on-prem deployment, vendor procurement kit, co-sell — Stage 3, gated on Stage 2 paying.
+- GRAND_PLAN §6.10 Linux Foundation AAIF membership — strategic decision, not a build item. Track separately.
 
 ---
 
@@ -506,6 +798,11 @@ Anything not in one of those buckets is, by convention, not being built. Add it 
 ## 8 · Source of truth
 
 - **What's shipped:** `main` of each repo + §0 above.
-- **What's planned:** §1 above. Edits go through PR review.
-- **What we will not build:** §6, plus [`GRAND_PLAN.md`](./docs/roadmap/GRAND_PLAN.md) §9 anti-goals.
+- **What's planned:** §1 above (weekly schedule) + the §"GRAND_PLAN expansions" subsections + the §"Orchestrator track" subsections. Edits go through PR review.
+- **What we will not build:** §6, plus [`GRAND_PLAN.md`](./docs/roadmap/GRAND_PLAN.md) §10 anti-goals.
+- **Product spec for the hosted orchestrator:** [`docs/roadmap/ORCHESTRATOR-ONEPAGER.md`](./docs/roadmap/ORCHESTRATOR-ONEPAGER.md).
+- **MVP user stories for the hosted orchestrator (~95 stories across 17 surfaces):** [`docs/roadmap/ORCHESTRATOR-USER-STORIES.md`](./docs/roadmap/ORCHESTRATOR-USER-STORIES.md).
+- **Orchestrator development stages (O0–O7) with file paths + slip accounting:** [`docs/roadmap/ORCHESTRATOR-STAGES.md`](./docs/roadmap/ORCHESTRATOR-STAGES.md).
+- **Long-range vision (24 months):** [`docs/roadmap/GRAND_PLAN.md`](./docs/roadmap/GRAND_PLAN.md).
+- **Local-first MVP (pre-orchestrator wave):** [`docs/roadmap/ROADMAP-MVP.md`](./docs/roadmap/ROADMAP-MVP.md).
 - **North star (one sentence):** Make it as easy to run a company with AI agents as it is to run one with people — and make the agent company faster, cheaper, and more observable than the human one.
