@@ -22,7 +22,14 @@ uv run pytest -q       # the test suite
 - [Roadmap](docs/roadmap/README.md) — the live Phase 1 plan (CRA-98, M0–M5)
 - [Getting started](docs/guide/getting-started.md)
 
-Status: **M0 (foundation) complete** — core types, structural type registry, versioning,
-the `Store` seam, the engine bootstrap, packaging + CI. M1–M5 in progress.
+Status: **Phase 1 complete** — M0–M5 shipped (34/35 CRA-98 issues; Company Brain
+deferred to the Phase-2 hub). The trust loop runs locally with no hosted dependency:
+a multi-item Source fans out, a Definition team runs per item via `claude -p`, an
+Aggregator reduces, a Router branches, and a Sink writes — typed, versioned,
+benchmarked, with retries/dead-letter and crash-resume. `ruff` + `mypy --strict` clean;
+255 tests green; docs build as a MkDocs site.
 
-See [CLAUDE.md](CLAUDE.md) for development guidance.
+Browse the docs: `uv run --group docs mkdocs serve`.
+
+See [CLAUDE.md](CLAUDE.md) for development guidance and [docs/roadmap](docs/roadmap/README.md)
+for the per-issue status.
