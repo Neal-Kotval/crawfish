@@ -26,6 +26,7 @@ from crawfish.core import (
     parameters_compatible,
 )
 from crawfish.engine import Engine, run_pipeline
+from crawfish.output import Output, WireError, check_wire, output_satisfies_inputs
 from crawfish.store import SqliteStore, Store
 from crawfish.typesystem import TypeDef, TypeKind, TypeRegistry, default_registry
 from crawfish.versioning import Freezable, FrozenError, Version
@@ -64,4 +65,9 @@ __all__ = [
     # engine
     "Engine",
     "run_pipeline",
+    # output
+    "Output",
+    "output_satisfies_inputs",
+    "check_wire",
+    "WireError",
 ]
