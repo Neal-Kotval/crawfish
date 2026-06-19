@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "crawfish"
+version = "0.1.0"
+description = "Agents for bulk work over your data: Source -> Batch -> Aggregator -> Router -> Sink, run locally."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Crawfish" }]
+keywords = ["agents", "llm", "pipeline", "claude", "batch", "automation"]
+dependencies = [
+    "pydantic>=2.7",
+    "typing-extensions>=4.10",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+otel = ["opentelemetry-api>=1.25", "opentelemetry-sdk>=1.25"]
+
+[project.scripts]
+craw = "crawfish.cli:main"
+
+# Entry-point groups that module discovery reads (CRA-113). Plugins installed via
+# pip register Sources/Sinks/Definitions/types under these groups.
+[project.entry-points."crawfish.sources"]
+
+[project.entry-points."crawfish.sinks"]
+
+[project.entry-points."crawfish.definitions"]
+
+[project.entry-points."crawfish.types"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crawfish"]

@@ -1,0 +1,45 @@
+site_name: Crawfish
+site_description: Agents for bulk work over your data — Source → Batch → Aggregator → Router → Sink.
+docs_dir: docs
+repo_url: https://github.com/crawfish/crawfish-framework
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: red
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - scheme: slate
+      primary: red
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Guide:
+      - Getting started: guide/getting-started.md
+      - Tutorial: guide/tutorial.md
+      - Concepts: guide/concepts.md
+      - Cookbook: guide/cookbook.md
+      - API reference: guide/api-reference.md
+  - Architecture:
+      - Overview: architecture/ARCHITECTURE.md
+      - Security spine: architecture/SECURITY.md
+      - API stability: architecture/API-STABILITY.md
+  - Product: product/PRODUCT.md
+  - Roadmap: roadmap/README.md

@@ -1,0 +1,17 @@
+# Crawfish project manifest (copy to `crawfish.toml` in a project root).
+# A project is self-contained: this manifest + .env (secrets) + .crawfish/ (state).
+
+[project]
+name = "triage-bot"
+version = "0.1.0"
+default_profile = "dev"
+
+# Profiles select the AgentRuntime backend (CRA-112).
+[profiles.dev]
+runtime = "command"   # `claude -p` — zero API key, the default dev loop
+
+[profiles.prod]
+runtime = "managed"   # CMA (ManagedRuntime)
+
+# [profiles.staging]
+# runtime = "client"  # ClientRuntime — Anthropic API key from env/keychain
