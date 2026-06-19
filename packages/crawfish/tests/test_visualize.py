@@ -121,6 +121,31 @@ def test_http_endpoints_serve_page_json_and_404() -> None:
         thread.join(timeout=2)
 
 
+def test_non_loopback_host_header_rejected() -> None:
+    # DNS-rebinding defense: a forged non-loopback Host header gets 403
+    import threading
+    import urllib.error
+    import urllib.request
+
+    store = SqliteStore()
+    _seed(store)
+    server = serve_dashboard(store, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://{server.server_address[0]}:{server.server_address[1]}/state.json"
+        req = urllib.request.Request(url, headers={"Host": "evil.example.com"})
+        try:
+            urllib.request.urlopen(req)  # noqa: S310 - loopback
+            raise AssertionError("expected 403 for non-loopback Host")
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 403
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def test_static_page_interpolates_no_state() -> None:
     # the HTML page is static and contains no interpolated state (no secret surface)
     assert "127.0.0.1" in DASHBOARD_HTML

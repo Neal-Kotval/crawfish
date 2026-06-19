@@ -168,6 +168,7 @@ class Supervisor:
         org_id: str = "local",
         version: str = "0.1.0",
         backend: str = "command",
+        secrets: Sequence[str] = (),
     ) -> None:
         self.name = name
         self.store = store
@@ -176,6 +177,7 @@ class Supervisor:
         self.org_id = org_id
         self.version = version
         self.backend = backend
+        self.secrets = list(secrets)  # known secret values, for intrinsic scrubbing
         self.surface = ObserverSurface(store, org_id=org_id)
         self.ledger = ExecutionLedger(store, org_id=org_id)
 
@@ -226,14 +228,15 @@ class Supervisor:
         except Exception as exc:  # noqa: BLE001 — supervisor must survive any cycle
             status, state = "failed", ExecState.FAILED
             # Scrub the exception text intrinsically: an exception can carry a raw
-            # credential (it may quote fluid input), and we must never leak it into the
-            # failure event regardless of whether the store is also a ScrubbingStore.
+            # credential (it may quote fluid input). We redact both the known secret
+            # *values* and the credential-shaped patterns, so the failure event is safe
+            # even when the store is not itself a ScrubbingStore (defense in depth).
             self.surface.emit(
                 ObserverEvent(
                     pipeline=self.name,
                     kind="run.failed",
                     severity=Severity.CRITICAL,
-                    detail=redact(str(exc))[:200],
+                    detail=redact(str(exc), self.secrets)[:200],
                     observer="supervisor",
                     run_id=run_id,
                 )
@@ -423,6 +426,6 @@ def supervise_main(name: str, project_dir: str | Path, schedule: str | None = No
     db.parent.mkdir(parents=True, exist_ok=True)
     secrets = SecretManager(env=None)
     store = ScrubbingStore(SqliteStore(db), secrets=secrets.values)
-    sup = Supervisor(name, store, default_run_fn(root), schedule=schedule)
+    sup = Supervisor(name, store, default_run_fn(root), schedule=schedule, secrets=secrets.values)
     sup.serve()
     return 0

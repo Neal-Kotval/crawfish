@@ -78,6 +78,20 @@ def test_failed_cycle_keeps_supervisor_alive_and_records_failure() -> None:
     assert "***REDACTED***" in failed[0].detail
 
 
+def test_supervisor_scrubs_value_based_secret_in_failure() -> None:
+    # a custom secret value (not a credential-shaped pattern) is redacted intrinsically
+    store = SqliteStore()
+
+    def leak(_ctx: RunContext) -> None:
+        raise RuntimeError("connection failed: password=hunter2pass")
+
+    sup = Supervisor("p", store, leak, secrets=["hunter2pass"])
+    sup.run_cycle(now=datetime(2026, 1, 1, tzinfo=UTC))
+    detail = next(e for e in ObserverSurface(store).events("p") if e.kind == "run.failed").detail
+    assert "hunter2pass" not in detail
+    assert "***REDACTED***" in detail
+
+
 def test_process_items_resumes_without_redoing_completed() -> None:
     store = SqliteStore()
     sup = Supervisor("p", store, _ok_cycle)

@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 
 from crawfish.core.context import CostBudget, RunContext
 from crawfish.observe import ObserverEvent, ObserverSurface, RunInfo, Severity, parse_since
+from crawfish.secrets import redact
 from crawfish.triggers import CronSchedule
 
 if TYPE_CHECKING:
@@ -252,11 +253,13 @@ class Observer:
 
         text = asyncio.run(_go())
         flagged = self.judge_flag(text)
+        # scrub the judge's free-text finding for defense in depth — an Observer may be
+        # driven against a raw store (tests/CLI reads), not only the deployed ScrubbingStore
         return ObserverEvent(
             pipeline=octx.pipeline,
             kind="quality.low" if flagged else "quality.ok",
             severity=Severity.WARN if flagged else Severity.INFO,
-            detail=text.strip()[:300],
+            detail=redact(text.strip())[:300],
             observer="judge",
             data={"cost_usd": ctx.cost_budget.spent_usd},
             ts=octx.now.timestamp(),

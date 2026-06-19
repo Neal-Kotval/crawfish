@@ -168,7 +168,16 @@ def make_handler(store: Store, *, org_id: str = "local") -> type[BaseHTTPRequest
         def log_message(self, *_args: object) -> None:  # silence default stderr logging
             return
 
+        def _host_is_loopback(self) -> bool:
+            """Reject non-loopback Host headers (DNS-rebinding defense)."""
+            host = (self.headers.get("Host") or "").split(":")[0].strip().lower()
+            return host in ("127.0.0.1", "localhost", "")
+
         def do_GET(self) -> None:  # noqa: N802 — http.server API
+            if not self._host_is_loopback():
+                # a rebinding page can hit the socket but not forge a loopback Host
+                self.send_error(403, "loopback only")
+                return
             if self.path in ("/", "/index.html"):
                 body = DASHBOARD_HTML.encode("utf-8")
                 ctype = "text/html; charset=utf-8"
@@ -181,6 +190,8 @@ def make_handler(store: Store, *, org_id: str = "local") -> type[BaseHTTPRequest
             self.send_response(200)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
 
