@@ -17,6 +17,14 @@ from crawfish.artifacts import (
 )
 from crawfish.batch import Anomaly, Batch, Task
 from crawfish.build import BuildPlan, generate_containerfile, plan_build, write_containerfile
+from crawfish.ccexport import (
+    ClaudeCodeAgent,
+    ClaudeCodeSkill,
+    definition_to_cc_agent,
+    export_claude_code,
+    map_tools,
+    model_alias,
+)
 from crawfish.config import ProfileConfig, ProjectManifest, ProjectPaths, load_manifest
 from crawfish.core import (
     BudgetExceeded,
@@ -55,6 +63,14 @@ from crawfish.definition import (
     TeamSpec,
     load_definition,
 )
+from crawfish.deploy import (
+    DeployEntry,
+    DeployRegistry,
+    DeployStatus,
+    Supervisor,
+    deploy,
+    stop,
+)
 from crawfish.discovery import Registry, UnitRef
 from crawfish.doctor import DoctorFinding, DoctorReport, diagnose
 from crawfish.engine import Engine, run_pipeline
@@ -78,6 +94,7 @@ from crawfish.executor import (
 )
 from crawfish.inspector import RunReport, format_report, inspect_run, tail_events
 from crawfish.ledger import ExecState, ExecutionLedger
+from crawfish.manage import PipelineStatus, format_table, manage_list, restart_target
 from crawfish.memory import Memory
 from crawfish.metrics import (
     Benchmark,
@@ -123,6 +140,14 @@ from crawfish.observe import (
     Severity,
     parse_since,
 )
+from crawfish.observer import (
+    CostSpike,
+    FailureRateAbove,
+    Observer,
+    ObserverContext,
+    Rule,
+    StuckRun,
+)
 from crawfish.output import Output, WireError, check_wire, output_satisfies_inputs
 from crawfish.retry import ItemResult, ItemStatus, RetryPolicy
 from crawfish.run import InputBindingError, Run, RunStatus, RunSuspended
@@ -165,9 +190,17 @@ from crawfish.testing import (
     run_fixtures,
     snapshot_match,
 )
-from crawfish.triggers import CronTrigger, Trigger, WebhookTrigger, verify_webhook
+from crawfish.triggers import (
+    Cron,
+    CronSchedule,
+    CronTrigger,
+    Trigger,
+    WebhookTrigger,
+    verify_webhook,
+)
 from crawfish.typesystem import TypeDef, TypeKind, TypeRegistry, default_registry
 from crawfish.versioning import Freezable, FrozenError, Version
+from crawfish.visualize import dashboard_state, serve_dashboard
 from crawfish.workflow import Workflow
 
 __version__ = "0.1.0"
@@ -283,6 +316,31 @@ __all__ = [
     "RunInfo",
     "Severity",
     "parse_since",
+    # operate / observe / integrate (CRA-150)
+    "DeployEntry",
+    "DeployRegistry",
+    "DeployStatus",
+    "Supervisor",
+    "deploy",
+    "stop",
+    "PipelineStatus",
+    "manage_list",
+    "format_table",
+    "restart_target",
+    "Observer",
+    "ObserverContext",
+    "Rule",
+    "FailureRateAbove",
+    "CostSpike",
+    "StuckRun",
+    "dashboard_state",
+    "serve_dashboard",
+    "ClaudeCodeAgent",
+    "ClaudeCodeSkill",
+    "definition_to_cc_agent",
+    "export_claude_code",
+    "map_tools",
+    "model_alias",
     "ExecState",
     "RetryPolicy",
     "ItemResult",
@@ -327,6 +385,8 @@ __all__ = [
     "DoctorFinding",
     "DoctorReport",
     "diagnose",
+    "Cron",
+    "CronSchedule",
     "scaffold_project",
     "resolve_secret",
     "load_env",

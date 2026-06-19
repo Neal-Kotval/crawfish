@@ -194,6 +194,89 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+# ------------------------------------------------------------------------- deploy
+def _project_name(project_dir: str) -> str:
+    from crawfish.config import load_manifest
+
+    return load_manifest(project_dir).name
+
+
+def _cmd_deploy(args: argparse.Namespace) -> int:
+    from crawfish.deploy import deploy
+
+    name = args.name or _project_name(args.dir)
+    entry = deploy(args.dir, name=name, store=_open_store(args.dir), schedule=args.schedule)
+    when = f"on schedule {args.schedule!r}" if args.schedule else "continuously"
+    print(f"deployed {name} (pid {entry.pid}, session {entry.session}) — runs {when}")
+    print(f"  logs: {entry.log_path}")
+    print("  manage: craw manage    dashboard: craw visualize")
+    return 0
+
+
+# ------------------------------------------------------------------------- manage
+def _cmd_manage(args: argparse.Namespace) -> int:
+    from crawfish.deploy import stop
+    from crawfish.inspector import tail_events
+    from crawfish.manage import format_table, manage_list, restart_target
+
+    store = _open_store(args.dir)
+    if args.action == "stop":
+        ok = stop(args.target, store=store)
+        print(f"stopped {args.target}" if ok else f"no such pipeline: {args.target}")
+        return 0 if ok else 1
+    if args.action == "restart":
+        ok = restart_target(args.target, store=store)
+        print(f"restarted {args.target}" if ok else f"no such pipeline: {args.target}")
+        return 0 if ok else 1
+    if args.action == "logs":
+        for row in manage_list(store):
+            if row.name == args.target:
+                for ri in row.runs:
+                    for event in tail_events(store, ri.run_id, after_seq=-1):
+                        print(json.dumps(event))
+                return 0
+        print(f"no such pipeline: {args.target}")
+        return 1
+    print(format_table(manage_list(store)))
+    return 0
+
+
+# ---------------------------------------------------------------------- visualize
+def _cmd_visualize(args: argparse.Namespace) -> int:
+    from crawfish.visualize import LOOPBACK, serve_dashboard
+
+    server = serve_dashboard(_open_store(args.dir), port=args.port)
+    host, port = str(server.server_address[0]), server.server_address[1]
+    print(f"crawfish dashboard → http://{host}:{port}  (loopback only; Ctrl-C to stop)")
+    assert host == LOOPBACK  # never bind a public interface
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:  # pragma: no cover - interactive
+        print("\nstopped")
+    finally:
+        server.server_close()
+    return 0
+
+
+# -------------------------------------------------------------------------- export
+def _cmd_export(args: argparse.Namespace) -> int:
+    from crawfish.ccexport import export_claude_code
+    from crawfish.definition import Definition
+
+    definition = Definition.from_package(args.path)
+    paths = export_claude_code(definition, Path(args.dir), skill=args.skill)
+    for p in paths:
+        print(f"wrote {p}")
+    return 0
+
+
+# ----------------------------------------------------------------- _supervise (hidden)
+def _cmd_supervise(args: argparse.Namespace) -> int:
+    from crawfish.deploy import supervise_main
+
+    return supervise_main(args.name, args.dir, schedule=args.schedule)
+
+
 # --------------------------------------------------------------------------- init
 def _cmd_init(args: argparse.Namespace) -> int:
     from crawfish.scaffold import scaffold_project
@@ -253,6 +336,52 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("build", help="generate a Containerfile from the manifest + lock")
     p.add_argument("--dir", default=".", help="project directory")
     p.set_defaults(func=_cmd_build)
+
+    p = sub.add_parser("deploy", help="run the project's pipeline always-on (detached)")
+    p.add_argument("name", nargs="?", default=None, help="deploy name (defaults to project name)")
+    p.add_argument("--schedule", default=None, help='cron schedule, e.g. "0 8 * * *"')
+    p.add_argument("--dir", default=".", help="project directory")
+    p.set_defaults(func=_cmd_deploy)
+
+    p = sub.add_parser("manage", help="see & control deployed pipelines")
+    p.add_argument(
+        "action",
+        nargs="?",
+        default="list",
+        choices=["list", "stop", "restart", "logs"],
+        help="management action",
+    )
+    p.add_argument("target", nargs="?", default=None, help="pipeline name (for stop/restart/logs)")
+    p.add_argument("--dir", default=".", help="project directory")
+    p.set_defaults(func=_cmd_manage)
+
+    p = sub.add_parser("visualize", help="serve the localhost dashboard (loopback only)")
+    p.add_argument("--port", type=int, default=7878, help="dashboard port (127.0.0.1)")
+    p.add_argument("--dir", default=".", help="project directory")
+    p.set_defaults(func=_cmd_visualize)
+
+    p = sub.add_parser("export", help="export a Definition to another runtime")
+    p.add_argument(
+        "--claude-code",
+        dest="path",
+        metavar="PATH",
+        required=True,
+        help="path to a Definition directory to export as a Claude Code subagent",
+    )
+    p.add_argument(
+        "--skill",
+        action="store_true",
+        help="also emit a .claude/skills/<name>/SKILL.md slash-command wrapper",
+    )
+    p.add_argument("--dir", default=".", help="project directory to write .claude/ into")
+    p.set_defaults(func=_cmd_export)
+
+    # hidden: the detached supervisor entry point that `craw deploy` spawns
+    p = sub.add_parser("_supervise")
+    p.add_argument("name")
+    p.add_argument("--dir", default=".")
+    p.add_argument("--schedule", default=None)
+    p.set_defaults(func=_cmd_supervise)
 
     p = sub.add_parser("inspect", help="inspect a run from the Store")
     p.add_argument("run_id")

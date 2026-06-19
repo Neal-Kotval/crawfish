@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 
 from crawfish.core.ids import new_id
 from crawfish.core.types import JSONValue
@@ -20,9 +21,76 @@ from crawfish.core.types import JSONValue
 __all__ = [
     "Trigger",
     "CronTrigger",
+    "CronSchedule",
+    "Cron",
     "WebhookTrigger",
     "verify_webhook",
 ]
+
+
+class CronSchedule:
+    """A minimal 5-field cron evaluator (``m h dom mon dow``).
+
+    Supports ``*``, ``*/n`` steps, ``a,b`` lists, ``a-b`` ranges, and exact values
+    — enough for the deploy/observer polling cases (``0 8 * * *``, ``*/5 * * * *``).
+    Day-of-week is ``0-6`` with Sunday = 0. When both day-of-month and day-of-week
+    are restricted, a tick matches if *either* matches (standard cron semantics).
+    Evaluation is at minute resolution.
+    """
+
+    _RANGES = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)]
+
+    def __init__(self, expr: str) -> None:
+        parts = expr.split()
+        if len(parts) != 5:
+            raise ValueError(f"cron expression must have 5 fields, got {len(parts)}: {expr!r}")
+        self.expr = expr
+        self._fields = [
+            self._parse_field(p, lo, hi) for p, (lo, hi) in zip(parts, self._RANGES, strict=True)
+        ]
+        self._dom_restricted = parts[2] != "*"
+        self._dow_restricted = parts[4] != "*"
+
+    @staticmethod
+    def _parse_field(field: str, lo: int, hi: int) -> set[int]:
+        allowed: set[int] = set()
+        for token in field.split(","):
+            step = 1
+            body = token
+            if "/" in token:
+                body, _, step_s = token.partition("/")
+                step = int(step_s)
+            if body in ("*", ""):
+                start, end = lo, hi
+            elif "-" in body:
+                start_s, _, end_s = body.partition("-")
+                start, end = int(start_s), int(end_s)
+            else:
+                start = end = int(body)
+            if not (lo <= start <= hi and lo <= end <= hi and start <= end):
+                raise ValueError(f"cron field out of range: {token!r}")
+            allowed.update(range(start, end + 1, step))
+        return allowed
+
+    def matches(self, dt: datetime) -> bool:
+        """True if ``dt`` (truncated to the minute) satisfies the schedule."""
+        minute, hour, dom, mon = self._fields[0], self._fields[1], self._fields[2], self._fields[3]
+        dow = self._fields[4]
+        cron_dow = (dt.weekday() + 1) % 7  # Python Mon=0 → cron Sun=0
+        if self._dom_restricted and self._dow_restricted:
+            day_ok = dt.day in dom or cron_dow in dow  # cron OR semantics
+        else:
+            day_ok = dt.day in dom and cron_dow in dow
+        return dt.minute in minute and dt.hour in hour and dt.month in mon and day_ok
+
+    def next_after(self, dt: datetime) -> datetime:
+        """The first minute strictly after ``dt`` that matches (searches ≤366d)."""
+        cur = dt.replace(second=0, microsecond=0) + timedelta(minutes=1)
+        for _ in range(366 * 24 * 60):
+            if self.matches(cur):
+                return cur
+            cur += timedelta(minutes=1)
+        raise ValueError(f"no matching time within a year for {self.expr!r}")
 
 
 class Trigger(ABC):
@@ -71,6 +139,10 @@ class WebhookTrigger(Trigger):
             "path": self.path,
             "secret_ref": self.secret_ref,
         }
+
+
+# Ergonomic alias so observer/poll call sites read `poll=Cron("*/5 * * * *")`.
+Cron = CronSchedule
 
 
 def verify_webhook(secret: str, payload: bytes, signature: str) -> bool:
