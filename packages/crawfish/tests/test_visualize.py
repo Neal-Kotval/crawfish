@@ -88,10 +88,40 @@ def test_dashboard_renders_no_secret_values() -> None:
     assert "***REDACTED***" in blob
 
 
-def test_state_endpoint_serves_json() -> None:
+def test_dashboard_state_empty_store() -> None:
+    state = dashboard_state(SqliteStore(), now=NOW)
+    assert state["cost_today_usd"] == 0.0
+    assert state["pipelines"] == [] and state["recent_runs"] == []
+
+
+def test_http_endpoints_serve_page_json_and_404() -> None:
+    import threading
+    import urllib.request
+
     store = SqliteStore()
     _seed(store)
-    handler = make_handler(store)
+    server = serve_dashboard(store, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://{server.server_address[0]}:{server.server_address[1]}"
+        page = urllib.request.urlopen(base + "/").read().decode()  # noqa: S310 - loopback
+        assert "127.0.0.1" in page
+        body = urllib.request.urlopen(base + "/state.json").read()  # noqa: S310 - loopback
+        data = json.loads(body)
+        assert data["pipelines"][0]["name"] == "triage-bot"
+        try:
+            urllib.request.urlopen(base + "/nope")  # noqa: S310 - loopback
+            raise AssertionError("expected 404")
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_static_page_interpolates_no_state() -> None:
     # the HTML page is static and contains no interpolated state (no secret surface)
     assert "127.0.0.1" in DASHBOARD_HTML
-    assert handler is not None
+    assert make_handler(SqliteStore()) is not None

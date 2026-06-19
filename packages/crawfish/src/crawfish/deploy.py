@@ -14,7 +14,7 @@ through a :class:`~crawfish.secrets.ScrubbingStore`, so the log/ledger never hol
 raw credential.
 
 The supervisor logic (registry, scheduling, one cycle) is separated from the spawn so
-it is unit-testable without launching a daemon. See ADR 0008 (daemon vs tmux).
+it is unit-testable without launching a daemon. See ADR 0009 (daemon vs tmux).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import os
 import signal
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
@@ -35,6 +35,7 @@ from crawfish.core.context import RunContext
 from crawfish.core.ids import new_id
 from crawfish.ledger import ExecState, ExecutionLedger
 from crawfish.observe import ObserverEvent, ObserverSurface, RunInfo, Severity
+from crawfish.secrets import redact
 from crawfish.triggers import CronSchedule
 
 if TYPE_CHECKING:
@@ -224,12 +225,15 @@ class Supervisor:
             self.run_fn(ctx)
         except Exception as exc:  # noqa: BLE001 — supervisor must survive any cycle
             status, state = "failed", ExecState.FAILED
+            # Scrub the exception text intrinsically: an exception can carry a raw
+            # credential (it may quote fluid input), and we must never leak it into the
+            # failure event regardless of whether the store is also a ScrubbingStore.
             self.surface.emit(
                 ObserverEvent(
                     pipeline=self.name,
                     kind="run.failed",
                     severity=Severity.CRITICAL,
-                    detail=str(exc)[:200],
+                    detail=redact(str(exc))[:200],
                     observer="supervisor",
                     run_id=run_id,
                 )
@@ -248,6 +252,24 @@ class Supervisor:
             )
         )
         return run_id
+
+    def process_items(self, items: Sequence[str], handler: Callable[[str], None]) -> list[str]:
+        """Process fan-out ``items`` exactly once across restarts (ledger resume).
+
+        Items already marked ``DONE`` in the ledger are **skipped** — so after a crash
+        and restart, only unfinished items re-run. Each item is marked ``DONE`` only
+        after its handler returns; a handler that raises leaves the item unmarked so it
+        retries next time. Returns the item ids processed in this call.
+        """
+        done = self.ledger.completed_items(self.name)
+        processed: list[str] = []
+        for item in items:
+            if item in done:
+                continue
+            handler(item)
+            self.ledger.mark_item(self.name, item, ExecState.DONE)
+            processed.append(item)
+        return processed
 
     def serve(
         self,
@@ -325,6 +347,21 @@ def deploy(
         CronSchedule(schedule)  # fail fast on a bad cron expression
     root = Path(project_dir).resolve()
     spawn = spawn or _default_spawn
+    registry = DeployRegistry(store, org_id=org_id)
+
+    # Replacing a still-live deployment of the same name would orphan its process —
+    # surface that instead of silently leaking a PID.
+    prior = registry.get(name)
+    if prior is not None and prior.status == DeployStatus.RUNNING and _pid_alive(prior.pid):
+        ObserverSurface(store, org_id=org_id).emit(
+            ObserverEvent(
+                pipeline=name,
+                kind="deploy.replaced",
+                severity=Severity.WARN,
+                detail=f"redeployed over live pid {prior.pid}; stop it via `craw manage stop`",
+                observer="deploy",
+            )
+        )
     log_path = root / ".crawfish" / "deploys" / f"{name}.log"
     argv = [
         sys.executable,
@@ -347,7 +384,7 @@ def deploy(
         schedule=schedule,
         log_path=str(log_path),
     )
-    DeployRegistry(store, org_id=org_id).register(entry)
+    registry.register(entry)
     return entry
 
 

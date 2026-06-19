@@ -127,6 +127,50 @@ def test_judge_runs_under_cost_cap() -> None:
     assert events and "cost_usd" in events[0].data
 
 
+def test_rule_boundaries_are_pinned() -> None:
+    # FailureRateAbove is strictly-greater: rate == threshold does NOT fire.
+    store = SqliteStore()
+    t = NOW.timestamp()
+    _seed(
+        store,
+        [
+            RunInfo(pipeline="p", run_id="a", status="failed", started_at=t - 4, finished_at=t - 3),
+            RunInfo(pipeline="p", run_id="b", status="done", started_at=t - 2, finished_at=t - 1),
+        ],
+    )  # rate exactly 0.5
+    assert Observer("p", rules=[FailureRateAbove(0.5)]).evaluate(store, now=NOW) == []
+    assert Observer("p", rules=[FailureRateAbove(0.49)]).evaluate(store, now=NOW)
+
+    # CostSpike is inclusive: spent == threshold DOES fire.
+    store2 = SqliteStore()
+    ObserverSurface(store2).put_run_info(
+        RunInfo(pipeline="p", run_id="a", cost_usd=2.0, started_at=NOW.timestamp() - 1)
+    )
+    assert Observer("p", rules=[CostSpike(2.0, window="-5m")]).evaluate(store2, now=NOW)
+
+
+def test_failure_rate_handles_zero_runs() -> None:
+    store = SqliteStore()  # no runs at all
+    assert Observer("p", rules=[FailureRateAbove(0.2)]).evaluate(store, now=NOW) == []
+
+
+def test_judge_binds_declared_inputs() -> None:
+    # a judge Definition that DECLARES inputs gets the run summary bound to them
+    from crawfish.core import Flow, Parameter
+
+    store = SqliteStore()
+    _seed(store, [RunInfo(pipeline="p", run_id="a", status="failed", started_at=NOW.timestamp())])
+    judge = Definition(
+        name="q",
+        inputs=[Parameter(name="recent", type="str", flow=Flow.STATIC)],
+        team=TeamSpec(agents=[AgentSpec(role="j", prompt="J")]),
+    )
+    # the declared-inputs branch must bind the run summary without InputBindingError
+    obs = Observer("p", judge=judge, judge_runtime=MockRuntime(responder=lambda _r: "looks wrong"))
+    events = obs.evaluate(store, now=NOW)
+    assert events and events[0].kind == "quality.low"
+
+
 def test_poll_due_respects_schedule() -> None:
     obs = Observer("p", poll="*/5 * * * *")
     assert obs.poll_due(datetime(2026, 1, 1, 0, 5, tzinfo=UTC)) is True

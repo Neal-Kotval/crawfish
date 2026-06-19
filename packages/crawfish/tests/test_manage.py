@@ -71,6 +71,22 @@ def test_format_table_empty() -> None:
     assert "no deployed pipelines" in format_table([])
 
 
+def test_pipeline_with_no_runs_and_no_schedule() -> None:
+    import os
+
+    store = SqliteStore()
+    DeployRegistry(store).register(
+        DeployEntry(name="fresh", pid=os.getpid(), dir="/p", session="crawfish/fresh")
+    )
+    row = manage_list(store, now=NOW)[0]
+    assert row.last_run_status is None  # no runs yet → no crash
+    assert row.last_run_ago_s is None
+    assert row.next_fire is None  # no schedule → no next fire
+    assert row.cost_today_usd == 0.0
+    # the table still renders the row with em-dashes for the empties
+    assert "fresh" in format_table([row])
+
+
 def test_restart_redeploys_with_recorded_schedule() -> None:
     store = SqliteStore()
     captured: dict[str, object] = {}

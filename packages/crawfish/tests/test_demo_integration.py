@@ -61,11 +61,14 @@ def test_deploy_observe_visualize_manage_end_to_end(triage: Definition) -> None:
     assert DeployRegistry(store).get("triage-bot") is not None
     assert "hunter2" not in str(entry.session)  # session name carries no secret
 
-    # 2. The supervisor fires healthy cycles + one induced bad run (auto-restart).
+    # 2. The supervisor fires on schedule (08:00) via the always-on serve() loop,
+    #    then survives an induced failure on its very next cycle (auto-restart).
     good = Supervisor("triage-bot", store, _good_cycle(triage), schedule="0 8 * * *")
-    for _ in range(3):
-        good.run_cycle(now=NOW)
-    Supervisor("triage-bot", store, _bad_cycle).run_cycle(now=NOW)  # induced failure
+    fired = good.serve(max_cycles=3, now_fn=lambda: NOW, sleep_fn=lambda _s: None)
+    assert fired == 3  # the cron-scheduled loop actually fired
+    flaky = Supervisor("triage-bot", store, _bad_cycle)
+    flaky.run_cycle(now=NOW)  # induced failure — supervisor records it and stays alive
+    flaky.run_cycle(now=NOW)  # proves it kept going after the failure
 
     # 3. OBSERVE: a rule-based observer flags the failure rate...
     rule_obs = Observer("triage-bot", rules=[FailureRateAbove(0.2)])
@@ -83,7 +86,7 @@ def test_deploy_observe_visualize_manage_end_to_end(triage: Definition) -> None:
     state = dashboard_state(store, now=NOW)
     names = [p["name"] for p in state["pipelines"]]  # type: ignore[index]
     assert "triage-bot" in names
-    assert len(state["recent_runs"]) == 4  # type: ignore[arg-type]
+    assert len(state["recent_runs"]) == 5  # 3 done + 2 failed  # type: ignore[arg-type]
     statuses = {r["status"] for r in state["recent_runs"]}  # type: ignore[index,union-attr]
     assert statuses == {"done", "failed"}
     assert state["cost_today_usd"] >= 0.12  # 3 × $0.04  # type: ignore[operator]
@@ -96,6 +99,32 @@ def test_deploy_observe_visualize_manage_end_to_end(triage: Definition) -> None:
     assert rows[0].last_run_status in {"done", "failed"}
     assert stop("triage-bot", store=store, kill=lambda _pid: None) is True
     assert manage_list(store, now=NOW)[0].status == "stopped"
+
+
+def test_deploy_resumes_fanout_without_redoing_completed_items(triage: Definition) -> None:
+    """A killed fan-out resumes from the ledger: completed items are not redone."""
+    store = SqliteStore()
+    sup = Supervisor("triage-bot", store, _good_cycle(triage))
+    items = ["ticket-1", "ticket-2", "ticket-3"]
+    processed: list[str] = []
+
+    def handler(item: str) -> None:
+        processed.append(item)
+        if item == "ticket-3":
+            raise RuntimeError("killed mid-fanout")
+
+    # first pass crashes on ticket-3 after ticket-1/2 are marked done
+    with pytest.raises(RuntimeError):
+        sup.process_items(items, handler)
+    assert processed == ["ticket-1", "ticket-2", "ticket-3"]
+
+    # restart (a fresh Supervisor over the same store) resumes via the ledger:
+    # ticket-1/2 are skipped, only ticket-3 re-runs
+    processed.clear()
+    Supervisor("triage-bot", store, _good_cycle(triage)).process_items(
+        items, lambda item: processed.append(item)
+    )
+    assert processed == ["ticket-3"]
 
 
 def test_demo_definition_exports_to_claude_code(triage: Definition, tmp_path: Path) -> None:

@@ -29,7 +29,8 @@ def _ok_cycle(ctx: RunContext) -> None:
 
 
 def _bad_cycle(ctx: RunContext) -> None:
-    raise RuntimeError("boom with secret hunter2")
+    # exception text quotes a credential-shaped token to prove intrinsic scrubbing
+    raise RuntimeError("boom leaked sk-abcdefghij0123456789 token")
 
 
 # -- registry ---------------------------------------------------------------
@@ -69,7 +70,37 @@ def test_failed_cycle_keeps_supervisor_alive_and_records_failure() -> None:
     info = ObserverSurface(store).get_run_info(run_id)
     assert info is not None and info.status == "failed"
     events = ObserverSurface(store).events("triage-bot")
-    assert any(e.kind == "run.failed" for e in events)
+    failed = [e for e in events if e.kind == "run.failed"]
+    assert failed
+    # the credential-shaped token in the exception is scrubbed intrinsically, even
+    # though this store is a raw SqliteStore (not wrapped in ScrubbingStore)
+    assert "sk-abcdefghij0123456789" not in failed[0].detail
+    assert "***REDACTED***" in failed[0].detail
+
+
+def test_process_items_resumes_without_redoing_completed() -> None:
+    store = SqliteStore()
+    sup = Supervisor("p", store, _ok_cycle)
+    handled: list[str] = []
+
+    def handler(item: str) -> None:
+        if item == "c" and "c" not in handled:
+            handled.append("c-attempt")
+            raise RuntimeError("crash on c")
+        handled.append(item)
+
+    # first pass: a, b succeed and are marked done; c crashes and is left unmarked
+    try:
+        sup.process_items(["a", "b", "c"], handler)
+    except RuntimeError:
+        pass
+    assert handled == ["a", "b", "c-attempt"]
+
+    # restart: a and b are skipped (already done); only c re-runs
+    handled.clear()
+    processed = sup.process_items(["a", "b", "c"], lambda item: handled.append(item))
+    assert processed == ["c"]
+    assert handled == ["c"]
 
 
 def test_serve_fires_each_tick_without_schedule() -> None:
@@ -118,6 +149,17 @@ def test_deploy_writes_registry_and_no_secret_in_argv(tmp_path: Path) -> None:
     argv = captured["argv"]
     assert "_supervise" in argv and "triage-bot" in argv
     assert DeployRegistry(store).get("triage-bot") is not None
+
+
+def test_redeploy_over_live_pid_emits_warning(tmp_path: Path) -> None:
+    import os
+
+    store = SqliteStore()
+    # first deploy uses this live process's PID so the liveness check sees it running
+    deploy(tmp_path, name="p", store=store, spawn=lambda _a, _c, _g: os.getpid())
+    deploy(tmp_path, name="p", store=store, spawn=lambda _a, _c, _g: 4242)
+    events = ObserverSurface(store).events("p")
+    assert any(e.kind == "deploy.replaced" for e in events)
 
 
 def test_deploy_rejects_bad_schedule(tmp_path: Path) -> None:

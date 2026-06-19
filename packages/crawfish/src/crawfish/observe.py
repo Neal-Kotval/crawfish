@@ -106,10 +106,15 @@ def parse_since(since: str | float | int | None = None, *, now: float | None = N
     if isinstance(since, (int, float)):
         return float(since)
     s = since.strip()
-    if s.startswith("-") and s[-1] in _SINCE_UNITS:
-        base = time.time() if now is None else now
-        return base - float(s[1:-1]) * _SINCE_UNITS[s[-1]]
-    return float(s)  # treat any other string as an absolute epoch
+    try:
+        if s.startswith("-") and s[-1] in _SINCE_UNITS:
+            base = time.time() if now is None else now
+            return base - float(s[1:-1]) * _SINCE_UNITS[s[-1]]
+        return float(s)  # treat any other string as an absolute epoch
+    except ValueError:
+        # Malformed window (e.g. "-xh", "garbage") must never crash a poll/dashboard;
+        # fall back to "everything" rather than raising into a caller's render loop.
+        return 0.0
 
 
 class ObserverSurface:

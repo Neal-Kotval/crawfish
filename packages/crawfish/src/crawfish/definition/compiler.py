@@ -50,9 +50,20 @@ class DefinitionLoadError(Exception):
     """Raised when a directory cannot compile to a valid Definition."""
 
 
-# Files/dirs excluded from the content hash so writing the lock or caches doesn't
-# change identity on recompile.
-_HASH_EXCLUDE = {"definition.lock", "__pycache__", ".crawfish"}
+# Files/dirs excluded from the content hash so writing the lock, caches, or running a
+# package manager inside the Definition dir doesn't change identity on recompile.
+_HASH_EXCLUDE = {
+    "definition.lock",
+    "__pycache__",
+    ".crawfish",
+    "uv.lock",
+    ".venv",
+    ".env",
+    ".git",
+    "node_modules",
+    ".DS_Store",
+    ".claude",
+}
 
 
 def _parse_front_matter(text: str) -> tuple[dict[str, Any], str]:

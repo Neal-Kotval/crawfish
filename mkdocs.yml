@@ -37,6 +37,14 @@ nav:
       - Concepts: guide/concepts.md
       - Cookbook: guide/cookbook.md
       - API reference: guide/api-reference.md
+  - Operate & Observe:
+      - Overview: guide/operations.md
+      - Deploy: guide/deploy.md
+      - Manage: guide/manage.md
+      - Observers: guide/observers.md
+      - Visualize: guide/visualize.md
+      - Project structure: guide/project-structure.md
+      - Export to Claude Code: guide/claude-code-export.md
   - Architecture:
       - Overview: architecture/ARCHITECTURE.md
       - Security spine: architecture/SECURITY.md
