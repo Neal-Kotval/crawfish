@@ -78,6 +78,26 @@ Status legend: ✅ done · 🔄 in progress · ⛔ blocked · ⬜ not started
 | 34 | CRA-115 | Container build/deploy + triggers | ✅ |
 | 35 | CRA-124 | API stability, semver & migration | ✅ |
 
+## Phase 1 Hardening — Operate, Observe & Integrate (epic CRA-150)
+
+*Exit: a pipeline goes from "runs once" to always-on — deployed, watched, managed —
+plus Claude Code integration and a clearer/configurable structure. Built on the
+framework above; cloud/container deploy stays CRA-115/CRA-130.*
+
+| # | Issue | Title | Status |
+|---|-------|-------|--------|
+| 1 | CRA-154 | Observer events + run-info surface (`ctx.emit`, `ObserverSurface`) | ✅ |
+| 2 | CRA-157 | Configurable project structure + `craw doctor` (`[project.paths]`) | ✅ |
+| 3 | CRA-151 | `craw deploy` — always-on detached supervisor (auto-restart, ledger resume) | ✅ |
+| 4 | CRA-153 | Observer primitive — rule-based + Definition-backed LLM judge | ✅ |
+| 5 | CRA-152 | `craw manage` — list/stop/restart/logs over registry+ledger+cost | ✅ |
+| 6 | CRA-155 | `craw visualize` — loopback-only dashboard over the run-info surface | ✅ |
+| 7 | CRA-156 | Claude Code integration — `craw export --claude-code` | ✅ |
+
+Decisions recorded as ADR 0008 (observer surface as a Store facade) and ADR 0009
+(deploy via a detached session-leader daemon, not tmux). Dogfooded end to end in
+`demo/` (deploy → observe → visualize → manage) with an integration test.
+
 ## Per-feature research notes
 
 Researcher findings (reviewed before implementation) live alongside this file as

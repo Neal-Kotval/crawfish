@@ -24,13 +24,19 @@ ENTRY_POINT_GROUPS = {
 }
 
 # Local project directories scanned for units (filename stem -> unit name).
+# Defaults; a project may relocate any of these via crawfish.toml [project.paths].
 LOCAL_DIRS = {
     "source": "sources",
     "sink": "sinks",
     "definition": "definitions",
+    "observer": "observers",
     "tool": "tools",
     "policy": "policies",
 }
+
+# Kinds discovered as a directory package (instructions.md / definition.py) rather
+# than a single ``*.py`` file. Observers can be Definition-backed (LLM judges).
+_DIR_KINDS = {"definition", "observer"}
 
 
 @dataclass
@@ -76,14 +82,15 @@ class Registry:
                     UnitRef(kind=kind, name=ep.name, origin=f"entrypoint:{group}", target=ep.value)
                 )
 
-    def discover_local(self, project_dir: str | Path) -> None:
+    def discover_local(self, project_dir: str | Path, paths: dict[str, str] | None = None) -> None:
         root = Path(project_dir)
-        for kind, subdir in LOCAL_DIRS.items():
+        dirs = {**LOCAL_DIRS, **(paths or {})}  # config overrides win
+        for kind, subdir in dirs.items():
             d = root / subdir
             if not d.is_dir():
                 continue
-            if kind == "definition":
-                # a definition is a directory (has instructions.md or definition.py)
+            if kind in _DIR_KINDS:
+                # discovered as a directory package (has instructions.md / definition.py)
                 for child in sorted(d.iterdir()):
                     if child.is_dir() and (
                         (child / "instructions.md").exists() or (child / "definition.py").exists()
@@ -96,8 +103,15 @@ class Registry:
                     self.register(UnitRef(kind, f.stem, f"local:{f}", str(f)))
 
     @classmethod
-    def discover(cls, project_dir: str | Path = ".") -> Registry:
+    def discover(
+        cls, project_dir: str | Path = ".", paths: dict[str, str] | None = None
+    ) -> Registry:
         reg = cls()
         reg.discover_entry_points()  # installed packages first (they win ties)
-        reg.discover_local(project_dir)
+        if paths is None:
+            # honor crawfish.toml [project.paths] overrides automatically
+            from crawfish.config import load_manifest
+
+            paths = load_manifest(project_dir).paths.as_discovery_map()
+        reg.discover_local(project_dir, paths=paths)
         return reg
