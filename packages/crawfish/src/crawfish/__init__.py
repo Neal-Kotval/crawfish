@@ -54,6 +54,16 @@ from crawfish.definition import (
     load_definition,
 )
 from crawfish.engine import Engine, run_pipeline
+from crawfish.eval import (
+    EvalCase,
+    GoldenSet,
+    LLMJudge,
+    capture_case,
+    gate_against_baseline,
+    grade_output,
+    load_baseline,
+    save_baseline,
+)
 from crawfish.executor import (
     BatchExecutor,
     BatchRunResult,
@@ -255,4 +265,13 @@ __all__ = [
     "tail_events",
     "format_report",
     "RunReport",
+    # eval data lifecycle (M4)
+    "EvalCase",
+    "GoldenSet",
+    "LLMJudge",
+    "capture_case",
+    "grade_output",
+    "save_baseline",
+    "load_baseline",
+    "gate_against_baseline",
 ]
