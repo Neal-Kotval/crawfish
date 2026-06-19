@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from crawfish.core.ids import new_id
 
 if TYPE_CHECKING:
+    from crawfish.observe import ObserverEvent
     from crawfish.store.base import Store
 
 __all__ = ["CostBudget", "BudgetExceeded", "CancelToken", "Cancelled", "RunContext"]
@@ -80,3 +81,13 @@ class RunContext:
     org_id: str = "local"  # tenancy key, defaulted locally (CRA-99 gap review)
     cost_budget: CostBudget = field(default_factory=CostBudget)
     cancel_token: CancelToken = field(default_factory=CancelToken)
+
+    def emit(self, event: ObserverEvent) -> None:
+        """Append an observer event to the run-info surface (CRA-154).
+
+        Routes through this run's ``store`` so a :class:`ScrubbingStore` wrapper
+        redacts secrets before the write — the prompt-injection/secret boundary.
+        """
+        from crawfish.observe import ObserverSurface
+
+        ObserverSurface(self.store, org_id=self.org_id).emit(event)

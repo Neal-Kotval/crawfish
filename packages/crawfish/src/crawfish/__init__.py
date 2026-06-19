@@ -114,6 +114,13 @@ from crawfish.nodes import (
     limit,
     title_contains,
 )
+from crawfish.observe import (
+    ObserverEvent,
+    ObserverSurface,
+    RunInfo,
+    Severity,
+    parse_since,
+)
 from crawfish.output import Output, WireError, check_wire, output_satisfies_inputs
 from crawfish.retry import ItemResult, ItemStatus, RetryPolicy
 from crawfish.run import InputBindingError, Run, RunStatus, RunSuspended
@@ -269,6 +276,11 @@ __all__ = [
     "BatchExecutor",
     "BatchRunResult",
     "ExecutionLedger",
+    "ObserverEvent",
+    "ObserverSurface",
+    "RunInfo",
+    "Severity",
+    "parse_since",
     "ExecState",
     "RetryPolicy",
     "ItemResult",
