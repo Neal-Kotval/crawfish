@@ -9,6 +9,13 @@ are added here; the stability tiers are governed by CRA-124.
 
 from __future__ import annotations
 
+from crawfish.artifacts import (
+    ArtifactRef,
+    ArtifactStore,
+    LocalArtifactStore,
+    offload_if_large,
+)
+from crawfish.batch import Anomaly, Batch, Task
 from crawfish.core import (
     BudgetExceeded,
     Cancelled,
@@ -41,15 +48,25 @@ from crawfish.definition import (
 from crawfish.engine import Engine, run_pipeline
 from crawfish.memory import Memory
 from crawfish.nodes import (
+    Aggregator,
     ApprovalRequired,
+    Classifier,
     Filter,
     GitHubPRSink,
     LinearSink,
     PullRequestSource,
     RepoSource,
+    Router,
     Sink,
     Source,
     TargetMustBeStaticError,
+    UnroutableLabelError,
+    collect,
+    concat,
+    count,
+    dedupe,
+    definition_reducer,
+    fan_in,
     fan_out,
     field_equals,
     field_matches,
@@ -157,4 +174,22 @@ __all__ = [
     "RunStatus",
     "InputBindingError",
     "RunSuspended",
+    # pipelines (M3)
+    "Batch",
+    "Task",
+    "Anomaly",
+    "Aggregator",
+    "collect",
+    "concat",
+    "count",
+    "dedupe",
+    "definition_reducer",
+    "fan_in",
+    "Router",
+    "Classifier",
+    "UnroutableLabelError",
+    "ArtifactRef",
+    "ArtifactStore",
+    "LocalArtifactStore",
+    "offload_if_large",
 ]

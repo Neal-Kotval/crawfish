@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from crawfish.nodes.aggregator import (
+    Aggregator,
+    collect,
+    concat,
+    count,
+    dedupe,
+    definition_reducer,
+    fan_in,
+)
 from crawfish.nodes.filter import (
     Filter,
     field_equals,
@@ -9,6 +18,7 @@ from crawfish.nodes.filter import (
     limit,
     title_contains,
 )
+from crawfish.nodes.router import Classifier, Router, UnroutableLabelError
 from crawfish.nodes.sink import (
     ApprovalRequired,
     GitHubPRSink,
@@ -36,4 +46,16 @@ __all__ = [
     "field_equals",
     "field_matches",
     "limit",
+    # aggregator (CRA-133)
+    "Aggregator",
+    "collect",
+    "concat",
+    "count",
+    "dedupe",
+    "definition_reducer",
+    "fan_in",
+    # router (CRA-136)
+    "Router",
+    "Classifier",
+    "UnroutableLabelError",
 ]

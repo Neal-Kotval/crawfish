@@ -45,13 +45,13 @@ Status legend: ✅ done · 🔄 in progress · ⛔ blocked · ⬜ not started
 
 | # | Issue | Title | Status |
 |---|-------|-------|--------|
-| 16 | CRA-107 | Batch — hand-wired pipeline + fan-out | ⬜ |
-| 17 | CRA-133 | Aggregator (fan-in / reduce) | ⬜ |
-| 18 | CRA-136 | Router & Classifier (branch) | ⬜ |
+| 16 | CRA-107 | Batch — hand-wired pipeline + fan-out | ✅ |
+| 17 | CRA-133 | Aggregator (fan-in / reduce) | ✅ |
+| 18 | CRA-136 | Router & Classifier (branch) | ✅ |
 | 19 | CRA-108 | Batch Executor & Scheduling (rule-based) | ⬜ |
 | 20 | CRA-134 | Execution-state ledger | ⬜ |
 | 21 | CRA-122 | Retries, dead-letter & replay | ⬜ |
-| 22 | CRA-137 | Artifact store | ⬜ |
+| 22 | CRA-137 | Artifact store | ✅ |
 | 23 | CRA-109 | Workflow / Pipeline | ⬜ |
 
 ## M4 — Measurement & knowledge
