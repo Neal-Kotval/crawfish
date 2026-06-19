@@ -31,12 +31,39 @@ def _cmd_run(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_dev(args: argparse.Namespace) -> int:
+    """Fast dev loop: compile a Definition directory and run it on the mock runtime
+    (zero key, zero budget) — the basis for fixtures + record/replay hot-reload."""
+    from crawfish.core.context import RunContext
+    from crawfish.definition import Definition
+    from crawfish.runtime import MockRuntime, RunRequest
+    from crawfish.store import SqliteStore
+
+    definition = Definition.from_package(args.path)
+    inputs: dict[str, object] = {}
+    for pair in args.input or []:
+        key, _, value = pair.partition("=")
+        inputs[key] = value
+
+    async def _go() -> str:
+        ctx = RunContext(store=SqliteStore())
+        result = await MockRuntime().run(RunRequest(definition=definition, inputs=inputs), ctx)
+        return result.text
+
+    print(asyncio.run(_go()))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="craw", description="Crawfish CLI")
     parser.add_argument("--version", action="version", version=f"crawfish {_version()}")
     sub = parser.add_subparsers(dest="command")
     run_p = sub.add_parser("run", help="run the project's pipeline")
     run_p.set_defaults(func=_cmd_run)
+    dev_p = sub.add_parser("dev", help="compile + run a Definition on the mock runtime")
+    dev_p.add_argument("path", help="path to a Definition directory")
+    dev_p.add_argument("-i", "--input", action="append", help="input as name=value (repeatable)")
+    dev_p.set_defaults(func=_cmd_dev)
     return parser
 
 
