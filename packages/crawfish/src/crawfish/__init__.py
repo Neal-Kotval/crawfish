@@ -25,6 +25,18 @@ from crawfish.core import (
     new_id,
     parameters_compatible,
 )
+from crawfish.definition import (
+    AgentSpec,
+    Coordination,
+    Definition,
+    DefinitionAssets,
+    DefinitionLoadError,
+    DefinitionRef,
+    MarketplacePackage,
+    Prompt,
+    TeamSpec,
+    load_definition,
+)
 from crawfish.engine import Engine, run_pipeline
 from crawfish.output import Output, WireError, check_wire, output_satisfies_inputs
 from crawfish.store import SqliteStore, Store
@@ -70,4 +82,15 @@ __all__ = [
     "output_satisfies_inputs",
     "check_wire",
     "WireError",
+    # definition
+    "Definition",
+    "AgentSpec",
+    "TeamSpec",
+    "Coordination",
+    "Prompt",
+    "DefinitionRef",
+    "DefinitionAssets",
+    "MarketplacePackage",
+    "load_definition",
+    "DefinitionLoadError",
 ]

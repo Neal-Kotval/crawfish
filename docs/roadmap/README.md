@@ -22,9 +22,9 @@ Status legend: ✅ done · 🔄 in progress · ⛔ blocked · ⬜ not started
 
 | # | Issue | Title | Status |
 |---|-------|-------|--------|
-| 5 | CRA-101 | Output — typed envelope between nodes | ⬜ |
-| 6 | CRA-102 | Definition + directory compiler (the heart) | ⬜ |
-| 7 | CRA-112 | AgentRuntime backends + `craw dev` | ⬜ |
+| 5 | CRA-101 | Output — typed envelope between nodes | ✅ |
+| 6 | CRA-102 | Definition + directory compiler (the heart) | ✅ |
+| 7 | CRA-112 | AgentRuntime backends + `craw dev` | 🔄 |
 | 8 | CRA-135 | Multi-agent team coordination (TeamSpec) | ⬜ |
 | 9 | CRA-138 | Context-window management (pluggable) | ⬜ |
 | 10 | CRA-116 | MCP tool access in Definitions | ⬜ |
