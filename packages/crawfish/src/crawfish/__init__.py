@@ -46,6 +46,15 @@ from crawfish.definition import (
     load_definition,
 )
 from crawfish.engine import Engine, run_pipeline
+from crawfish.executor import (
+    BatchExecutor,
+    BatchRunResult,
+    CycleError,
+    DependencyGraph,
+    ExecutionPlan,
+    Roadmap,
+)
+from crawfish.ledger import ExecState, ExecutionLedger
 from crawfish.memory import Memory
 from crawfish.nodes import (
     Aggregator,
@@ -74,6 +83,7 @@ from crawfish.nodes import (
     title_contains,
 )
 from crawfish.output import Output, WireError, check_wire, output_satisfies_inputs
+from crawfish.retry import ItemResult, ItemStatus, RetryPolicy
 from crawfish.run import InputBindingError, Run, RunStatus, RunSuspended
 from crawfish.runtime import (
     AgentRuntime,
@@ -90,6 +100,7 @@ from crawfish.runtime import (
 from crawfish.store import SqliteStore, Store
 from crawfish.typesystem import TypeDef, TypeKind, TypeRegistry, default_registry
 from crawfish.versioning import Freezable, FrozenError, Version
+from crawfish.workflow import Workflow
 
 __version__ = "0.1.0"
 
@@ -192,4 +203,16 @@ __all__ = [
     "ArtifactStore",
     "LocalArtifactStore",
     "offload_if_large",
+    "DependencyGraph",
+    "CycleError",
+    "Roadmap",
+    "ExecutionPlan",
+    "BatchExecutor",
+    "BatchRunResult",
+    "ExecutionLedger",
+    "ExecState",
+    "RetryPolicy",
+    "ItemResult",
+    "ItemStatus",
+    "Workflow",
 ]
