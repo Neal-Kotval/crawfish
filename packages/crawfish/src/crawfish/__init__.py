@@ -57,6 +57,7 @@ from crawfish.nodes import (
     title_contains,
 )
 from crawfish.output import Output, WireError, check_wire, output_satisfies_inputs
+from crawfish.run import InputBindingError, Run, RunStatus, RunSuspended
 from crawfish.runtime import (
     AgentRuntime,
     ClientRuntime,
@@ -151,4 +152,9 @@ __all__ = [
     "field_matches",
     "limit",
     "Memory",
+    # run (M2)
+    "Run",
+    "RunStatus",
+    "InputBindingError",
+    "RunSuspended",
 ]
