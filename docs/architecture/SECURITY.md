@@ -49,6 +49,35 @@ egress *interception* (the broker is a cooperative `guard()` allowlist today, no
 network chokepoint) and runtime enforcement of the consented capability manifest;
 full microVM/seccomp hardening beyond out-of-process isolation.
 
+## The operate/observe layer (CRA-150)
+
+The always-on layer — [deploy](../guide/deploy.md), [observers](../guide/observers.md),
+[visualize](../guide/visualize.md), [manage](../guide/manage.md),
+[export](../guide/claude-code-export.md) — inherits the spine above and adds four
+operate-specific guarantees:
+
+1. **Scrubbed observer events & run-info.** `ObserverEvent` and `RunInfo` are written
+   through `ScrubbingStore` (reused, not reinvented) before the Store write, so no secret
+   value reaches an event, the dashboard, `craw manage logs`, or a log file. Every row
+   carries `org_id`.
+
+2. **No-secret detached processes.** The `craw deploy` supervisor keeps secrets **by
+   reference**, exactly as a foreground run: no credential in argv, the session name
+   (`crawfish/<pipeline>`), the detached environment, the deploy registry row, or the
+   supervisor log.
+
+3. **Loopback-only dashboard.** `craw visualize` binds `127.0.0.1` only — no off-host
+   surface — and renders only the scrubbed run-info surface.
+
+4. **Cost-capped LLM observers.** A Definition-backed observer judge runs under the same
+   `CostBudget`/`CostMeter` and the same static-vs-fluid prompt-injection boundary as any
+   Definition: run data is **data**, never instructions, and spend is capped and
+   telemetered.
+
+The [`craw export --claude-code`](../guide/claude-code-export.md) output carries **no
+secrets** — it maps tool/MCP *references* only (the `tools` allowlist), never an `auth`
+reference or a credential value, so the generated file is safe to commit.
+
 ## Review gate
 
 Every feature is audited against these invariants by the security reviewer before

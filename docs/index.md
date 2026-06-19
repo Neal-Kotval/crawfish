@@ -14,6 +14,18 @@ Think *dbt / Airflow for agents*, not another chatbot SDK.
 - **[Cookbook](guide/cookbook.md)** — copy-paste recipes
 - **[API reference](guide/api-reference.md)** — the public surface
 
+## Operate & observe
+
+From runs-once to always-on — deploy, watch, and control pipelines locally.
+
+- **[Operations overview](guide/operations.md)** — the deploy → observe → visualize → manage loop, end to end
+- **[Deploy](guide/deploy.md)** — `craw deploy`: a detached, scheduled, self-restarting supervisor
+- **[Manage](guide/manage.md)** — `craw manage`: list/stop/restart/logs deployed pipelines
+- **[Observers](guide/observers.md)** — `crawfish.observe`: rule- and LLM-based watchers over the run-info surface
+- **[Visualize](guide/visualize.md)** — `craw visualize`: a loopback-only localhost dashboard
+- **[Project structure](guide/project-structure.md)** — the canonical layout, `[project.paths]`, and `craw doctor`
+- **[Export to Claude Code](guide/claude-code-export.md)** — `craw export --claude-code`: a Definition as a subagent
+
 ## Under the hood
 
 - **[Architecture](architecture/ARCHITECTURE.md)** — the three swappable seams · [ADRs](architecture/decisions)
