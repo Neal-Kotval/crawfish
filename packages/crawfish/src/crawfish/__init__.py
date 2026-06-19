@@ -17,6 +17,7 @@ from crawfish.artifacts import (
 )
 from crawfish.batch import Anomaly, Batch, Task
 from crawfish.build import BuildPlan, generate_containerfile, plan_build, write_containerfile
+from crawfish.config import ProfileConfig, ProjectManifest, ProjectPaths, load_manifest
 from crawfish.core import (
     BudgetExceeded,
     Cancelled,
@@ -55,6 +56,7 @@ from crawfish.definition import (
     load_definition,
 )
 from crawfish.discovery import Registry, UnitRef
+from crawfish.doctor import DoctorFinding, DoctorReport, diagnose
 from crawfish.engine import Engine, run_pipeline
 from crawfish.eval import (
     EvalCase,
@@ -318,6 +320,13 @@ __all__ = [
     # authoring / packaging / ship (M5)
     "Registry",
     "UnitRef",
+    "ProfileConfig",
+    "ProjectManifest",
+    "ProjectPaths",
+    "load_manifest",
+    "DoctorFinding",
+    "DoctorReport",
+    "diagnose",
     "scaffold_project",
     "resolve_secret",
     "load_env",

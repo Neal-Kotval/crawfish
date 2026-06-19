@@ -185,6 +185,15 @@ def _cmd_logs(args: argparse.Namespace) -> int:
     return 0
 
 
+# ------------------------------------------------------------------------- doctor
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    from crawfish.doctor import diagnose
+
+    report = diagnose(args.dir)
+    print(report.text())
+    return 0 if report.ok else 1
+
+
 # --------------------------------------------------------------------------- init
 def _cmd_init(args: argparse.Namespace) -> int:
     from crawfish.scaffold import scaffold_project
@@ -219,6 +228,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("list", help="list discovered units")
     p.add_argument("--dir", default=".", help="project directory")
     p.set_defaults(func=_cmd_list)
+
+    p = sub.add_parser("doctor", help="report project structure health")
+    p.add_argument("--dir", default=".", help="project directory")
+    p.set_defaults(func=_cmd_doctor)
 
     p = sub.add_parser("install", help="install a unit (surfaces capabilities for consent)")
     p.add_argument("path", help="path to the unit/package")

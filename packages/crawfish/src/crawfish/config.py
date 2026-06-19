@@ -14,7 +14,13 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-__all__ = ["ProfileConfig", "ProjectManifest", "load_manifest", "DEFAULT_PROFILES"]
+__all__ = [
+    "ProfileConfig",
+    "ProjectPaths",
+    "ProjectManifest",
+    "load_manifest",
+    "DEFAULT_PROFILES",
+]
 
 # Built-in profile → runtime mapping. Projects may override in crawfish.toml.
 DEFAULT_PROFILES: dict[str, str] = {
@@ -30,12 +36,40 @@ class ProfileConfig(BaseModel):
     settings: dict[str, object] = Field(default_factory=dict)
 
 
+class ProjectPaths(BaseModel):
+    """Where each kind of unit lives, relative to the project root (CRA-157).
+
+    Defaults are the canonical layout; a project may relocate any folder via
+    ``crawfish.toml [project.paths]`` and discovery follows the override.
+    """
+
+    sources: str = "sources"
+    sinks: str = "sinks"
+    definitions: str = "definitions"
+    pipelines: str = "pipelines"
+    observers: str = "observers"
+    tools: str = "tools"
+    policies: str = "policies"
+
+    def as_discovery_map(self) -> dict[str, str]:
+        """``{unit-kind: subdir}`` for the registry's local folder scan."""
+        return {
+            "source": self.sources,
+            "sink": self.sinks,
+            "definition": self.definitions,
+            "observer": self.observers,
+            "tool": self.tools,
+            "policy": self.policies,
+        }
+
+
 class ProjectManifest(BaseModel):
     """Parsed ``crawfish.toml``."""
 
     name: str = "crawfish-project"
     version: str = "0.1.0"
     default_profile: str = "dev"
+    paths: ProjectPaths = Field(default_factory=ProjectPaths)
     profiles: dict[str, ProfileConfig] = Field(default_factory=dict)
 
     def resolve_profile(self, name: str | None = None) -> ProfileConfig:
@@ -63,5 +97,6 @@ def load_manifest(project_dir: str | Path = ".") -> ProjectManifest:
         name=project.get("name", "crawfish-project"),
         version=project.get("version", "0.1.0"),
         default_profile=project.get("default_profile", "dev"),
+        paths=ProjectPaths.model_validate(project.get("paths", {})),
         profiles=profiles,
     )
