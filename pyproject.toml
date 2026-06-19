@@ -1,0 +1,46 @@
+[project]
+name = "crawfish-workspace"
+version = "0.0.0"
+description = "Crawfish monorepo workspace (not published)."
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+crawfish = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "crawfish",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["packages/crawfish/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+# Spec mandates `class X(str, Enum)` for Pydantic value coercion; keep it.
+ignore = ["UP042"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+mypy_path = "packages/crawfish/src"
+explicit_package_bases = true
+namespace_packages = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["packages/crawfish/tests"]
