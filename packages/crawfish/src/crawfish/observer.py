@@ -58,7 +58,12 @@ _JUDGE_OK = {"", "ok", "pass", "none", "fine", "good"}
 
 @dataclass
 class ObserverContext:
-    """The window a rule judges: recent runs + events for one pipeline at ``now``."""
+    """The window a rule judges: recent runs + events for one pipeline at ``now``.
+
+    ``events`` (the pipeline's recent observer events) is provided as a hook for custom
+    user rules — the built-in rules judge ``runs`` only, but a rule can read prior
+    findings (e.g. to debounce or escalate repeats).
+    """
 
     pipeline: str
     runs: list[RunInfo]

@@ -88,6 +88,9 @@ class RunContext:
         Routes through this run's ``store`` so a :class:`ScrubbingStore` wrapper
         redacts secrets before the write — the prompt-injection/secret boundary.
         """
+        # Deliberately a function-local import: `core` is the substrate `observe` sits
+        # above, so this reach-up must stay lazy. Do NOT hoist it to module scope —
+        # that would reintroduce a core↔observe import cycle.
         from crawfish.observe import ObserverSurface
 
         ObserverSurface(self.store, org_id=self.org_id).emit(event)

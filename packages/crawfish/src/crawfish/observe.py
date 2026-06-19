@@ -48,7 +48,9 @@ __all__ = [
 ]
 
 # Observer events ride the existing event ledger under a synthetic stream id so all
-# SQL stays inside the Store impl and scrubbing (if the store is wrapped) applies.
+# SQL stays inside the Store impl and scrubbing (if the store is wrapped) applies. The
+# `observer:<pipeline>` namespace cannot collide with a real run's event stream: run ids
+# come from `new_id()`, which never emits a colon-prefixed value.
 _EVENT_STREAM = "observer"
 _RUNINFO_KIND = "run_info"
 _SINCE_UNITS = {"s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0}
