@@ -19,6 +19,9 @@ dev = [
     "types-pyyaml>=6.0",
     "crawfish",
 ]
+docs = [
+    "mkdocs-material>=9.5",
+]
 
 [tool.ruff]
 line-length = 100

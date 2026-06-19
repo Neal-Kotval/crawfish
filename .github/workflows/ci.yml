@@ -26,3 +26,5 @@ jobs:
         run: uv run pytest -q
       - name: Build wheel
         run: uv build packages/crawfish
+      - name: Build docs site
+        run: uv run --group docs mkdocs build --strict

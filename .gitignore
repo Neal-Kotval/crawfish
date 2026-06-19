@@ -6,6 +6,9 @@
 # Generated project state
 .crawfish/
 
+# Built docs site
+site/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -32,6 +32,10 @@ class Output(BaseModel, Generic[T]):
     output_schema: list[Parameter] = Field(default_factory=list)  # shape of `value`
     value: T
     produced_by: str  # node id that emitted it
+    # Taint: True when this value derives from fluid (untrusted) input. A tainted
+    # value must never be treated as trusted downstream (CRA-114). Propagates
+    # through `derive`.
+    tainted: bool = False
 
     model_config = {"frozen": True}
 
@@ -41,12 +45,18 @@ class Output(BaseModel, Generic[T]):
         value: JSONValue,
         produced_by: str,
         output_schema: list[Parameter] | None = None,
+        tainted: bool | None = None,
     ) -> Output[JSONValue]:
-        """Create a fresh Output from this one (the immutable-derivation path)."""
+        """Create a fresh Output from this one (the immutable-derivation path).
+
+        Taint propagates: a value derived from a tainted Output stays tainted
+        unless explicitly overridden.
+        """
         return Output(
             value=value,
             produced_by=produced_by,
             output_schema=output_schema if output_schema is not None else list(self.output_schema),
+            tainted=self.tainted if tainted is None else tainted,
         )
 
     def persist(self, store: object, *, org_id: str = "local") -> None:

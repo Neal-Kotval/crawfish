@@ -30,6 +30,20 @@ Security is a **spine, not a phase** — enforced on every feature from day one.
 6. **Supply chain.** `crawfish.lock` carries integrity hashes; install-time
    capability consent gates what a plugin may touch. (CRA-113/CRA-114)
 
+## Implementation status (Phase 1)
+
+Shipped: static-vs-fluid typing (`crawfish.core`) + prompt-compiler boundary
+(`runtime/prompt.py`); static-only Sink targets + transactional idempotency
+(`nodes/sink.py`); credentials by reference + `.env` loader + node↔secret
+least-privilege mapping (`crawfish.secrets`); transcript/telemetry redaction before
+the Store write (`ScrubbingStore`); taint flag propagating through `Output.derive`;
+install-time capability consent + lockfile integrity (`craw install` / `craw freeze`);
+out-of-process host-side execution + an egress broker (`crawfish.sandbox`).
+
+Deferred (tracked separately): egress-mediated secret *injection* (a local
+CommandRuntime can still read `.env` in-sandbox — the known v1 tradeoff); full
+microVM/seccomp hardening beyond out-of-process isolation.
+
 ## Review gate
 
 Every feature is audited against these invariants by the security reviewer before

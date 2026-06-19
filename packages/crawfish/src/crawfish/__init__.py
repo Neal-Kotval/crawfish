@@ -16,6 +16,7 @@ from crawfish.artifacts import (
     offload_if_large,
 )
 from crawfish.batch import Anomaly, Batch, Task
+from crawfish.build import BuildPlan, generate_containerfile, plan_build, write_containerfile
 from crawfish.core import (
     BudgetExceeded,
     Cancelled,
@@ -53,6 +54,7 @@ from crawfish.definition import (
     TeamSpec,
     load_definition,
 )
+from crawfish.discovery import Registry, UnitRef
 from crawfish.engine import Engine, run_pipeline
 from crawfish.eval import (
     EvalCase,
@@ -127,7 +129,34 @@ from crawfish.runtime import (
     RuntimeEvent,
     get_runtime,
 )
+from crawfish.sandbox import EgressBroker, EgressDenied, run_out_of_process
+from crawfish.scaffold import scaffold_project
+from crawfish.secrets import (
+    Capabilities,
+    ScrubbingStore,
+    SecretManager,
+    load_env,
+    read_capabilities,
+    redact,
+    resolve_secret,
+)
+from crawfish.stability import (
+    Stability,
+    deprecated,
+    experimental,
+    is_breaking,
+    stability_of,
+    stable,
+)
 from crawfish.store import SqliteStore, Store
+from crawfish.testing import (
+    assert_rubric,
+    assert_snapshot,
+    replaying,
+    run_fixtures,
+    snapshot_match,
+)
+from crawfish.triggers import CronTrigger, Trigger, WebhookTrigger, verify_webhook
 from crawfish.typesystem import TypeDef, TypeKind, TypeRegistry, default_registry
 from crawfish.versioning import Freezable, FrozenError, Version
 from crawfish.workflow import Workflow
@@ -274,4 +303,37 @@ __all__ = [
     "save_baseline",
     "load_baseline",
     "gate_against_baseline",
+    # authoring / packaging / ship (M5)
+    "Registry",
+    "UnitRef",
+    "scaffold_project",
+    "resolve_secret",
+    "load_env",
+    "SecretManager",
+    "ScrubbingStore",
+    "redact",
+    "read_capabilities",
+    "Capabilities",
+    "snapshot_match",
+    "assert_snapshot",
+    "run_fixtures",
+    "assert_rubric",
+    "replaying",
+    "generate_containerfile",
+    "plan_build",
+    "write_containerfile",
+    "BuildPlan",
+    "Trigger",
+    "CronTrigger",
+    "WebhookTrigger",
+    "verify_webhook",
+    "Stability",
+    "stable",
+    "experimental",
+    "deprecated",
+    "stability_of",
+    "is_breaking",
+    "EgressBroker",
+    "EgressDenied",
+    "run_out_of_process",
 ]

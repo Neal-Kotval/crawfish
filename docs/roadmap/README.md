@@ -70,13 +70,13 @@ Status legend: ✅ done · 🔄 in progress · ⛔ blocked · ⬜ not started
 
 | # | Issue | Title | Status |
 |---|-------|-------|--------|
-| 29 | CRA-113 | craw CLI + module discovery | ⬜ |
-| 30 | CRA-118 | First-run zero-key wow | ⬜ |
-| 31 | CRA-117 | Docs as a product | ⬜ |
-| 32 | CRA-119 | craw test | ⬜ |
-| 33 | CRA-114 | Secrets v1 + security hardening | ⬜ |
-| 34 | CRA-115 | Container build/deploy + triggers | ⬜ |
-| 35 | CRA-124 | API stability, semver & migration | ⬜ |
+| 29 | CRA-113 | craw CLI + module discovery | ✅ |
+| 30 | CRA-118 | First-run zero-key wow | ✅ |
+| 31 | CRA-117 | Docs as a product (MkDocs site) | ✅ |
+| 32 | CRA-119 | craw test | ✅ |
+| 33 | CRA-114 | Secrets v1 + security hardening | ✅ |
+| 34 | CRA-115 | Container build/deploy + triggers | ✅ |
+| 35 | CRA-124 | API stability, semver & migration | ✅ |
 
 ## Per-feature research notes
 
