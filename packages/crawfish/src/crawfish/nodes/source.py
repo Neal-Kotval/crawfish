@@ -71,10 +71,27 @@ def fan_out(
     if not multi or not isinstance(output.value, list):
         return [output]
     schema = list(item_schema) if item_schema is not None else list(output.output_schema)
-    return [
-        Output(value=item, produced_by=output.produced_by, output_schema=schema)
-        for item in output.value
-    ]
+    items: list[Output[JSONValue]] = []
+    for i, item in enumerate(output.value):
+        # Stable per-item lineage from the item's own id, else a deterministic index
+        # key — never random — so idempotency keys are stable across re-runs.
+        if isinstance(item, dict) and (
+            item.get("id") is not None or item.get("number") is not None
+        ):
+            lineage = str(item.get("id", item.get("number")))
+        else:
+            lineage = f"{output.produced_by}#{i}"
+        # Multi-source items are per-item fluid data → tainted (untrusted).
+        items.append(
+            Output(
+                value=item,
+                produced_by=output.produced_by,
+                output_schema=schema,
+                lineage=lineage,
+                tainted=True,
+            )
+        )
+    return items
 
 
 class RepoSource(Source[dict[str, JSONValue]]):

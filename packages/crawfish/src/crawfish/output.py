@@ -32,9 +32,13 @@ class Output(BaseModel, Generic[T]):
     output_schema: list[Parameter] = Field(default_factory=list)  # shape of `value`
     value: T
     produced_by: str  # node id that emitted it
+    # Stable per-item lineage (the source item's identity), threaded through the
+    # pipeline so idempotency keys are deterministic across re-runs (CRA-104/CRA-122).
+    # Distinct from `id` (a fresh UUID per Output instance).
+    lineage: str | None = None
     # Taint: True when this value derives from fluid (untrusted) input. A tainted
-    # value must never be treated as trusted downstream (CRA-114). Propagates
-    # through `derive`.
+    # value must never become a Sink target or an idempotency key (CRA-114).
+    # Propagates through `derive`.
     tainted: bool = False
 
     model_config = {"frozen": True}
@@ -46,17 +50,19 @@ class Output(BaseModel, Generic[T]):
         produced_by: str,
         output_schema: list[Parameter] | None = None,
         tainted: bool | None = None,
+        lineage: str | None = None,
     ) -> Output[JSONValue]:
         """Create a fresh Output from this one (the immutable-derivation path).
 
-        Taint propagates: a value derived from a tainted Output stays tainted
-        unless explicitly overridden.
+        Taint and lineage propagate: a value derived from a tainted Output stays
+        tainted, and keeps the upstream lineage, unless explicitly overridden.
         """
         return Output(
             value=value,
             produced_by=produced_by,
             output_schema=output_schema if output_schema is not None else list(self.output_schema),
             tainted=self.tainted if tainted is None else tainted,
+            lineage=self.lineage if lineage is None else lineage,
         )
 
     def persist(self, store: object, *, org_id: str = "local") -> None:

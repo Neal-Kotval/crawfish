@@ -33,16 +33,21 @@ Security is a **spine, not a phase** — enforced on every feature from day one.
 ## Implementation status (Phase 1)
 
 Shipped: static-vs-fluid typing (`crawfish.core`) + prompt-compiler boundary
-(`runtime/prompt.py`); static-only Sink targets + transactional idempotency
-(`nodes/sink.py`); credentials by reference + `.env` loader + node↔secret
-least-privilege mapping (`crawfish.secrets`); transcript/telemetry redaction before
-the Store write (`ScrubbingStore`); taint flag propagating through `Output.derive`;
-install-time capability consent + lockfile integrity (`craw install` / `craw freeze`);
-out-of-process host-side execution + an egress broker (`crawfish.sandbox`).
+(`runtime/prompt.py`); static-only Sink targets + idempotency keyed on **stable
+per-item lineage + static config only** (never the random output id or model output)
+with the approval gate evaluated *before* the claim (`nodes/sink.py`); taint
+**originated** on fluid-source fan-out and on Runs with fluid inputs, propagating
+through `Output.derive`/lineage (`nodes/source.py`, `run.py`); credentials by
+reference + `.env` loader + node↔secret least-privilege mapping (`crawfish.secrets`);
+transcript/telemetry redaction before the Store write (`ScrubbingStore`); install-time
+capability consent + full-digest lockfile integrity (`craw install` / `craw freeze`);
+out-of-process host-side execution + an egress-allowlist primitive (`crawfish.sandbox`).
 
 Deferred (tracked separately): egress-mediated secret *injection* (a local
-CommandRuntime can still read `.env` in-sandbox — the known v1 tradeoff); full
-microVM/seccomp hardening beyond out-of-process isolation.
+CommandRuntime can still read `.env` in-sandbox — the known v1 tradeoff); transparent
+egress *interception* (the broker is a cooperative `guard()` allowlist today, not a
+network chokepoint) and runtime enforcement of the consented capability manifest;
+full microVM/seccomp hardening beyond out-of-process isolation.
 
 ## Review gate
 

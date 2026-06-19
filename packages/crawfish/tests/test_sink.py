@@ -119,3 +119,30 @@ async def test_idempotency_key_ignores_output_value() -> None:
     assert await sink.write(out_a, ctx) is True
     assert await sink.write(out_b, ctx) is False
     assert len(sink.writes) == 1
+
+
+# -- regression: H-1 (deterministic idempotency) + L-2 (approval before claim) -----
+async def test_idempotency_is_deterministic_across_reruns() -> None:
+    """A re-run that produces a FRESH Output (new random id) but the same stable
+    lineage must be a no-op — keys derive from lineage + static config, not output.id."""
+    store = SqliteStore()
+    sink = GitHubPRSink(config={"repo": "acme/app"})
+    # simulate two separate runs of the same source item (same lineage, new id each)
+    first = Output(value={"title": "Fix"}, produced_by="run-1", lineage="pr-42")
+    second = Output(value={"title": "Fix"}, produced_by="run-2", lineage="pr-42")
+    ctx1 = RunContext(store=store, batch_id="b1")
+    ctx2 = RunContext(store=store, batch_id="b1")
+    assert await sink.write(first, ctx1) is True
+    assert await sink.write(second, ctx2) is False  # re-run is a no-op
+    assert len(sink.writes) == 1
+
+
+async def test_declined_approval_does_not_burn_idempotency() -> None:
+    store = SqliteStore()
+    sink = GitHubPRSink(config={"repo": "acme/app"}, always_ask=True)
+    out = Output(value={"title": "Fix"}, produced_by="r", lineage="pr-7")
+    ctx = RunContext(store=store, batch_id="b1")
+    assert await sink.write(out, ctx, approve=lambda: False) is False  # declined
+    # a later approval still goes through — the decline didn't claim the key
+    assert await sink.write(out, ctx, approve=lambda: True) is True
+    assert len(sink.writes) == 1

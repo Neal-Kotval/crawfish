@@ -151,11 +151,17 @@ class Run:
             )
             raise
 
-        # Output schema derives from the Definition's declared outputs.
+        # Output schema derives from the Definition's declared outputs. The result
+        # is tainted if any input was fluid (untrusted) — taint originates here and
+        # propagates downstream (CRA-114).
+        from crawfish.runtime.prompt import split_inputs
+
+        _static, fluid = split_inputs(self.definition, self.inputs)
         out: Output[JSONValue] = Output(
             output_schema=list(self.definition.outputs),
             value=result.text,
             produced_by=self.id,
+            tainted=bool(fluid),
         )
         out.persist(ctx.store, org_id=ctx.org_id)
         self.output = out

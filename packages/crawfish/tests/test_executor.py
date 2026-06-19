@@ -16,7 +16,7 @@ from crawfish.definition import Definition
 from crawfish.executor import BatchExecutor, CycleError, DependencyGraph
 from crawfish.nodes import Source
 from crawfish.output import Output
-from crawfish.retry import list_dead_letters
+from crawfish.retry import RetryPolicy, list_dead_letters
 from crawfish.runtime import CommandRuntime, MockRuntime
 from crawfish.runtime.base import AgentRuntime, RunRequest, RunResult
 from crawfish.store import SqliteStore
@@ -121,7 +121,9 @@ async def test_concurrency_capped(tmp_path: Path) -> None:
 
 async def test_failing_item_dead_lettered_not_halting(tmp_path: Path) -> None:
     items = [{"pr_body": "ok-1"}, {"pr_body": "FAIL"}, {"pr_body": "ok-2"}]
-    ex = BatchExecutor(_minimal(tmp_path), max_concurrency=1)
+    ex = BatchExecutor(
+        _minimal(tmp_path), max_concurrency=1, retry_policy=RetryPolicy(max_attempts=1)
+    )
     ctx = _ctx()
     batch = _batch(tmp_path, items)
     result = await ex.run(batch, ctx, _Flaky("FAIL"))
@@ -145,7 +147,9 @@ async def test_runaway_killed_at_cost_cap(tmp_path: Path) -> None:
 
 async def test_replay_reruns_only_failures(tmp_path: Path) -> None:
     items = [{"pr_body": "ok-1"}, {"pr_body": "FAIL"}]
-    ex = BatchExecutor(_minimal(tmp_path), max_concurrency=1)
+    ex = BatchExecutor(
+        _minimal(tmp_path), max_concurrency=1, retry_policy=RetryPolicy(max_attempts=1)
+    )
     ctx = _ctx()
     batch = _batch(tmp_path, items)
     await ex.run(batch, ctx, _Flaky("FAIL"))

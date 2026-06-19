@@ -116,3 +116,22 @@ async def test_telemetry_spans_emitted(tmp_path: Path) -> None:
     await run.execute(ctx, MockRuntime())
     names = {e.get("name") for e in ctx.store.events(ctx.run_id) if e.get("type") == "span"}
     assert {"run.start", "run.finish"} <= names
+
+
+async def test_run_output_tainted_when_inputs_fluid(tmp_path: Path) -> None:
+    d = _definition(tmp_path)  # inputs: repo (static) + pr_body (fluid)
+    run = Run(d, {"repo": "acme/app", "pr_body": "x"})
+    out = await run.execute(_ctx(), MockRuntime())
+    assert out.tainted is True  # a fluid input taints the output (CRA-114)
+
+
+async def test_run_output_untainted_when_all_static() -> None:
+    from crawfish.core.types import Flow, Parameter
+    from crawfish.definition import AgentSpec, Definition, TeamSpec
+
+    d = Definition(
+        team=TeamSpec(agents=[AgentSpec(role="main", prompt="do")]),
+        inputs=[Parameter(name="repo", type="str", flow=Flow.STATIC)],
+    )
+    out = await Run(d, {"repo": "acme/app"}).execute(_ctx(), MockRuntime())
+    assert out.tainted is False  # no fluid input -> untainted

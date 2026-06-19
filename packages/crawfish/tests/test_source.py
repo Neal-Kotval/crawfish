@@ -114,3 +114,21 @@ async def test_no_secret_leak(ctx: RunContext, monkeypatch: pytest.MonkeyPatch) 
     # The secret value must not appear in the serialized Output.
     assert secret_value not in out.model_dump_json()
     assert secret_value not in repr(out)
+
+
+# -- regression: H-2 taint origination + stable lineage on fan-out -----------------
+def test_fan_out_marks_items_tainted_with_stable_lineage() -> None:
+    from crawfish.nodes.source import fan_out
+
+    src = Output(
+        output_schema=[],
+        value=[{"number": 42, "title": "a"}, {"title": "b"}],
+        produced_by="prs",
+    )
+    items = fan_out(src, multi=True)
+    assert all(i.tainted for i in items)  # per-item fluid data is tainted
+    assert items[0].lineage == "42"  # stable id from the item
+    assert items[1].lineage == "prs#1"  # deterministic index fallback (never random)
+    # deterministic across calls
+    again = fan_out(src, multi=True)
+    assert [i.lineage for i in items] == [i.lineage for i in again]

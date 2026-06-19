@@ -1,10 +1,12 @@
 """Host-side code sandbox + egress broker (CRA-114, Phase-1 minimum).
 
-Third-party Source/Sink/tool code runs **out-of-process** so a compromised unit
-can't read the engine's keychain/memory, and network egress is mediated by a
-**broker** that enforces the capability manifest at *runtime* (not merely consented
-at install). Full microVM/seccomp hardening is tracked separately; this is the
-portable Phase-1 floor.
+Third-party Source/Sink/tool code runs **out-of-process** (:func:`run_out_of_process`)
+so a compromised unit can't read the engine's in-process memory/credentials. The
+:class:`EgressBroker` is the **allowlist primitive** host-side code checks before
+network egress (``broker.guard(host)``); wiring it into a transparent network
+interception layer (so undeclared egress is blocked even without a cooperative call),
+plus full microVM/seccomp isolation, is tracked separately. This is the portable
+Phase-1 floor, not the final enforcement boundary.
 """
 
 from __future__ import annotations

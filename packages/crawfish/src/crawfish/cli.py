@@ -111,7 +111,7 @@ def _cmd_freeze(args: argparse.Namespace) -> int:
                 if target.is_dir()
                 else target.read_bytes()
             )
-            integrity = "sha256:" + hashlib.sha256(data).hexdigest()[:16]
+            integrity = "sha256:" + hashlib.sha256(data).hexdigest()  # full digest
         pins[f"{kind}:{name}"] = {"origin": ref.origin, "integrity": integrity}
     lock = Path(args.dir) / "crawfish.lock"
     lock.write_text(json.dumps({"units": pins}, indent=2, sort_keys=True) + "\n")

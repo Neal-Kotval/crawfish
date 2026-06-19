@@ -115,7 +115,9 @@ class BatchExecutor:
     ) -> None:
         self.definition = definition
         self.max_concurrency = max_concurrency
-        self.retry_policy = retry_policy or RetryPolicy()
+        # Production-grade default: real exponential backoff. Tests that exercise the
+        # failure path pass max_attempts=1 to stay fast.
+        self.retry_policy = retry_policy or RetryPolicy(base_delay=0.5)
         self.runtime = runtime
         self.roadmap = Roadmap()
 

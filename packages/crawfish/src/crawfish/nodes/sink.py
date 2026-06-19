@@ -103,7 +103,9 @@ class Sink(Node, ABC, Generic[T]):
         payload = {
             "sink": self.name,
             "batch_id": ctx.batch_id,
-            "output_id": output.id,
+            # Stable per-item identity (lineage), NOT the random per-instance
+            # output.id — so a re-run of the same batch/item is a no-op (CRA-104).
+            "item_id": output.lineage or output.id,
             # Sorted static config so key is stable regardless of dict order.
             "static_config": json.dumps(self.config, sort_keys=True, default=str),
         }
@@ -126,12 +128,8 @@ class Sink(Node, ABC, Generic[T]):
         """
         key = self._idempotency_key(output, ctx)
 
-        # Atomically claim the key. If we didn't win, this batch/output was
-        # already written — no-op.
-        if not ctx.store.claim_idempotency(key, org_id=ctx.org_id):
-            return False
-
-        # Approval gate.
+        # Approval gate FIRST, so a decline never burns the idempotency claim
+        # (a declined write can be retried later; a claim is permanent).
         if self.always_ask:
             if approve is None:
                 raise ApprovalRequired(
@@ -139,6 +137,11 @@ class Sink(Node, ABC, Generic[T]):
                 )
             if not approve():
                 return False
+
+        # Atomically claim the key. If we didn't win, this batch/item was already
+        # written — no-op (idempotent re-run).
+        if not ctx.store.claim_idempotency(key, org_id=ctx.org_id):
+            return False
 
         await self._write(output, ctx)
 

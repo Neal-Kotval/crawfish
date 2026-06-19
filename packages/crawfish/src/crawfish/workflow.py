@@ -155,11 +155,8 @@ class Workflow:
             return step.fan_out(out) if step.multi else [out]
 
         if isinstance(step, Filter):
-            wrapped: Output[JSONValue] = Output(
-                value=[o.value for o in current], produced_by=self.id
-            )
-            kept = step.apply(wrapped).value
-            return [Output(value=v, produced_by=step.id) for v in kept]
+            # Filter the item Outputs directly so lineage + taint are preserved.
+            return [o for o in current if step.predicate(o.value)]
 
         if isinstance(step, Batch):
             if rt is None:
@@ -174,7 +171,9 @@ class Workflow:
                     cost_budget=ctx.cost_budget,
                 )
                 run = Run(step.definition, inputs, runtime=rt)
-                outputs.append(await run.execute(child, rt))
+                out = await run.execute(child, rt)
+                # Carry the source item's stable lineage forward for idempotency.
+                outputs.append(out.model_copy(update={"lineage": item.lineage}))
             return outputs
 
         if isinstance(step, Aggregator):
