@@ -11,6 +11,18 @@ from crawfish.runtime.base import (
     ToolCall,
 )
 from crawfish.runtime.command import CommandRuntime, Transport
+from crawfish.runtime.context_strategy import (
+    CompactionResult,
+    ContextStrategy,
+    ConversationTurn,
+    ExponentialCompact,
+    LinearCompact,
+    MaxTokens,
+    Summarize,
+    estimate_tokens,
+    manage_context,
+    resolve_strategy,
+)
 from crawfish.runtime.mock import MockRuntime
 from crawfish.runtime.prompt import compile_prompt, pick_agent, split_inputs
 from crawfish.runtime.replay import CassetteMiss, RecordReplayRuntime
@@ -38,4 +50,15 @@ __all__ = [
     "compile_prompt",
     "pick_agent",
     "split_inputs",
+    # context strategies (CRA-138)
+    "ContextStrategy",
+    "ConversationTurn",
+    "CompactionResult",
+    "MaxTokens",
+    "LinearCompact",
+    "ExponentialCompact",
+    "Summarize",
+    "estimate_tokens",
+    "resolve_strategy",
+    "manage_context",
 ]

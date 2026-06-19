@@ -47,6 +47,7 @@ class AgentSpec(BaseModel):
     tools: list[str] = Field(default_factory=list)
     policies: list[str] = Field(default_factory=list)
     delegates_to: list[str] = Field(default_factory=list)  # subagent roles (CRA-135)
+    context_strategy: str | None = None  # context-window strategy name (CRA-138)
 
 
 class TeamSpec(BaseModel):
