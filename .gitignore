@@ -24,3 +24,6 @@ uv.lock
 
 # OS / editor
 .DS_Store
+
+# Local Claude Code settings
+.claude/settings.json
