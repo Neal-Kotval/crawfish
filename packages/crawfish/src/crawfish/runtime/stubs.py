@@ -1,4 +1,4 @@
-"""ClientRuntime + ManagedRuntime stubs (CRA-112).
+"""ClientRuntime + ManagedRuntime stubs.
 
 Registered so profile selection resolves them, but not implemented in Phase 1 M1.
 ClientRuntime (Anthropic / OpenAI-compatible, API key) and ManagedRuntime (CMA) land
@@ -22,7 +22,7 @@ class ClientRuntime(AgentRuntime):
 
     async def run(self, request: RunRequest, ctx: RunContext) -> RunResult:
         raise NotImplementedError(
-            "ClientRuntime is a stub (CRA-112). Use CommandRuntime (`claude -p`) for the "
+            "ClientRuntime is a stub. Use CommandRuntime (`claude -p`) for the "
             "zero-key dev loop; the API-key backend lands behind this same seam."
         )
 
@@ -35,6 +35,6 @@ class ManagedRuntime(AgentRuntime):
 
     async def run(self, request: RunRequest, ctx: RunContext) -> RunResult:
         raise NotImplementedError(
-            "ManagedRuntime (CMA) is a stub (CRA-112); ships in the managed/cloud phase "
+            "ManagedRuntime (CMA) is a stub; ships in the managed/cloud phase "
             "(packages/crawfish-cma)."
         )

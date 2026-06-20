@@ -1,4 +1,4 @@
-"""Project scaffolding — the zero-key 5-minute wow (CRA-118).
+"""Project scaffolding — the zero-key 5-minute wow.
 
 ``craw init`` writes a **self-contained project** (root = the project; ``.crawfish/``
 is generated state only) with a genuinely useful hero example — the triage-bot

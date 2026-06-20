@@ -1,4 +1,4 @@
-"""Aggregator — the fan-in / reduce node (CRA-133).
+"""Aggregator — the fan-in / reduce node.
 
 A fan-out produces N item :class:`~crawfish.output.Output` s (one per item); an
 ``Aggregator`` is the fan-in counterpart: it consumes that *group* of N Outputs and

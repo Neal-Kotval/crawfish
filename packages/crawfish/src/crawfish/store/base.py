@@ -1,4 +1,4 @@
-"""The ``Store`` seam — all persistence goes through this protocol (CRA-99).
+"""The ``Store`` seam — all persistence goes through this protocol.
 
 The product model imports the *protocol*, never a concrete backend, so SQLite →
 Postgres is a driver swap. No raw SQL appears at any call site. Every row carries
@@ -32,20 +32,20 @@ class Store(Protocol):
 
     def delete_record(self, kind: str, id: str, *, org_id: str = "local") -> None: ...
 
-    # -- KV / working memory (CRA-123 builds on this) -----------------------
+    # -- KV / working memory -----------------------
     def kv_get(self, namespace: str, key: str, *, org_id: str = "local") -> JSONValue | None: ...
 
     def kv_set(
         self, namespace: str, key: str, value: JSONValue, *, org_id: str = "local"
     ) -> None: ...
 
-    # -- idempotency: transactional check-then-claim (CRA-104) --------------
+    # -- idempotency: transactional check-then-claim --------------
     def claim_idempotency(self, key: str, *, org_id: str = "local") -> bool:
         """Atomically claim ``key``. Returns True iff this call won the claim
         (i.e. it had not been claimed before). Safe under concurrency."""
         ...
 
-    # -- telemetry / execution ledger (CRA-106, CRA-134) --------------------
+    # -- telemetry / execution ledger --------------------
     def append_event(
         self, run_id: str, event: dict[str, JSONValue], *, org_id: str = "local"
     ) -> None: ...

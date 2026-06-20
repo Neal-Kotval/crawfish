@@ -1,7 +1,7 @@
-"""Eval data lifecycle — cases, labeling, golden sets, LLM-judge (CRA-139).
+"""Eval data lifecycle — cases, labeling, golden sets, LLM-judge.
 
-The other half of the quality loop: CRA-110 ships the scoring *types*
-(Metric/Rubric/Benchmark); this ships the eval *data* lifecycle that lets the
+The other half of the quality loop: the scoring *types*
+(Metric/Rubric/Benchmark) live elsewhere; this ships the eval *data* lifecycle that lets the
 "metrics correlate with quality" bet be validated. Capture real runs as reusable
 eval cases, attach human labels, curate versioned golden sets, grade with an
 LLM-as-judge (complementing coded Metrics), and gate a new Definition version

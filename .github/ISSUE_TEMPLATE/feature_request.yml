@@ -1,0 +1,64 @@
+name: Feature request
+description: Propose a new capability or improvement to Crawfish.
+title: "[feature]: "
+labels: ["type: feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea? Tell us about the problem first, then your proposed shape.
+
+        Proposing a new **Source / Sink / Definition connector**? Use the
+        **New connector** template instead — it captures the typed seams we need.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and where does Crawfish get in the way today?
+      placeholder: "I want to fan out over rows from a database, but there's no Postgres source…"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        What you'd like to see. If it touches a seam, say which:
+        `AgentRuntime`, `Store`, `ArtifactStore`, or a node kind
+        (Source / Sink / Aggregator / Router / Filter).
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you weighed and why you set them aside.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the framework does this most affect?
+      options:
+        - core (typed IO, Flow, Parameter)
+        - runtime (AgentRuntime / claude -p)
+        - store (persistence, ledger, idempotency)
+        - sink (egress, approval, idempotency)
+        - source (ingress, fan-out)
+        - cli (craw commands)
+        - docs
+        - other / not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to implement this myself (with guidance).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true

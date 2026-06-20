@@ -1,4 +1,4 @@
-"""Record/replay — deterministic runs from cassettes (CRA-112, basis for CRA-119).
+"""Record/replay — deterministic runs from cassettes.
 
 Wrap any runtime. On a cache hit, replay the recorded ``RunResult`` (zero cost, no
 model call — `craw dev` and `craw test` iterate without burning budget). On a miss in

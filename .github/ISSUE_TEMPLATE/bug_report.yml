@@ -1,0 +1,90 @@
+name: Bug report
+description: Report something in Crawfish that is broken or behaves unexpectedly.
+title: "[bug]: "
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in as much as you can —
+        a minimal reproduction is the single most useful thing you can give us.
+
+        For questions and "how do I…" support, use
+        [Discussions](https://github.com/TODO-maintainer/crawfish/discussions) instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug and what you expected instead.
+      placeholder: "`craw dev` crashed when I passed two `-i` inputs with the same name…"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: |
+        The exact commands / minimal project that reproduces the bug. A pipeline
+        directory or `definitions/<name>/` snippet is ideal.
+      placeholder: |
+        1. `craw init demo && cd demo`
+        2. `craw dev definitions/triage-bot -i project=acme`
+        3. …
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What actually happened, including any stack trace.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Crawfish version
+      description: Output of `craw --version`.
+      placeholder: "crawfish 0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        OS, Python version (`python --version`), and how you installed Crawfish
+        (`pip install crawfish`, `uv`, source checkout). `craw doctor` output is
+        helpful if the project structure is involved.
+      placeholder: |
+        - OS: macOS 14.5 (arm64)
+        - Python: 3.12.4
+        - Install: pip install crawfish
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Paste any relevant output. For a specific run, `craw logs <run_id>` and
+        `craw inspect <run_id>` are the most useful. **Redact any secrets** —
+        Crawfish never logs credential values, but double-check your paste.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I confirmed no secret values appear in the logs/output I pasted.
+          required: true

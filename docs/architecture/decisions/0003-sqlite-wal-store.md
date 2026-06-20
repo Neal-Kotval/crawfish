@@ -1,6 +1,6 @@
 # ADR 0003 — SQLite (WAL) reference Store with tenancy + transactional idempotency
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M0 (CRA-99)
+**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M0
 
 ## Context
 
@@ -18,7 +18,7 @@ The reference `Store` is SQLite with:
 - **Tenancy key on every row** (`org_id`, defaulted `"local"`), part of every primary
   key, so multi-tenancy is a driver swap, not a migration.
 - An **append-only event ledger** (`events` table, monotonic `seq` per run) — the basis
-  for telemetry (CRA-106) and the execution-state ledger (CRA-134).
+  for telemetry and the execution-state ledger.
 
 ## Alternatives rejected
 

@@ -1,4 +1,4 @@
-"""Batch — a hand-wired pipeline of Sources, a Definition, and Sinks (CRA-107).
+"""Batch — a hand-wired pipeline of Sources, a Definition, and Sinks.
 
 The assembly point: wire Sources/Outputs into a Definition by hand. A multi-item
 Source **fans out** to one Run per item, each seeded with that item's fluid values.

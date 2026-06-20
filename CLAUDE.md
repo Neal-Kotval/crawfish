@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Crawfish** — an open-source Python framework for *agents that do bulk work over your
 data*: `Source → Batch (fan-out) → Aggregator (reduce) → Router (branch) → Sink`,
-authored as directories and run locally via `claude -p`. The build is tracked as Linear
-epic **CRA-98** (35 sub-issues, milestones M0–M5). Build in dependency order; the live
-plan is mirrored in [`docs/roadmap/README.md`](docs/roadmap/README.md).
+authored as directories and run locally via `claude -p`. Phase 1 (the local trust loop)
+is complete; the public view of what shipped and what's next is in
+[`ROADMAP.md`](ROADMAP.md), and the detailed per-feature plan lives in
+[`docs/roadmap/README.md`](docs/roadmap/README.md). Build in dependency order.
 
 ## Commands
 

@@ -1,9 +1,9 @@
-"""Definition types — the code-first agent-team package (CRA-102).
+"""Definition types — the code-first agent-team package.
 
 A Definition is authored as a directory and compiled into this typed object (see
 :mod:`crawfish.definition.compiler`). The team-coordination fields on ``TeamSpec``
 (``coordination``/``lead``/``workspace``) and ``AgentSpec.delegates_to`` carry the
-multi-agent topology (CRA-135); semantics are delegation-in / typed-result-out,
+multi-agent topology; semantics are delegation-in / typed-result-out,
 leaning on Claude's hierarchical subagent model — no bespoke message bus.
 """
 
@@ -47,8 +47,8 @@ class AgentSpec(BaseModel):
     model: str | list[str] | None = None
     tools: list[str] = Field(default_factory=list)
     policies: list[str] = Field(default_factory=list)
-    delegates_to: list[str] = Field(default_factory=list)  # subagent roles (CRA-135)
-    context_strategy: str | None = None  # context-window strategy name (CRA-138)
+    delegates_to: list[str] = Field(default_factory=list)  # subagent roles
+    context_strategy: str | None = None  # context-window strategy name
 
 
 class TeamSpec(BaseModel):
@@ -69,7 +69,7 @@ class DefinitionRef(BaseModel):
 
 
 class MCPConnection(BaseModel):
-    """An MCP server connection authored in ``mcp/*.py`` (CRA-116).
+    """An MCP server connection authored in ``mcp/*.py``.
 
     ``auth`` is a **secret reference** (an env-var name), never an inline credential —
     resolved at run time and injected into the server env, never into the prompt.
@@ -95,7 +95,7 @@ class DefinitionAssets(BaseModel):
 
 
 class MarketplacePackage(BaseModel):
-    """Export shape (stub — full hub package lands with the registry, CRA-125)."""
+    """Export shape (stub — full hub package lands with the registry)."""
 
     id: str
     version: str

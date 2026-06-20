@@ -1,10 +1,10 @@
-"""Project manifest + profile resolution (CRA-131).
+"""Project manifest + profile resolution.
 
 A Crawfish project is self-contained: ``crawfish.toml`` is the manifest, ``.env``
 holds secrets (gitignored, never logged), and ``.crawfish/`` is generated state.
 Profiles select the runtime: ``dev`` → CommandRuntime (``claude -p``, zero key),
-``prod`` → ManagedRuntime (CMA). The runtime classes themselves land in CRA-112;
-this module resolves *which* profile and *which* runtime name is requested.
+``prod`` → ManagedRuntime (CMA). This module resolves *which* profile and
+*which* runtime name is requested.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ class ProfileConfig(BaseModel):
 
 
 class ProjectPaths(BaseModel):
-    """Where each kind of unit lives, relative to the project root (CRA-157).
+    """Where each kind of unit lives, relative to the project root.
 
     Defaults are the canonical layout; a project may relocate any folder via
     ``crawfish.toml [project.paths]`` and discovery follows the override.

@@ -46,7 +46,7 @@ __all__ = [
     "field_equals",
     "field_matches",
     "limit",
-    # aggregator (CRA-133)
+    # aggregator
     "Aggregator",
     "collect",
     "concat",
@@ -54,7 +54,7 @@ __all__ = [
     "dedupe",
     "definition_reducer",
     "fan_in",
-    # router (CRA-136)
+    # router
     "Router",
     "Classifier",
     "UnroutableLabelError",

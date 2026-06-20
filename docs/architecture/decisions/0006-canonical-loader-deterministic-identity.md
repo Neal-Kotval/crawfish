@@ -1,11 +1,11 @@
 # ADR 0006 — One canonical loader; content-derived Definition identity
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M1 (CRA-102)
+**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M1
 
 ## Context
 
 A Definition can be loaded two ways: from a local directory (`from_package(path)`) and
-as an installed package via a `DefinitionRef@version` (CRA-113). The gap review requires
+as an installed package via a `DefinitionRef@version`. The gap review requires
 that both routes materialize an **identical** Definition — otherwise "reproducible
 artifact" is a lie and the canvas/registry can disagree with the runtime. A random
 `Definition.id` (the type's default `new_id`) or a path-derived identity would break this.
@@ -14,7 +14,7 @@ artifact" is a lie and the canvas/registry can disagree with the runtime. A rand
 
 - **One canonical loader** (`crawfish.definition.compiler.load_definition`) backs every
   route. `Definition.from_package` and the future installed-package/`DefinitionRef` route
-  both call it. CLI discovery (CRA-113) will too.
+  both call it. CLI discovery will too.
 - **Identity is content-derived, never path- or time-derived.** `Definition.id` is the
   package name (from `pyproject.toml`'s `[project].name`, else the directory name);
   `Version.sha` is a hash of the directory's file contents. `definition.lock`, caches,

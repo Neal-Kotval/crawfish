@@ -1,4 +1,4 @@
-"""Cost preview, budgets, and a live spend meter (CRA-121).
+"""Cost preview, budgets, and a live spend meter.
 
 Three pieces, all deterministic and explicitly *approximate*:
 
@@ -59,7 +59,7 @@ DEFAULT_MODEL_PRICES: dict[str, float] = {
 
 
 class CostEstimate(BaseModel):
-    """A dry-run cost preview for a Definition (CRA-121).
+    """A dry-run cost preview for a Definition.
 
     All figures are USD and approximate. ``per_item_usd`` is the predicted spend
     for a single item across the whole team; ``total_usd`` scales that by the
@@ -134,7 +134,7 @@ class BudgetState(str, Enum):
 
 @dataclass
 class Budget:
-    """A warn/stop spend policy (CRA-121).
+    """A warn/stop spend policy.
 
     ``stop_usd`` is the hard ceiling; ``warn_usd`` (default 80% of stop) is the
     soft line where callers should surface a warning. ``None`` for ``stop_usd``
@@ -225,7 +225,7 @@ def spent_today(
 
 @dataclass
 class CostMeter:
-    """A live spend accumulator checked against a :class:`Budget` (CRA-121).
+    """A live spend accumulator checked against a :class:`Budget`.
 
     Call :meth:`charge` as runs complete; :attr:`total_usd` is running spend,
     :attr:`remaining_usd` is headroom to the hard stop, and :meth:`state`

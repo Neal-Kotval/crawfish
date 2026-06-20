@@ -1,4 +1,4 @@
-"""Sink nodes — the egress boundary with idempotency + approval gates (CRA-104).
+"""Sink nodes — the egress boundary with idempotency + approval gates.
 
 A ``Sink`` is the only place a pipeline performs an external side effect (open a
 PR, post a comment). Three invariants make egress safe:
@@ -104,7 +104,7 @@ class Sink(Node, ABC, Generic[T]):
             "sink": self.name,
             "batch_id": ctx.batch_id,
             # Stable per-item identity (lineage), NOT the random per-instance
-            # output.id — so a re-run of the same batch/item is a no-op (CRA-104).
+            # output.id — so a re-run of the same batch/item is a no-op.
             "item_id": output.lineage or output.id,
             # Sorted static config so key is stable regardless of dict order.
             "static_config": json.dumps(self.config, sort_keys=True, default=str),

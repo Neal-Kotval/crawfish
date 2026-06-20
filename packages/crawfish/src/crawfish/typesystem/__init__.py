@@ -1,4 +1,4 @@
-"""Structural type model & registry (CRA-132)."""
+"""Structural type model & registry."""
 
 from __future__ import annotations
 

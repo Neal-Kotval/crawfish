@@ -4,7 +4,7 @@
 authored as directories and run locally via ``claude -p``.
 
 This module re-exports the stable public surface. As primitives land (M1–M5) they
-are added here; the stability tiers are governed by CRA-124.
+are added here, each placed in its stability tier.
 """
 
 from __future__ import annotations
@@ -316,7 +316,7 @@ __all__ = [
     "RunInfo",
     "Severity",
     "parse_since",
-    # operate / observe / integrate (CRA-150)
+    # operate / observe / integrate
     "DeployEntry",
     "DeployRegistry",
     "DeployStatus",

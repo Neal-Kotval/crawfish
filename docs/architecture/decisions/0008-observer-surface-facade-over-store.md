@@ -1,10 +1,10 @@
 # ADR 0008 — Observer/run-info surface as a facade over the Store, not new protocol methods
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** Phase 1 Hardening (CRA-154)
+**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** Phase 1 Hardening
 
 ## Context
 
-CRA-154 needs a queryable place for **observer events** and **per-run info** to land,
+The operate/observe layer needs a queryable place for **observer events** and **per-run info** to land,
 read by `craw visualize`, `craw manage`, and alerting. The worked example shows
 `ctx.emit(ObserverEvent(...))` and `store.run_info("triage-bot", since="-1h")`. The
 obvious reading — add `emit` / `run_info` / `observer_events` methods to the `Store`

@@ -1,7 +1,7 @@
 # demo/ — Crawfish dogfood
 
 A mini real project that depends on Crawfish and exercises every capability as it
-lands. The framework's own self-test and the hero example for the guide (CRA-118).
+lands. The framework's own self-test and the hero example for the guide.
 
 ## `triage-bot/` (grows per milestone)
 

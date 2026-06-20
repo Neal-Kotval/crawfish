@@ -1,6 +1,6 @@
 # ADR 0009 — `craw deploy` uses a detached session-leader daemon, not tmux
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** Phase 1 Hardening (CRA-151)
+**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** Phase 1 Hardening
 
 ## Context
 
@@ -38,7 +38,7 @@ ephemeral-backend runs are marked `needs_retry`; completed fan-out items are not
 
 - **Hard tmux dependency** — not portable, external process, pane-name leak surface.
 - **A full process supervisor (systemd/supervisord)** — heavyweight, OS-specific, wrong
-  altitude for a local "runs always-on" command; cloud/container deploy is CRA-115/130.
+  altitude for a local "runs always-on" command; cloud/container deploy is a later milestone.
 - **Threads inside the CLI process** — dies with the shell; fails the survive-exit
   acceptance.
 

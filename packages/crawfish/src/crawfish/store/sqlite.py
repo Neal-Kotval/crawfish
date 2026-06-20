@@ -1,4 +1,4 @@
-"""SQLite reference implementation of the ``Store`` seam (CRA-99).
+"""SQLite reference implementation of the ``Store`` seam.
 
 WAL mode + a process lock let thousands of fan-out runs write telemetry, outputs,
 and idempotency claims concurrently without lock contention. Idempotency uses a

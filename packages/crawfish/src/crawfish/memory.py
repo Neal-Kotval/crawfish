@@ -1,4 +1,4 @@
-"""Memory / state primitive — cross-run dedup + working memory (CRA-123).
+"""Memory / state primitive — cross-run dedup + working memory.
 
 A thin, ``Store``-backed key/value handle scoped to a ``(namespace, org_id)``
 pair. It gives a pipeline three things on top of the persistence seam:

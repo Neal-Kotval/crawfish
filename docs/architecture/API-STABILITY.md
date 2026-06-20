@@ -1,6 +1,6 @@
 # API Stability, Semver & Migration Policy
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Issue:** CRA-124
+**Status:** Accepted · **Date:** 2026-06-19
 
 This is the contract that lets people adopt the Crawfish OSS core for serious work.
 React's deprecation discipline plus codemods are *why* large codebases trust upgrades;

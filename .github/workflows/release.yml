@@ -1,0 +1,135 @@
+# Build and publish the `crawfish` distribution to PyPI on a version tag.
+#
+# Publishing uses PyPI **trusted publishing** (OIDC): there are NO stored tokens or
+# secrets anywhere in this workflow. The exchange is brokered by `id-token: write` and
+# the `pypa/gh-action-pypi-publish` action.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────
+# ONE-TIME HUMAN SETUP (done in the PyPI / Test-PyPI web UI, not here):
+#   1. Create the project's trusted publisher on PyPI:
+#        https://pypi.org/manage/account/publishing/
+#      Fill in: owner = <github-org>, repo = crawfish, workflow = release.yml,
+#      environment = pypi.
+#   2. Repeat on Test-PyPI for the dry run:
+#        https://test.pypi.org/manage/account/publishing/
+#      with environment = testpypi.
+#   3. Create the two GitHub Environments (Settings → Environments): `pypi` and
+#      `testpypi`. Add reviewers/branch rules to `pypi` if you want a manual gate.
+# No API tokens are created or stored — that is the point of trusted publishing.
+# TODO(maintainer): replace `TODO-maintainer/crawfish` with the real org/repo slug
+# when configuring the trusted publishers above (the slug only matters in the PyPI UI;
+# this workflow reads the repo from the GitHub OIDC token at runtime).
+# ─────────────────────────────────────────────────────────────────────────────────────
+
+name: release
+
+on:
+  # Real release: push a tag like `v0.1.0`.
+  push:
+    tags:
+      - "v*"
+  # Manual dry run: Actions → release → "Run workflow" → target = testpypi.
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Publish target"
+        type: choice
+        options:
+          - testpypi
+          - pypi
+        default: testpypi
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build distribution
+        run: uv build packages/crawfish
+
+      # `uv build packages/crawfish` writes to packages/crawfish/dist by default.
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: packages/crawfish/dist/
+          if-no-files-found: error
+
+  publish-testpypi:
+    name: Publish to Test-PyPI (dry run)
+    needs: build
+    # Only on a manual dispatch that targets Test-PyPI.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/crawfish
+    permissions:
+      id-token: write # OIDC token for trusted publishing — no password needed.
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to Test-PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          # No `password:` — trusted publishing resolves the identity via OIDC.
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    # Real release on a `v*` tag, or a manual dispatch explicitly targeting PyPI.
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/crawfish
+    permissions:
+      id-token: write # OIDC token for trusted publishing — no password needed.
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No `repository-url` (defaults to PyPI) and no `password:` — trusted publishing.
+
+  github-release:
+    name: Create GitHub Release
+    needs: publish-pypi
+    # Only attach a Release to an actual tag push.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release + upload assets
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*

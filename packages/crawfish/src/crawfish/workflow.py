@@ -1,4 +1,4 @@
-"""Workflow / Pipeline — the first-class deployable (CRA-109).
+"""Workflow / Pipeline — the first-class deployable.
 
 The top-level composition: ordered ``steps`` (Source / Filter / Batch / Aggregator /
 Sink), Output threaded stage to stage, fan-out across steps. Adjacent steps are

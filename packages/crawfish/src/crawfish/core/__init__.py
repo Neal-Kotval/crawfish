@@ -1,4 +1,4 @@
-"""Shared core: typed-IO atoms, the node base, policy, run context (CRA-99)."""
+"""Shared core: typed-IO atoms, the node base, policy, run context."""
 
 from __future__ import annotations
 

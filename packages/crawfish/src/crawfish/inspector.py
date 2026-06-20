@@ -1,4 +1,4 @@
-"""Run inspector / devtools — CLI-level introspection over the Store (CRA-120).
+"""Run inspector / devtools — CLI-level introspection over the Store.
 
 The trust + DX layer (the React-DevTools analog): let a framework user *see what
 happened* on any run, locally, without a live model call. Everything is derived
@@ -50,7 +50,7 @@ class TranscriptEntry(BaseModel):
 
 
 class RunReport(BaseModel):
-    """A summary of a single run, derived from the Store's event ledger (CRA-120).
+    """A summary of a single run, derived from the Store's event ledger.
 
     ``found`` is ``False`` for an unknown run (no events) — callers get a clearly
     empty report rather than a crash.

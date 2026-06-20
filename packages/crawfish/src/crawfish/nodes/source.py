@@ -1,11 +1,11 @@
-"""Source nodes — pipeline ingress with single- & multi-item fan-out (CRA-103).
+"""Source nodes — pipeline ingress with single- & multi-item fan-out.
 
 A ``Source`` is the entry point of a pipeline: it ``fetch``es data and emits a
 typed :class:`~crawfish.output.Output`. A *single* source produces one Output that
 seeds one Run; a *multi* source produces an Output whose value is a list, which
 :func:`fan_out` explodes into one Output per item (each seeding its own Run).
 
-Security (CRA-103/CRA-104): credentials are held **by reference** only. ``config``
+Security: credentials are held **by reference** only. ``config``
 stores the env-var *name* (e.g. ``"GITHUB_TOKEN"``); the value is resolved via
 :func:`~crawfish.secrets.resolve_secret` at fetch time and never written to
 ``config``, the Output, or logs.

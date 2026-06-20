@@ -1,4 +1,4 @@
-"""Compile an agent prompt while honouring the prompt-injection boundary (CRA-112/CRA-114).
+"""Compile an agent prompt while honouring the prompt-injection boundary.
 
 The load-bearing rule (see SECURITY.md): ``Flow.STATIC`` inputs are trusted config and
 may be interpolated into instructions; ``Flow.FLUID`` inputs are **untrusted session

@@ -1,4 +1,4 @@
-"""Context-window management — pluggable strategies (CRA-138).
+"""Context-window management — pluggable strategies.
 
 A real run will exceed the context window. A ``ContextStrategy`` decides *when*
 (threshold) and *how* (compaction) to shrink the transcript; it is applied inside the

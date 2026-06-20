@@ -20,9 +20,9 @@ the whole reason cloud + scale are driver swaps, not rewrites.
 
 | Seam | Protocol | Local default | Later |
 |------|----------|---------------|-------|
-| `AgentRuntime` | the agent loop/backend (CRA-112) | CommandRuntime (`claude -p`) | ClientRuntime / ManagedRuntime (CMA) |
-| `Store` | persistence (CRA-99) | `SqliteStore` (WAL) | Postgres |
-| `ArtifactStore` | blobs (CRA-137) | local filesystem | S3 |
+| `AgentRuntime` | the agent loop/backend | CommandRuntime (`claude -p`) | ClientRuntime / ManagedRuntime (CMA) |
+| `Store` | persistence | `SqliteStore` (WAL) | Postgres |
+| `ArtifactStore` | blobs | local filesystem | S3 |
 
 ## Foundation (M0, shipped)
 
@@ -39,7 +39,7 @@ the whole reason cloud + scale are driver swaps, not rewrites.
   transactional `INSERT OR IGNORE` idempotency, append-only event ledger).
 - **`crawfish.engine`** — the bootstrap that runs a pipeline of steps end to end
   under one `RunContext` (a no-op pipeline is valid). The richer typed `Workflow`
-  (CRA-109) builds on this.
+  builds on this.
 - **`crawfish.config`** — `crawfish.toml` manifest + profile resolution
   (`dev`→command, `prod`→managed).
 

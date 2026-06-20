@@ -1,7 +1,6 @@
 """``parameters_compatible`` — the type-match check Batches use to decide wiring.
 
-Resolves through the structural type registry (CRA-132), not string equality
-(per the CRA-99 gap review).
+Resolves through the structural type registry, not string equality.
 """
 
 from __future__ import annotations

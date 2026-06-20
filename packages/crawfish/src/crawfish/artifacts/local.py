@@ -1,4 +1,4 @@
-"""Local-filesystem reference implementation of the ``ArtifactStore`` seam (CRA-137).
+"""Local-filesystem reference implementation of the ``ArtifactStore`` seam.
 
 Content-addressed storage under ``root/<org_id>/<sha[:2]>/<sha>``: identical bytes
 dedupe to one file, and each ``org_id`` gets a separate subtree (tenancy is a path

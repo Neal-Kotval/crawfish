@@ -1,4 +1,4 @@
-"""Artifact store — blob/file Outputs carried by reference (CRA-137).
+"""Artifact store — blob/file Outputs carried by reference.
 
 Public surface: the :class:`ArtifactRef` envelope, the :class:`ArtifactStore`
 protocol seam, the local-disk reference impl, and the ``offload_if_large`` helper.

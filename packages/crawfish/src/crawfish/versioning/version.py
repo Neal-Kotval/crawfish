@@ -1,4 +1,4 @@
-"""Versioning — every customizable item is versioned and freezable (CRA-100).
+"""Versioning — every customizable item is versioned and freezable.
 
 A frozen ``Version`` marks its owning artifact as an immutable, reproducible
 artifact: mutating a frozen artifact raises :class:`FrozenError`. ``str(Version)``

@@ -1,4 +1,4 @@
-"""Observer output + run-info surface (CRA-154).
+"""Observer output + run-info surface.
 
 A structured, queryable place for **observer events** and **per-run info** to land,
 read by ``craw visualize``, ``craw manage``, and alerting. Everything persists

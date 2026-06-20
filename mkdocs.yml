@@ -1,7 +1,7 @@
 site_name: Crawfish
 site_description: Agents for bulk work over your data — Source → Batch → Aggregator → Router → Sink.
 docs_dir: docs
-repo_url: https://github.com/crawfish/crawfish-framework
+repo_url: https://github.com/Neal-Kotval/crawfish-framework
 
 theme:
   name: material
@@ -36,6 +36,8 @@ nav:
       - Tutorial: guide/tutorial.md
       - Concepts: guide/concepts.md
       - Cookbook: guide/cookbook.md
+      - Contributing a connector: guide/contributing-a-connector.md
+      - Connector ideas: guide/connector-ideas.md
       - API reference: guide/api-reference.md
   - Operate & Observe:
       - Overview: guide/operations.md

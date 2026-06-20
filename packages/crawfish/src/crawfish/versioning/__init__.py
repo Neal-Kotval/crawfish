@@ -1,4 +1,4 @@
-"""Versioning & freezing (CRA-100)."""
+"""Versioning & freezing."""
 
 from __future__ import annotations
 

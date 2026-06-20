@@ -59,7 +59,7 @@ def draft_markdown(request: RunRequest) -> str:
 
     Renders the issue fields (all fluid/untrusted) into a Markdown body. The issue text
     is treated strictly as *data*: it is embedded, never interpreted as an instruction,
-    which is why CRA-203's injection attempt has no effect on where the PR lands.
+    which is why DEMO-203's injection attempt has no effect on where the PR lands.
     """
     issue = request.inputs
     title = issue.get("title", "")

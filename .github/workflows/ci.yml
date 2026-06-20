@@ -21,7 +21,7 @@ jobs:
       - name: Format check (ruff)
         run: uv run ruff format --check .
       - name: Typecheck (mypy)
-        run: uv run mypy packages/crawfish/src
+        run: uv run mypy packages/crawfish/src packages/crawfish-slack/src
       - name: Test (pytest)
         run: uv run pytest -q
       - name: Build wheel

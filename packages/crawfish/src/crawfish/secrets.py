@@ -1,4 +1,4 @@
-"""Secrets v1 + hardening (CRA-103/CRA-104/CRA-114).
+"""Secrets v1 + hardening.
 
 Credentials are held **by reference** (an env-var name), never by value: a node
 receives only the secrets it declares (least privilege — the embryonic capability

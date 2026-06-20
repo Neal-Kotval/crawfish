@@ -1,6 +1,6 @@
 # ADR 0005 — Claude-first runtime, model-universal type
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M1 (CRA-102, CRA-112)
+**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M1
 
 ## Context
 

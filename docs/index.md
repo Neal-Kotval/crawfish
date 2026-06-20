@@ -32,7 +32,7 @@ From runs-once to always-on — deploy, watch, and control pipelines locally.
 - **[Security spine](architecture/SECURITY.md)** — the prompt-injection boundary, secrets, taint
 - **[API stability](architecture/API-STABILITY.md)** — semver + deprecation policy
 - **[Product](product/PRODUCT.md)** — positioning, hero use case, personas
-- **[Roadmap](roadmap/README.md)** — the Phase-1 plan (CRA-98)
+- **[Roadmap](roadmap/README.md)** — the Phase-1 plan
 
 ## The 30-second version
 

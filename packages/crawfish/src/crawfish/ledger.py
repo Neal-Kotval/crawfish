@@ -1,4 +1,4 @@
-"""Execution-state ledger + durability reconciliation (CRA-134).
+"""Execution-state ledger + durability reconciliation.
 
 Makes runs/pipelines crash-safe and re-runnable regardless of backend. The ledger
 lives in the ``Store``: per-pipeline status + **version pin** + fan-out **item cursor**,

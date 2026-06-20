@@ -1,4 +1,4 @@
-"""Company Brain — the registry of Sources, Definitions & Outputs (CRA-111).
+"""Company Brain — the registry of Sources, Definitions & Outputs.
 
 The Company Brain is the union of everything the system knows and can do: a
 queryable read-model over every configured :class:`~crawfish.nodes.source.Source`,

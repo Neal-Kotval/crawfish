@@ -1,4 +1,4 @@
-"""Batch Executor & scheduling — rule-based (CRA-108).
+"""Batch Executor & scheduling — rule-based.
 
 Orders tasks into parallel layers (Kahn's algorithm over ``blocked_by``, cycles
 rejected), then runs a Batch through a **work-queue** backbone: a fixed pool of
@@ -236,7 +236,7 @@ class BatchExecutor:
     async def replay(
         self, batch: Batch, ctx: RunContext, runtime: AgentRuntime | None = None
     ) -> BatchRunResult:
-        """Re-run only dead-lettered items (idempotency makes this safe, CRA-104)."""
+        """Re-run only dead-lettered items (idempotency makes this safe)."""
         dead = list_dead_letters(ctx, batch.id)
         only = {str(d["item_id"]) for d in dead}
         for d in dead:  # clear before re-running; success won't re-dead-letter

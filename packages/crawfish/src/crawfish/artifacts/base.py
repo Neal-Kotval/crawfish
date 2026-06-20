@@ -1,4 +1,4 @@
-"""The ``ArtifactStore`` seam — blob/file Outputs by reference (CRA-137).
+"""The ``ArtifactStore`` seam — blob/file Outputs by reference.
 
 Large payloads (files, blobs, big JSON) don't belong inline in an ``Output``.
 Instead an Output carries a small, content-addressed :class:`ArtifactRef` (a dict

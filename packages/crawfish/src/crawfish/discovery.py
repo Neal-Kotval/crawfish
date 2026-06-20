@@ -1,4 +1,4 @@
-"""Module discovery + a self-registering unit registry (CRA-113).
+"""Module discovery + a self-registering unit registry.
 
 Three feeds, one registry: (a) entry points of installed ``crawfish-*`` packages
 (``crawfish.sources`` / ``crawfish.sinks`` / ``crawfish.definitions`` / ``crawfish.types``)

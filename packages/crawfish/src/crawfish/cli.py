@@ -1,10 +1,10 @@
-"""The ``craw`` CLI (CRA-113 + M4/M5 command wiring).
+"""The ``craw`` CLI.
 
-Command surface: ``init`` (scaffold a working project — the 5-minute wow, CRA-118),
-``list`` (module discovery), ``install`` (capability consent, CRA-114), ``freeze``
+Command surface: ``init`` (scaffold a working project — the 5-minute wow),
+``list`` (module discovery), ``install`` (capability consent), ``freeze``
 (lockfile + integrity), ``publish`` (registry stub), ``run`` / ``dev`` (+ ``--estimate``
-cost preview, CRA-121), ``test`` (CRA-119), ``build`` (Containerfile, CRA-115),
-``inspect`` / ``logs`` (run inspector, CRA-120).
+cost preview), ``test``, ``build`` (Containerfile),
+``inspect`` / ``logs`` (run inspector).
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ def _cmd_freeze(args: argparse.Namespace) -> int:
 
 
 def _cmd_publish(_args: argparse.Namespace) -> int:
-    print("publish: the registry is Phase 2 (CRA-125); nothing to publish yet.")
+    print("publish: the registry is Phase 2; nothing to publish yet.")
     return 0
 
 

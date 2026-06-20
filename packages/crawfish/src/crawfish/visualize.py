@@ -1,4 +1,4 @@
-"""``craw visualize`` — a minimal localhost dashboard (CRA-155).
+"""``craw visualize`` — a minimal localhost dashboard.
 
 A hardcoded, zero-config dashboard over the run-info surface: deployed pipelines
 (from the deploy registry), recent runs + status, today's spend, and the observer

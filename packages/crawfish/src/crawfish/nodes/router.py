@@ -1,4 +1,4 @@
-"""Router & Classifier — conditional routing / branching (CRA-136).
+"""Router & Classifier — conditional routing / branching.
 
 A :class:`Router` is a first-class :class:`~crawfish.core.types.Node` that sends an
 incoming :class:`~crawfish.output.Output` down one of several labelled branches. The
