@@ -50,14 +50,14 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Build distribution
-        run: uv build packages/crawfish
+        run: uv build packages/crawfish --out-dir dist
 
-      # `uv build packages/crawfish` writes to packages/crawfish/dist by default.
+      # uv writes to the cwd's `dist/` (repo root), set explicitly above.
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: packages/crawfish/dist/
+          path: dist/
           if-no-files-found: error
 
   publish-testpypi:

@@ -5,7 +5,9 @@ triages support tickets. Then you fan it out across many tickets, write the resu
 sink, and score the quality with a rubric. Everything runs on `MockRuntime`, so there's
 no key to set up and nothing to spend.
 
-The finished Definition ships at `demo/triage-bot/`. Open it alongside this page.
+The finished Definition ships at `demo/triage-bot/` — open it alongside this page. If you
+installed from PyPI instead of cloning, run `craw init my-app` to get the same example at
+`my-app/definitions/triage-bot/` (adjust the paths below accordingly).
 
 ## 1. The directory model
 
@@ -119,7 +121,7 @@ print([a.role for a in definition.team.agents])  # ['lead', 'classifier', 'summa
 Or from the CLI — `craw dev` compiles and runs in one step on the mock runtime:
 
 ```bash
-uv run craw dev demo/triage-bot -i project=acme -i ticket_body="login button broken"
+craw dev demo/triage-bot -i project=acme -i ticket_body="login button broken"
 ```
 
 ## 6. Run the team

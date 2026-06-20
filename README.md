@@ -14,9 +14,16 @@ Think *dbt / Airflow for agents*, not another chatbot SDK.
 
 ## Install
 
-```bash
-pip install crawfish
-```
+Pick the line that matches what you're doing:
+
+| You want to… | Install with | Why |
+| --- | --- | --- |
+| **Build *with* the framework** (`import crawfish`) | `pip install crawfish` &nbsp;·&nbsp; `uv add crawfish` | Lands in your project env so it resolves against your deps |
+| **Just run the `craw` CLI** | `uv tool install crawfish` &nbsp;·&nbsp; `pipx install crawfish` | Isolated CLI, no env to pollute |
+| **Try it with zero Python setup** | `curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh \| sh` | Bootstraps `uv` if needed, then installs the CLI |
+
+The `curl` line is a thin wrapper over the same PyPI package — see [`install.sh`](install.sh).
+(Once a `crawfish.dev` domain is set up, that URL shortens to `https://crawfish.dev/install.sh`.)
 
 Then run the zero-key demo:
 

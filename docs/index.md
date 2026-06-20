@@ -40,7 +40,7 @@ controlling pipelines locally.
 ## The 30-second version
 
 ```bash
-uv sync
+pip install crawfish
 craw init my-app && cd my-app
 craw dev definitions/triage-bot -i project=acme -i "ticket_body=login is broken"
 ```

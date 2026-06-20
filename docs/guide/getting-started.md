@@ -8,18 +8,37 @@ This page takes you from a clean checkout to a running agent team in a few minut
 
 ## Install
 
-Crawfish is a `uv` workspace. From a checkout:
+Install the package and you get the `craw` CLI:
 
 ```bash
-git clone <repo> && cd crawfish-framework
-uv sync
-uv run craw --version
+pip install crawfish
+craw --version
 # crawfish 0.1.0
 ```
 
-`uv sync` installs the workspace, including the `crawfish` package (editable) and the
-`craw` CLI. If your environment already has the dev tools, you can skip it — `uv run
-craw --version` is enough to confirm the install.
+Prefer an isolated CLI that doesn't touch your project env? Use `uv tool install
+crawfish` or `pipx install crawfish`. For zero Python setup, the bootstrap script
+installs `uv` if needed and then the CLI:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh | sh
+```
+
+The fastest path to a running team is `craw init`, which scaffolds a project with a
+working `triage-bot` example — that's what the examples below use. (Developing from a
+clone? The same example also ships in the repo at `demo/triage-bot`.)
+
+### Develop from source
+
+Working on Crawfish itself? It's a [`uv`](https://docs.astral.sh/uv/) workspace:
+
+```bash
+git clone https://github.com/Neal-Kotval/crawfish && cd crawfish
+uv sync                  # installs the workspace editable, incl. the craw CLI
+uv run craw --version
+```
+
+When developing this way, prefix the commands below with `uv run`.
 
 ## How runs execute
 
@@ -43,18 +62,20 @@ is a runtime swap, not a code change.
 pipeline, which confirms the `Engine → RunContext → Store` path works:
 
 ```bash
-uv run craw run
+craw run
 # pipeline ok: 0 output(s)
 ```
 
-## First real run — `craw dev`
+## First real run — scaffold, then `craw dev`
 
-`craw dev` compiles a **Definition directory** and runs its agent team on `MockRuntime` —
-no key, no cost. The repo ships an example, `demo/triage-bot`: a lead agent that triages
-a support ticket by delegating to a classifier and a summarizer.
+`craw init` scaffolds a project with a working example; `craw dev` then compiles a
+**Definition directory** and runs its agent team on `MockRuntime` — no key, no cost. The
+example is `triage-bot`: a lead agent that triages a support ticket by delegating to a
+classifier and a summarizer.
 
 ```bash
-uv run craw dev demo/triage-bot -i project=acme -i ticket_body="login button broken"
+craw init my-app && cd my-app
+craw dev definitions/triage-bot -i project=acme -i ticket_body="login button broken"
 ```
 
 You'll see the lead's combined result, with the classifier and summarizer results
@@ -80,7 +101,7 @@ import asyncio
 
 from crawfish import CommandRuntime, Definition, RunContext, Run, SqliteStore
 
-definition = Definition.from_package("demo/triage-bot")
+definition = Definition.from_package("definitions/triage-bot")
 
 async def main() -> None:
     ctx = RunContext(store=SqliteStore())
@@ -131,7 +152,7 @@ store.put_record("definition", "d1", {"name": "clarity"})
 
 ### The CLI today
 
-The M0 CLI ships `craw --version`, `craw run`, and `craw dev <path> -i name=value`. The
-rest of the command surface (`init / install / list / freeze / publish / build / test /
-logs / inspect`) is planned. It's marked *coming* where it appears below and isn't
-runnable yet.
+The CLI ships `craw init`, `run`, `dev`, `list`, `doctor`, `install`, `freeze`, `test`,
+and `build`, plus the operations commands (`deploy`, `manage`, `visualize`, `export`).
+`publish` is a Phase-2 stub — the registry isn't live yet. Run `craw --help` for the
+full surface.
