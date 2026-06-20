@@ -8,6 +8,27 @@ dev loop. Runs are typed and versioned, so you can diff and replay them.
 The shape of a pipeline: `Source → Batch → Aggregator → Router → Sink`. If you've used
 dbt or Airflow, the idea is familiar — this is that, for agents.
 
+## Install the CLI
+
+Installing the package gives you the `craw` command:
+
+```bash
+pip install crawfish
+craw --version
+```
+
+Pick the install that fits what you're doing:
+
+| You want to… | Install with |
+| --- | --- |
+| Build *with* the framework (`import crawfish`) | `pip install crawfish` · `uv add crawfish` |
+| Just run the `craw` CLI, isolated | `uv tool install crawfish` · `pipx install crawfish` |
+| Try it with zero Python setup | `curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh \| sh` |
+
+The `curl` line is a thin wrapper that installs [`uv`](https://docs.astral.sh/uv/) if
+needed, then the CLI — the package always comes from PyPI. Working on Crawfish itself?
+See [Getting started → Develop from source](guide/getting-started.md#develop-from-source).
+
 ## Start here
 
 - **[Getting started](guide/getting-started.md)** — install and run your first agent in a few minutes
