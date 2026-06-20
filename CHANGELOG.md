@@ -11,6 +11,15 @@ release process.
 
 _Nothing yet._
 
+## [0.1.1]
+
+Documentation and packaging polish (no code changes):
+
+- Published the docs site at <https://neal-kotval.github.io/crawfish/> and pointed the
+  PyPI `Homepage`/`Documentation` URLs at it.
+- Rewrote the PyPI landing page (package README) with install, quickstart, and absolute
+  documentation links.
+
 ## [0.1.0]
 
 First public release: the **local trust loop** for agents that do bulk work over your
