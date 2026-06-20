@@ -20,7 +20,6 @@ dist/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
-uv.lock
 
 # OS / editor
 .DS_Store
