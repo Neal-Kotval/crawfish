@@ -41,7 +41,7 @@ Type these at a natural pace (the `--idle-time-limit 2` above trims long pauses)
 
 ```bash
 # Install the published package (zero key needed for the demo).
-pip install crawfish        # TODO(maintainer): confirm the dist name is `crawfish`
+pip install crawfish
 
 # Scaffold a new project.
 craw init my-app
