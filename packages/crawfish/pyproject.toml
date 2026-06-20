@@ -8,14 +8,36 @@ version = "0.1.0"
 description = "Agents for bulk work over your data: Source -> Batch -> Aggregator -> Router -> Sink, run locally."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
-authors = [{ name = "Crawfish" }]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+# TODO(maintainer): set the legal copyright holder (person or org) and a contact
+# email before the first PyPI release — this name appears in the published metadata.
+authors = [{ name = "Crawfish Contributors" }]
 keywords = ["agents", "llm", "pipeline", "claude", "batch", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2.7",
     "typing-extensions>=4.10",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/TODO-maintainer/crawfish"
+Documentation = "https://github.com/TODO-maintainer/crawfish#readme"
+Repository = "https://github.com/TODO-maintainer/crawfish"
+Issues = "https://github.com/TODO-maintainer/crawfish/issues"
+Changelog = "https://github.com/TODO-maintainer/crawfish/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 otel = ["opentelemetry-api>=1.25", "opentelemetry-sdk>=1.25"]
