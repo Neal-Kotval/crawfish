@@ -1,4 +1,4 @@
-"""MCP wiring for runtimes (CRA-116).
+"""MCP wiring for runtimes.
 
 Turns a Definition's ``assets.mcp`` connections into the config a backend needs, and
 gates them by the agent's tool allowlist. Credentials are resolved **by reference**

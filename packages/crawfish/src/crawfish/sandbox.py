@@ -1,4 +1,4 @@
-"""Host-side code sandbox + egress broker (CRA-114, Phase-1 minimum).
+"""Host-side code sandbox + egress broker (Phase-1 minimum).
 
 Third-party Source/Sink/tool code runs **out-of-process** (:func:`run_out_of_process`)
 so a compromised unit can't read the engine's in-process memory/credentials. The

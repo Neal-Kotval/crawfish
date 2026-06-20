@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "crawfish-slack"
+version = "0.1.0"
+description = "Slack message sink for Crawfish — the worked example connector."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Crawfish Contributors" }]
+keywords = ["crawfish", "slack", "connector", "sink"]
+dependencies = [
+    "crawfish",
+    "pydantic>=2.7",
+]
+
+# The real entry point: installing this package makes Registry.discover() find
+# the sink as ("sink", "slack") with zero host-project wiring (CRA-113).
+[project.entry-points."crawfish.sinks"]
+slack = "crawfish_slack.sink:SlackSink"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crawfish_slack"]

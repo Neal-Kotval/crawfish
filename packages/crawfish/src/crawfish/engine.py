@@ -1,10 +1,10 @@
-"""Engine bootstrap — load a project, build a pipeline, run it (CRA-131).
+"""Engine bootstrap — load a project, build a pipeline, run it.
 
 This is the shared core behind ``craw run`` (and a future daemon). M0 ships the
 minimal honest version: a pipeline is an ordered list of *steps*, each an async
 callable ``(ctx, inputs) -> outputs`` that threads its predecessor's outputs
 forward. An empty pipeline is a valid no-op that runs end to end. The richer
-typed ``Workflow`` (CRA-109) and node primitives build on this contract.
+typed ``Workflow`` and node primitives build on this contract.
 """
 
 from __future__ import annotations

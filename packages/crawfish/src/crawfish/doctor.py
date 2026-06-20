@@ -1,4 +1,4 @@
-"""``craw doctor`` — project structure health (CRA-157).
+"""``craw doctor`` — project structure health.
 
 Explains where things belong, flags misplaced/ambiguous files, and verifies the
 split between **authored** code (the unit folders at the project root) and

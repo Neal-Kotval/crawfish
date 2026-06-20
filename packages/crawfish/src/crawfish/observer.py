@@ -1,4 +1,4 @@
-"""The Observer primitive — watch a running pipeline (CRA-153).
+"""The Observer primitive — watch a running pipeline.
 
 An :class:`Observer` polls a pipeline's run-info/event stream on a cron interval and
 emits structured :class:`~crawfish.observe.ObserverEvent`s. It is either:

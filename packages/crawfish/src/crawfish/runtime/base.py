@@ -1,4 +1,4 @@
-"""The ``AgentRuntime`` seam (CRA-112).
+"""The ``AgentRuntime`` seam.
 
 The **only** place the model SDK/CLI is touched. The product model drives runs
 through this interface, so the agent loop is swappable: CommandRuntime (`claude -p`,

@@ -4,7 +4,7 @@
 > Do not edit by hand — regenerate on each release:
 > `uv run python docs/guide/gen_api_reference.py > docs/guide/api-reference.md`.
 
-`crawfish` version: `0.1.0` — 154 public symbols.
+`crawfish` version: `0.1.0` — 195 public symbols.
 
 Everything documented here is importable directly from the top-level package:
 
@@ -52,8 +52,8 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `Prompt` | class | !!! abstract "Usage Documentation" |
 | `DefinitionRef` | class | !!! abstract "Usage Documentation" |
 | `DefinitionAssets` | class | !!! abstract "Usage Documentation" |
-| `MarketplacePackage` | class | Export shape (stub — full hub package lands with the registry, CRA-125). |
-| `MCPConnection` | class | An MCP server connection authored in ``mcp/*.py`` (CRA-116). |
+| `MarketplacePackage` | class | Export shape (stub — full hub package lands with the registry). |
+| `MCPConnection` | class | An MCP server connection authored in ``mcp/*.py``. |
 | `load_definition` | function |  |
 | `DefinitionLoadError` | class | Raised when a directory cannot compile to a valid Definition. |
 | `AgentRuntime` | class | Swappable agent-loop backend. |
@@ -109,6 +109,35 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `BatchExecutor` | class | Schedules + runs a Batch. Rule-based; leaves a seam for an agentic executor. |
 | `BatchRunResult` | class | BatchRunResult(outputs: 'list[Output[JSONValue]]' = <factory>, items: 'list[ItemResult]' = <factory>, dead_letters: 'list[dict[str, JSONValue]]' = <factory>) |
 | `ExecutionLedger` | class | Store-backed execution state for pipelines, runs, and fan-out items. |
+| `ObserverEvent` | class | A structured finding emitted by an observer or a node. |
+| `ObserverSurface` | class | Read/write facade over the run-info surface, scoped to one tenant. |
+| `RunInfo` | class | Per-run summary the dashboard and ``craw manage`` read. |
+| `Severity` | enum | How loudly an observer event should be surfaced. |
+| `parse_since` | function | Resolve a ``since`` argument to an epoch-seconds threshold. |
+| `DeployEntry` | class | A registry row describing one deployed pipeline. |
+| `DeployRegistry` | class | Store-backed registry of deployed pipelines (read by deploy/manage/visualize). |
+| `DeployStatus` | enum | str(object='') -> str |
+| `Supervisor` | class | The always-on loop: schedule → fire → record, with ledger-backed resume. |
+| `deploy` | function | Detach the project's pipeline as an always-on supervisor and register it. |
+| `stop` | function | Stop a deployed pipeline: signal its process and clear its registry status. |
+| `PipelineStatus` | class | A row in ``craw manage``: a deployed pipeline joined with its run state. |
+| `manage_list` | function | Build the management view for every deployed pipeline. |
+| `format_table` | function | Render the management view as a fixed-width table (``craw manage``). |
+| `restart_target` | function | Stop then re-deploy ``name`` with its recorded dir + schedule. Returns success. |
+| `Observer` | class | Watch one pipeline: run rules (and an optional LLM judge) on a poll interval. |
+| `ObserverContext` | class | The window a rule judges: recent runs + events for one pipeline at ``now``. |
+| `Rule` | class | A cheap, deterministic check over recent runs. Returns an event or ``None``. |
+| `FailureRateAbove` | class | Fire when the fraction of failed runs in ``window`` exceeds ``threshold``. |
+| `CostSpike` | class | Fire when total spend across runs in ``window`` reaches ``usd``. |
+| `StuckRun` | class | Fire when a run has been ``running`` for longer than ``seconds``. |
+| `dashboard_state` | function | Build the JSON the dashboard renders — pipelines, runs, cost, observer feed. |
+| `serve_dashboard` | function | Create a loopback-bound dashboard server (caller runs ``serve_forever``). |
+| `ClaudeCodeAgent` | class | A Claude Code subagent: YAML front-matter + a system-prompt body. |
+| `ClaudeCodeSkill` | class | A Claude Code skill wrapper — a Definition as an invocable slash-command. |
+| `definition_to_cc_agent` | function | Render a Definition into a :class:`ClaudeCodeAgent` (no secrets emitted). |
+| `export_claude_code` | function | Write the CC subagent (and optional skill) under ``project_dir/.claude``. |
+| `map_tools` | function | The subagent's ``tools`` allowlist: union of agent tools + MCP tool names. |
+| `model_alias` | function | Map a Definition's pinned model to a CC alias (``opus``/``sonnet``/``haiku``). |
 | `ExecState` | enum | str(object='') -> str |
 | `RetryPolicy` | class | Exponential backoff: ``delay = min(base * factor**attempt, max_delay)``. |
 | `ItemResult` | class | Partial-success unit surfaced in batch results. |
@@ -124,15 +153,15 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `compare` | function | Per-metric deltas ``b - a`` (candidate minus baseline). |
 | `is_regression` | function | True if ``candidate`` is worse than ``baseline`` on any metric. |
 | `estimate_cost` | function | Predict the dollar cost of running ``definition`` over ``items`` items. |
-| `CostEstimate` | class | A dry-run cost preview for a Definition (CRA-121). |
-| `Budget` | class | A warn/stop spend policy (CRA-121). |
+| `CostEstimate` | class | A dry-run cost preview for a Definition. |
+| `Budget` | class | A warn/stop spend policy. |
 | `BudgetState` | enum | Where spend sits relative to a :class:`Budget`'s thresholds. |
-| `CostMeter` | class | A live spend accumulator checked against a :class:`Budget` (CRA-121). |
+| `CostMeter` | class | A live spend accumulator checked against a :class:`Budget`. |
 | `spent_today` | function | Sum today's spend from the Store's run telemetry (UTC day). |
 | `inspect_run` | function | Summarize a run from the Store's event ledger (``craw inspect <run>``). |
 | `tail_events` | function | Return events after ``after_seq`` — the poll primitive for ``craw logs``. |
 | `format_report` | function | Render a concise human-readable summary for ``craw inspect`` output. |
-| `RunReport` | class | A summary of a single run, derived from the Store's event ledger (CRA-120). |
+| `RunReport` | class | A summary of a single run, derived from the Store's event ledger. |
 | `EvalCase` | class | A captured run made reusable: its inputs, the produced output, and an |
 | `GoldenSet` | class | A named, versioned set of labeled cases, persisted through the ``Store``. |
 | `LLMJudge` | class | A Definition-backed grader: an agent scores an output against criteria. |
@@ -143,6 +172,15 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `gate_against_baseline` | function | True if ``candidate`` passes (no regression vs the stored baseline). |
 | `Registry` | class | Collects discovered units; first registration of a (kind, name) wins. |
 | `UnitRef` | class | A discovered unit: its kind, name, and where it came from. |
+| `ProfileConfig` | class | One named profile: which runtime backend, plus free-form settings. |
+| `ProjectManifest` | class | Parsed ``crawfish.toml``. |
+| `ProjectPaths` | class | Where each kind of unit lives, relative to the project root. |
+| `load_manifest` | function | Load ``crawfish.toml`` from ``project_dir``; return defaults if absent. |
+| `DoctorFinding` | class | One health observation. ``level`` is ``ok`` \| ``info`` \| ``warn`` \| ``error``. |
+| `DoctorReport` | class | !!! abstract "Usage Documentation" |
+| `diagnose` | function | Inspect ``project_dir`` and return a structured structure-health report. |
+| `Cron` | class | A minimal 5-field cron evaluator (``m h dom mon dow``). |
+| `CronSchedule` | class | A minimal 5-field cron evaluator (``m h dom mon dow``). |
 | `scaffold_project` | function | Create a self-contained project directory and return its path. |
 | `resolve_secret` | function | Resolve a secret reference (env-var name) to its value, or None if unset. |
 | `load_env` | function | Parse a gitignored ``.env`` (KEY=VALUE lines). Values are never logged. |
@@ -156,20 +194,23 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `run_fixtures` | function | Run every ``*.json`` fixture in ``fixtures_dir`` against ``definition``. |
 | `assert_rubric` | function | Score ``output`` and assert each thresholded metric clears its floor. |
 | `replaying` | function | Wrap ``inner_runtime`` so tests replay cassettes instead of calling live. |
-| `generate_containerfile` | function | Generate deterministic Containerfile text for ``manifest`` (CRA-115). |
-| `plan_build` | function | Build a :class:`BuildPlan` from ``manifest`` (CRA-115). |
-| `write_containerfile` | function | Write the generated Containerfile to ``dest`` and return its path (CRA-115). |
-| `BuildPlan` | class | Summary of what ``craw build`` will produce for a project (CRA-115). |
-| `Trigger` | class | Base for anything that can fire a pipeline run (CRA-115). |
-| `CronTrigger` | class | Fire a run on a cron ``schedule`` (CRA-115). |
-| `WebhookTrigger` | class | Fire a run from an inbound HTTP POST to ``path`` (CRA-115). |
-| `verify_webhook` | function | Verify an inbound webhook ``signature`` against ``payload`` (CRA-115). |
-| `Stability` | enum | The stability tier of a public API surface (CRA-124). |
+| `generate_containerfile` | function | Generate deterministic Containerfile text for ``manifest``. |
+| `plan_build` | function | Build a :class:`BuildPlan` from ``manifest``. |
+| `write_containerfile` | function | Write the generated Containerfile to ``dest`` and return its path. |
+| `BuildPlan` | class | Summary of what ``craw build`` will produce for a project. |
+| `Trigger` | class | Base for anything that can fire a pipeline run. |
+| `CronTrigger` | class | Fire a run on a cron ``schedule``. |
+| `WebhookTrigger` | class | Fire a run from an inbound HTTP POST to ``path``. |
+| `verify_webhook` | function | Verify an inbound webhook ``signature`` against ``payload``. |
+| `Stability` | enum | The stability tier of a public API surface. |
 | `stable` | function | Tag ``obj`` as :attr:`Stability.STABLE`. Behavior-preserving no-op otherwise. |
 | `experimental` | function | Tag ``obj`` as :attr:`Stability.EXPERIMENTAL`. Behavior-preserving no-op. |
-| `deprecated` | function | Mark a callable :attr:`Stability.DEPRECATED` and warn on every call (CRA-124). |
+| `deprecated` | function | Mark a callable :attr:`Stability.DEPRECATED` and warn on every call. |
 | `stability_of` | function | Read the stability tier tagged on ``obj``. |
 | `is_breaking` | function | Return ``True`` when going from ``old`` to ``new`` is a major (breaking) bump. |
+| `EgressBroker` | class | Mediates network egress against a capability allowlist (runtime enforcement). |
+| `EgressDenied` | class | Raised when host-side code attempts egress to a non-allowlisted host. |
+| `run_out_of_process` | function | Execute ``func`` in a separate process and return its result. |
 
 ### `JSONValue`
 
@@ -290,6 +331,10 @@ Per-run execution context handed to every node.
 RunContext(store: 'Store', run_id: 'str' = <factory>, batch_id: 'str | None' = None, org_id: 'str' = 'local', cost_budget: 'CostBudget' = <factory>, cancel_token: 'CancelToken' = <factory>) -> None
 ```
 
+**Methods**
+
+- `emit(self, event: 'ObserverEvent') -> 'None'` — Append an observer event to the run-info surface.
+
 ### `CostBudget`
 
 *class*
@@ -384,7 +429,7 @@ TypeRegistry() -> 'None'
 
 *value* — `TypeRegistry`
 
-`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x101fd6cf0>`
+`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x102c19940>`
 
 ### `Version`
 
@@ -494,7 +539,7 @@ The unit of data flowing between nodes. Frozen once produced.
 
 **Methods**
 
-- `derive(self, *, value: 'JSONValue', produced_by: 'str', output_schema: 'list[Parameter] | None' = None, tainted: 'bool | None' = None) -> 'Output[JSONValue]'` — Create a fresh Output from this one (the immutable-derivation path).
+- `derive(self, *, value: 'JSONValue', produced_by: 'str', output_schema: 'list[Parameter] | None' = None, tainted: 'bool | None' = None, lineage: 'str | None' = None) -> 'Output[JSONValue]'` — Create a fresh Output from this one (the immutable-derivation path).
 - `persist(self, store: 'object', *, org_id: 'str' = 'local') -> 'None'` — Persist this Output through the ``Store`` seam.
 
 ### `output_satisfies_inputs`
@@ -716,13 +761,13 @@ Attributes:
 
 *class* — bases: `BaseModel`
 
-Export shape (stub — full hub package lands with the registry, CRA-125).
+Export shape (stub — full hub package lands with the registry).
 
 ### `MCPConnection`
 
 *class* — bases: `BaseModel`
 
-An MCP server connection authored in ``mcp/*.py`` (CRA-116).
+An MCP server connection authored in ``mcp/*.py``.
 
 ``auth`` is a **secret reference** (an env-var name), never an inline credential —
 resolved at run time and injected into the server env, never into the prompt.
@@ -1545,7 +1590,7 @@ BatchExecutor(definition: 'Definition', *, max_concurrency: 'int' = 8, retry_pol
 
 **Methods**
 
-- `replay(self, batch: 'Batch', ctx: 'RunContext', runtime: 'AgentRuntime | None' = None) -> 'BatchRunResult'` — Re-run only dead-lettered items (idempotency makes this safe, CRA-104).
+- `replay(self, batch: 'Batch', ctx: 'RunContext', runtime: 'AgentRuntime | None' = None) -> 'BatchRunResult'` — Re-run only dead-lettered items (idempotency makes this safe).
 - `run(self, batch: 'Batch', ctx: 'RunContext', runtime: 'AgentRuntime | None' = None, *, only_items: 'set[str] | None' = None) -> 'BatchRunResult'`
 - `schedule(self, tasks: 'list[Task]') -> 'ExecutionPlan'`
 
@@ -1580,6 +1625,381 @@ ExecutionLedger(store: 'Store', *, org_id: 'str' = 'local') -> 'None'
 - `reconcile(self) -> 'dict[str, list[str]]'` — Reconcile orphaned state after an engine restart.
 - `record_run(self, run_id: 'str', *, backend: 'str', status: 'ExecState', version: 'str') -> 'None'`
 - `start_pipeline(self, pipeline_id: 'str', version: 'str', *, total_items: 'int' = 0) -> 'None'`
+
+### `ObserverEvent`
+
+*class* — bases: `BaseModel`
+
+A structured finding emitted by an observer or a node.
+
+``pipeline`` and ``kind`` are stable, static identifiers (safe to render and
+filter on); ``detail``/``data`` are free-form and are scrubbed on write when the
+surface is backed by a :class:`~crawfish.secrets.ScrubbingStore`.
+
+### `ObserverSurface`
+
+*class*
+
+Read/write facade over the run-info surface, scoped to one tenant.
+
+Persists through whatever :class:`~crawfish.store.base.Store` it is handed — pass
+a :class:`~crawfish.secrets.ScrubbingStore` to redact secrets before the write.
+
+```python
+ObserverSurface(store: 'Store', *, org_id: 'str' = 'local') -> 'None'
+```
+
+**Methods**
+
+- `emit(self, event: 'ObserverEvent') -> 'None'` — Append an observer event to the ``pipeline``'s ordered stream.
+- `events(self, pipeline: 'str', *, since: 'str | float | int | None' = None, kind: 'str | None' = None, now: 'float | None' = None) -> 'list[ObserverEvent]'` — Observer events for ``pipeline``, oldest first, filtered by time/kind.
+- `get_run_info(self, run_id: 'str') -> 'RunInfo | None'`
+- `put_run_info(self, info: 'RunInfo') -> 'None'` — Upsert a run's info record (idempotent on ``run_id``).
+- `run_info(self, pipeline: 'str | None' = None, *, since: 'str | float | int | None' = None, now: 'float | None' = None) -> 'list[RunInfo]'` — Run-info records, newest first, optionally scoped to one pipeline/window.
+
+### `RunInfo`
+
+*class* — bases: `BaseModel`
+
+Per-run summary the dashboard and ``craw manage`` read.
+
+### `Severity`
+
+*class* — bases: `str`, `Enum`
+
+How loudly an observer event should be surfaced.
+
+Members: `INFO` = `'info'`, `WARN` = `'warn'`, `CRITICAL` = `'critical'`
+
+### `parse_since`
+
+*function*
+
+```python
+parse_since(since: 'str | float | int | None' = None, *, now: 'float | None' = None) -> 'float'
+```
+
+Resolve a ``since`` argument to an epoch-seconds threshold.
+
+Accepts ``None`` (epoch 0 — everything), an absolute epoch ``float``/``int``, or a
+relative string like ``"-1h"`` / ``"-30m"`` / ``"-15s"`` / ``"-2d"``.
+
+### `DeployEntry`
+
+*class* — bases: `BaseModel`
+
+A registry row describing one deployed pipeline.
+
+### `DeployRegistry`
+
+*class*
+
+Store-backed registry of deployed pipelines (read by deploy/manage/visualize).
+
+```python
+DeployRegistry(store: 'Store', *, org_id: 'str' = 'local') -> 'None'
+```
+
+**Methods**
+
+- `entries(self) -> 'list[DeployEntry]'`
+- `get(self, name: 'str') -> 'DeployEntry | None'`
+- `reconcile_liveness(self) -> 'list[str]'` — Mark registry rows whose PID is gone as ``DEAD``; return their names.
+- `register(self, entry: 'DeployEntry') -> 'None'`
+- `remove(self, name: 'str') -> 'None'`
+- `set_status(self, name: 'str', status: 'DeployStatus') -> 'None'`
+
+### `DeployStatus`
+
+*class* — bases: `str`, `Enum`
+
+str(object='') -> str
+str(bytes_or_buffer[, encoding[, errors]]) -> str
+
+Create a new string object from the given object. If encoding or
+errors is specified, then the object must expose a data buffer
+that will be decoded using the given encoding and error handler.
+Otherwise, returns the result of object.__str__() (if defined)
+or repr(object).
+encoding defaults to 'utf-8'.
+errors defaults to 'strict'.
+
+Members: `RUNNING` = `'running'`, `STOPPED` = `'stopped'`, `DEAD` = `'dead'`
+
+### `Supervisor`
+
+*class*
+
+The always-on loop: schedule → fire → record, with ledger-backed resume.
+
+Construct with the pipeline ``name``, a :class:`~crawfish.store.base.Store`, the
+cycle ``run_fn``, and an optional cron ``schedule``. :meth:`serve` blocks; tests
+drive :meth:`run_cycle` / :meth:`due` directly with an injected clock.
+
+```python
+Supervisor(name: 'str', store: 'Store', run_fn: 'RunFn', *, schedule: 'str | None' = None, org_id: 'str' = 'local', version: 'str' = '0.1.0', backend: 'str' = 'command', secrets: 'Sequence[str]' = ()) -> 'None'
+```
+
+**Methods**
+
+- `due(self, now: 'datetime') -> 'bool'` — Whether a cycle should fire at ``now`` (always, if no schedule).
+- `process_items(self, items: 'Sequence[str]', handler: 'Callable[[str], None]') -> 'list[str]'` — Process fan-out ``items`` exactly once across restarts (ledger resume).
+- `reconcile(self) -> 'dict[str, list[str]]'` — On (re)start, resume/retry orphaned runs via the ledger.
+- `run_cycle(self, now: 'datetime | None' = None) -> 'str'` — Execute one pipeline cycle, recording RunInfo + ledger state.
+- `serve(self, *, max_cycles: 'int | None' = None, now_fn: 'Callable[[], datetime] | None' = None, sleep_fn: 'Callable[[float], None] | None' = None, stop_flag: 'Callable[[], bool] | None' = None) -> 'int'` — Block in the always-on loop. Returns the number of cycles fired.
+
+### `deploy`
+
+*function*
+
+```python
+deploy(project_dir: 'str | Path', *, name: 'str', store: 'Store', schedule: 'str | None' = None, backend: 'str' = 'daemon', spawn: 'Spawner | None' = None, org_id: 'str' = 'local') -> 'DeployEntry'
+```
+
+Detach the project's pipeline as an always-on supervisor and register it.
+
+Validates the schedule up front, spawns the detached ``craw _supervise`` child
+(argv carries only the pipeline name + dir — never a secret), and writes the
+deploy-registry entry ``craw manage`` reads.
+
+When ``schedule`` is omitted, the project's own declared trigger (a module-level
+``TRIGGER``/``SCHEDULE`` in its ``pipeline.py``) is used — so cadence lives in the
+project, not the command line.
+
+### `stop`
+
+*function*
+
+```python
+stop(name: 'str', *, store: 'Store', org_id: 'str' = 'local', kill: 'Callable[[int], None] | None' = None) -> 'bool'
+```
+
+Stop a deployed pipeline: signal its process and clear its registry status.
+
+Returns True if an entry was found. ``kill`` is injectable for tests.
+
+### `PipelineStatus`
+
+*class* — bases: `BaseModel`
+
+A row in ``craw manage``: a deployed pipeline joined with its run state.
+
+### `manage_list`
+
+*function*
+
+```python
+manage_list(store: 'Store', *, org_id: 'str' = 'local', now: 'datetime | None' = None) -> 'list[PipelineStatus]'
+```
+
+Build the management view for every deployed pipeline.
+
+Reconciles liveness first (marks dead PIDs), then joins each registry entry with
+its run-info history for uptime, last run, next fire, and today's spend.
+
+### `format_table`
+
+*function*
+
+```python
+format_table(rows: 'list[PipelineStatus]', *, show_dir: 'bool' = False) -> 'str'
+```
+
+Render the management view as a fixed-width table (``craw manage``).
+
+``show_dir`` appends a DIR column — useful for the global view, where pipelines come
+from different project directories.
+
+### `restart_target`
+
+*function*
+
+```python
+restart_target(name: 'str', *, store: 'Store', org_id: 'str' = 'local', spawn: 'Spawner | None' = None) -> 'bool'
+```
+
+Stop then re-deploy ``name`` with its recorded dir + schedule. Returns success.
+
+### `Observer`
+
+*class*
+
+Watch one pipeline: run rules (and an optional LLM judge) on a poll interval.
+
+```python
+Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x104379a80>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
+```
+
+**Methods**
+
+- `evaluate(self, store: 'Store', *, now: 'datetime | None' = None, run_judge: 'bool' = True) -> 'list[ObserverEvent]'` — Run every rule (and the judge, if configured) once; emit + return findings.
+- `poll_due(self, now: 'datetime') -> 'bool'` — Whether the poll schedule fires at ``now`` (always, if no schedule).
+- `watch_loop(self, store: 'Store', *, max_polls: 'int | None' = None, now_fn: 'Callable[[], datetime] | None' = None, sleep_fn: 'Callable[[float], None] | None' = None, stop_flag: 'Callable[[], bool] | None' = None) -> 'int'` — Block, evaluating on each poll tick. Returns the number of evaluations.
+
+### `ObserverContext`
+
+*class*
+
+The window a rule judges: recent runs + events for one pipeline at ``now``.
+
+``events`` (the pipeline's recent observer events) is provided as a hook for custom
+user rules — the built-in rules judge ``runs`` only, but a rule can read prior
+findings (e.g. to debounce or escalate repeats).
+
+```python
+ObserverContext(pipeline: 'str', runs: 'list[RunInfo]', events: 'list[ObserverEvent]', now: 'datetime') -> None
+```
+
+**Methods**
+
+- `runs_since(self, window: 'str') -> 'list[RunInfo]'`
+
+### `Rule`
+
+*class* — bases: `ABC`
+
+A cheap, deterministic check over recent runs. Returns an event or ``None``.
+
+**Methods**
+
+- `evaluate(self, octx: 'ObserverContext') -> 'ObserverEvent | None'`
+
+### `FailureRateAbove`
+
+*class* — bases: `Rule`
+
+Fire when the fraction of failed runs in ``window`` exceeds ``threshold``.
+
+```python
+FailureRateAbove(threshold: 'float', *, window: 'str' = '-1h') -> 'None'
+```
+
+**Methods**
+
+- `evaluate(self, octx: 'ObserverContext') -> 'ObserverEvent | None'`
+
+### `CostSpike`
+
+*class* — bases: `Rule`
+
+Fire when total spend across runs in ``window`` reaches ``usd``.
+
+```python
+CostSpike(usd: 'float', *, window: 'str' = '-5m') -> 'None'
+```
+
+**Methods**
+
+- `evaluate(self, octx: 'ObserverContext') -> 'ObserverEvent | None'`
+
+### `StuckRun`
+
+*class* — bases: `Rule`
+
+Fire when a run has been ``running`` for longer than ``seconds``.
+
+```python
+StuckRun(seconds: 'float') -> 'None'
+```
+
+**Methods**
+
+- `evaluate(self, octx: 'ObserverContext') -> 'ObserverEvent | None'`
+
+### `dashboard_state`
+
+*function*
+
+```python
+dashboard_state(store: 'Store', *, org_id: 'str' = 'local', now: 'datetime | None' = None, event_window: 'str' = '-24h') -> 'dict[str, JSONValue]'
+```
+
+Build the JSON the dashboard renders — pipelines, runs, cost, observer feed.
+
+Every value comes from the scrubbed Store surface; nothing here reaches outside
+the persisted, redacted records.
+
+### `serve_dashboard`
+
+*function*
+
+```python
+serve_dashboard(store: 'Store', *, org_id: 'str' = 'local', port: 'int' = 7878) -> 'ThreadingHTTPServer'
+```
+
+Create a loopback-bound dashboard server (caller runs ``serve_forever``).
+
+Always binds :data:`LOOPBACK` — the dashboard is never reachable off-host.
+
+### `ClaudeCodeAgent`
+
+*class* — bases: `BaseModel`
+
+A Claude Code subagent: YAML front-matter + a system-prompt body.
+
+**Methods**
+
+- `to_markdown(self) -> 'str'` — Render the ``.claude/agents/<name>.md`` file (front-matter + body).
+
+### `ClaudeCodeSkill`
+
+*class* — bases: `BaseModel`
+
+A Claude Code skill wrapper — a Definition as an invocable slash-command.
+
+**Methods**
+
+- `to_markdown(self) -> 'str'` — Render the ``.claude/skills/<name>/SKILL.md`` file.
+
+### `definition_to_cc_agent`
+
+*function*
+
+```python
+definition_to_cc_agent(definition: 'Definition') -> 'ClaudeCodeAgent'
+```
+
+Render a Definition into a :class:`ClaudeCodeAgent` (no secrets emitted).
+
+### `export_claude_code`
+
+*function*
+
+```python
+export_claude_code(definition: 'Definition', project_dir: 'Path', *, skill: 'bool' = False) -> 'list[Path]'
+```
+
+Write the CC subagent (and optional skill) under ``project_dir/.claude``.
+
+Returns the written paths. Always writes ``.claude/agents/<name>.md``; with
+``skill=True`` also writes ``.claude/skills/<name>/SKILL.md``. Carries no secrets.
+
+### `map_tools`
+
+*function*
+
+```python
+map_tools(definition: 'Definition') -> 'list[str]'
+```
+
+The subagent's ``tools`` allowlist: union of agent tools + MCP tool names.
+
+MCP-exposed tools render as ``mcp__<server>__<tool>`` (CC's MCP tool naming). The
+result is sorted and de-duplicated for a deterministic file. **No ``auth`` /secret
+reference is ever emitted** — only tool names.
+
+### `model_alias`
+
+*function*
+
+```python
+model_alias(model: 'str | list[str] | None') -> 'str'
+```
+
+Map a Definition's pinned model to a CC alias (``opus``/``sonnet``/``haiku``).
+
+A list (model-universal with preferences) resolves on its first entry; ``mock``,
+an unrecognised id, or ``None`` resolves to ``inherit`` (the platform picks).
 
 ### `ExecState`
 
@@ -1786,7 +2206,7 @@ sharper numbers.
 
 *class* — bases: `BaseModel`
 
-A dry-run cost preview for a Definition (CRA-121).
+A dry-run cost preview for a Definition.
 
 All figures are USD and approximate. ``per_item_usd`` is the predicted spend
 for a single item across the whole team; ``total_usd`` scales that by the
@@ -1797,7 +2217,7 @@ caller can see which model dominates the bill.
 
 *class*
 
-A warn/stop spend policy (CRA-121).
+A warn/stop spend policy.
 
 ``stop_usd`` is the hard ceiling; ``warn_usd`` (default 80% of stop) is the
 soft line where callers should surface a warning. ``None`` for ``stop_usd``
@@ -1826,7 +2246,7 @@ Members: `OK` = `'ok'`, `WARN` = `'warn'`, `STOPPED` = `'stopped'`
 
 *class*
 
-A live spend accumulator checked against a :class:`Budget` (CRA-121).
+A live spend accumulator checked against a :class:`Budget`.
 
 Call :meth:`charge` as runs complete; :attr:`total_usd` is running spend,
 :attr:`remaining_usd` is headroom to the hard stop, and :meth:`state`
@@ -1902,7 +2322,7 @@ Render a concise human-readable summary for ``craw inspect`` output.
 
 *class* — bases: `BaseModel`
 
-A summary of a single run, derived from the Store's event ledger (CRA-120).
+A summary of a single run, derived from the Store's event ledger.
 
 ``found`` is ``False`` for an unknown run (no events) — callers get a clearly
 empty report rather than a crash.
@@ -2006,7 +2426,7 @@ Registry(units: 'dict[tuple[str, str], UnitRef]' = <factory>) -> None
 **Methods**
 
 - `discover_entry_points(self) -> 'None'`
-- `discover_local(self, project_dir: 'str | Path') -> 'None'`
+- `discover_local(self, project_dir: 'str | Path', paths: 'dict[str, str] | None' = None) -> 'None'`
 - `get(self, kind: 'str', name: 'str') -> 'UnitRef | None'`
 - `of_kind(self, kind: 'str') -> 'list[UnitRef]'`
 - `register(self, ref: 'UnitRef') -> 'bool'`
@@ -2020,6 +2440,145 @@ A discovered unit: its kind, name, and where it came from.
 ```python
 UnitRef(kind: 'str', name: 'str', origin: 'str', target: 'str') -> None
 ```
+
+### `ProfileConfig`
+
+*class* — bases: `BaseModel`
+
+One named profile: which runtime backend, plus free-form settings.
+
+### `ProjectManifest`
+
+*class* — bases: `BaseModel`
+
+Parsed ``crawfish.toml``.
+
+**Methods**
+
+- `resolve_profile(self, name: 'str | None' = None) -> 'ProfileConfig'` — Resolve a profile by name, falling back to the manifest default and
+
+### `ProjectPaths`
+
+*class* — bases: `BaseModel`
+
+Where each kind of unit lives, relative to the project root.
+
+Defaults are the canonical layout; a project may relocate any folder via
+``crawfish.toml [project.paths]`` and discovery follows the override.
+
+**Methods**
+
+- `as_discovery_map(self) -> 'dict[str, str]'` — ``{unit-kind: subdir}`` for the registry's local folder scan.
+
+### `load_manifest`
+
+*function*
+
+```python
+load_manifest(project_dir: 'str | Path' = '.') -> 'ProjectManifest'
+```
+
+Load ``crawfish.toml`` from ``project_dir``; return defaults if absent.
+
+### `DoctorFinding`
+
+*class* — bases: `BaseModel`
+
+One health observation. ``level`` is ``ok`` | ``info`` | ``warn`` | ``error``.
+
+### `DoctorReport`
+
+*class* — bases: `BaseModel`
+
+!!! abstract "Usage Documentation"
+    Models
+
+A base class for creating Pydantic models.
+
+Attributes:
+    __class_vars__: The names of the class variables defined on the model.
+    __private_attributes__: Metadata about the private attributes of the model.
+    __signature__: The synthesized `__init__` [`Signature`][inspect.Signature] of the model.
+
+    __pydantic_complete__: Whether model building is completed, or if there are still undefined fields.
+    __pydantic_core_schema__: The core schema of the model.
+    __pydantic_custom_init__: Whether the model has a custom `__init__` function.
+    __pydantic_decorators__: Metadata containing the decorators defined on the model.
+        This replaces `Model.__validators__` and `Model.__root_validators__` from Pydantic V1.
+    __pydantic_generic_metadata__: A dictionary containing metadata about generic Pydantic models.
+        The `origin` and `args` items map to the [`__origin__`][genericalias.__origin__]
+        and [`__args__`][genericalias.__args__] attributes of [generic aliases][types-genericalias],
+        and the `parameter` item maps to the `__parameter__` attribute of generic classes.
+    __pydantic_parent_namespace__: Parent namespace of the model, used for automatic rebuilding of models.
+    __pydantic_post_init__: The name of the post-init method for the model, if defined.
+    __pydantic_root_model__: Whether the model is a [`RootModel`][pydantic.root_model.RootModel].
+    __pydantic_serializer__: The `pydantic-core` `SchemaSerializer` used to dump instances of the model.
+    __pydantic_validator__: The `pydantic-core` `SchemaValidator` used to validate instances of the model.
+
+    __pydantic_fields__: A dictionary of field names and their corresponding [`FieldInfo`][pydantic.fields.FieldInfo] objects.
+    __pydantic_computed_fields__: A dictionary of computed field names and their corresponding [`ComputedFieldInfo`][pydantic.fields.ComputedFieldInfo] objects.
+
+    __pydantic_extra__: A dictionary containing extra values, if [`extra`][pydantic.config.ConfigDict.extra]
+        is set to `'allow'`.
+    __pydantic_fields_set__: The names of fields explicitly set during instantiation.
+    __pydantic_private__: Values of private attributes set on the model instance.
+
+**Methods**
+
+- `add(self, level: 'str', message: 'str') -> 'None'`
+- `text(self) -> 'str'`
+
+### `diagnose`
+
+*function*
+
+```python
+diagnose(project_dir: 'str | Path' = '.') -> 'DoctorReport'
+```
+
+Inspect ``project_dir`` and return a structured structure-health report.
+
+### `Cron`
+
+*class*
+
+A minimal 5-field cron evaluator (``m h dom mon dow``).
+
+Supports ``*``, ``*/n`` steps, ``a,b`` lists, ``a-b`` ranges, and exact values
+— enough for the deploy/observer polling cases (``0 8 * * *``, ``*/5 * * * *``).
+Day-of-week is ``0-6`` with Sunday = 0. When both day-of-month and day-of-week
+are restricted, a tick matches if *either* matches (standard cron semantics).
+Evaluation is at minute resolution.
+
+```python
+Cron(expr: 'str') -> 'None'
+```
+
+**Methods**
+
+- `matches(self, dt: 'datetime') -> 'bool'` — True if ``dt`` (truncated to the minute) satisfies the schedule.
+- `next_after(self, dt: 'datetime') -> 'datetime'` — The first minute strictly after ``dt`` that matches (searches ≤366d).
+
+### `CronSchedule`
+
+*class*
+
+A minimal 5-field cron evaluator (``m h dom mon dow``).
+
+Supports ``*``, ``*/n`` steps, ``a,b`` lists, ``a-b`` ranges, and exact values
+— enough for the deploy/observer polling cases (``0 8 * * *``, ``*/5 * * * *``).
+Day-of-week is ``0-6`` with Sunday = 0. When both day-of-month and day-of-week
+are restricted, a tick matches if *either* matches (standard cron semantics).
+Evaluation is at minute resolution.
+
+```python
+CronSchedule(expr: 'str') -> 'None'
+```
+
+**Methods**
+
+- `matches(self, dt: 'datetime') -> 'bool'` — True if ``dt`` (truncated to the minute) satisfies the schedule.
+- `next_after(self, dt: 'datetime') -> 'datetime'` — The first minute strictly after ``dt`` that matches (searches ≤366d).
 
 ### `scaffold_project`
 
@@ -2208,7 +2767,7 @@ call. Set ``record=True`` once to capture cassettes from ``inner_runtime``.
 generate_containerfile(manifest: 'ProjectManifest', *, python_version: 'str' = '3.11', lock_present: 'bool' = True) -> 'str'
 ```
 
-Generate deterministic Containerfile text for ``manifest`` (CRA-115).
+Generate deterministic Containerfile text for ``manifest``.
 
 The output installs dependencies (``pip install`` of the project, plus the
 pinned ``crawfish.lock`` when ``lock_present``), copies the project tree, and
@@ -2223,7 +2782,7 @@ so builds are reproducible.
 plan_build(manifest: 'ProjectManifest', *, python_version: 'str' = '3.11', lock_present: 'bool' = True) -> 'BuildPlan'
 ```
 
-Build a :class:`BuildPlan` from ``manifest`` (CRA-115).
+Build a :class:`BuildPlan` from ``manifest``.
 
 The image name/tag is derived as ``name:version`` from the manifest.
 
@@ -2235,7 +2794,7 @@ The image name/tag is derived as ``name:version`` from the manifest.
 write_containerfile(manifest: 'ProjectManifest', dest: 'str | Path', *, python_version: 'str' = '3.11', lock_present: 'bool' = True) -> 'Path'
 ```
 
-Write the generated Containerfile to ``dest`` and return its path (CRA-115).
+Write the generated Containerfile to ``dest`` and return its path.
 
 If ``dest`` is a directory, the file is written as ``dest/Containerfile``.
 
@@ -2243,23 +2802,23 @@ If ``dest`` is a directory, the file is written as ``dest/Containerfile``.
 
 *class* — bases: `BaseModel`
 
-Summary of what ``craw build`` will produce for a project (CRA-115).
+Summary of what ``craw build`` will produce for a project.
 
 ### `Trigger`
 
 *class* — bases: `ABC`
 
-Base for anything that can fire a pipeline run (CRA-115).
+Base for anything that can fire a pipeline run.
 
 **Methods**
 
-- `describe(self) -> 'dict[str, JSONValue]'` — Return a JSON-serialisable description of this trigger (CRA-115).
+- `describe(self) -> 'dict[str, JSONValue]'` — Return a JSON-serialisable description of this trigger.
 
 ### `CronTrigger`
 
 *class* — bases: `Trigger`
 
-Fire a run on a cron ``schedule`` (CRA-115).
+Fire a run on a cron ``schedule``.
 
 ```python
 CronTrigger(schedule: 'str') -> 'None'
@@ -2267,13 +2826,13 @@ CronTrigger(schedule: 'str') -> 'None'
 
 **Methods**
 
-- `describe(self) -> 'dict[str, JSONValue]'` — Round-trippable description: kind + schedule (CRA-115).
+- `describe(self) -> 'dict[str, JSONValue]'` — Round-trippable description: kind + schedule.
 
 ### `WebhookTrigger`
 
 *class* — bases: `Trigger`
 
-Fire a run from an inbound HTTP POST to ``path`` (CRA-115).
+Fire a run from an inbound HTTP POST to ``path``.
 
 ``secret_ref`` is the *name* of an environment variable holding the shared
 secret, never the secret value itself, so it is safe to serialise.
@@ -2284,7 +2843,7 @@ WebhookTrigger(path: 'str', secret_ref: 'str | None' = None) -> 'None'
 
 **Methods**
 
-- `describe(self) -> 'dict[str, JSONValue]'` — Round-trippable description; carries the secret *reference* only (CRA-115).
+- `describe(self) -> 'dict[str, JSONValue]'` — Round-trippable description; carries the secret *reference* only.
 
 ### `verify_webhook`
 
@@ -2294,7 +2853,7 @@ WebhookTrigger(path: 'str', secret_ref: 'str | None' = None) -> 'None'
 verify_webhook(secret: 'str', payload: 'bytes', signature: 'str') -> 'bool'
 ```
 
-Verify an inbound webhook ``signature`` against ``payload`` (CRA-115).
+Verify an inbound webhook ``signature`` against ``payload``.
 
 Computes ``HMAC-SHA256(secret, payload)`` as lowercase hex and compares it to
 ``signature`` in constant time to avoid timing oracles. The caller resolves
@@ -2304,7 +2863,7 @@ Computes ``HMAC-SHA256(secret, payload)`` as lowercase hex and compares it to
 
 *class* — bases: `str`, `Enum`
 
-The stability tier of a public API surface (CRA-124).
+The stability tier of a public API surface.
 
 ``str`` mix-in so a tier round-trips through JSON and config without conversion.
 
@@ -2338,7 +2897,7 @@ Tag ``obj`` as :attr:`Stability.EXPERIMENTAL`. Behavior-preserving no-op.
 deprecated(*, since: 'str', removed_in: 'str', use: 'str | None' = None) -> 'Callable[[Callable[..., T]], Callable[..., T]]'
 ```
 
-Mark a callable :attr:`Stability.DEPRECATED` and warn on every call (CRA-124).
+Mark a callable :attr:`Stability.DEPRECATED` and warn on every call.
 
 Args:
     since: Version in which the deprecation took effect (e.g. ``"0.4"``).
@@ -2373,5 +2932,39 @@ is_breaking(old: 'str', new: 'str') -> 'bool'
 Return ``True`` when going from ``old`` to ``new`` is a major (breaking) bump.
 
 Follows semver: a change is breaking when the major component increases. This is the
-coarse signal used by tooling to require a migration note (CRA-124).
+coarse signal used by tooling to require a migration note.
+
+### `EgressBroker`
+
+*class*
+
+Mediates network egress against a capability allowlist (runtime enforcement).
+
+```python
+EgressBroker(allow: 'Iterable[str]' = ()) -> 'None'
+```
+
+**Methods**
+
+- `guard(self, host: 'str') -> 'None'`
+- `permitted(self, host: 'str') -> 'bool'`
+
+### `EgressDenied`
+
+*class* — bases: `RuntimeError`
+
+Raised when host-side code attempts egress to a non-allowlisted host.
+
+### `run_out_of_process`
+
+*function*
+
+```python
+run_out_of_process(func: 'Callable[..., R]', *args: 'object', timeout: 'float' = 30.0) -> 'R'
+```
+
+Execute ``func`` in a separate process and return its result.
+
+The function must be importable (picklable). Host-side tool code runs here so it
+never shares the engine's process memory or credentials.
 

@@ -1,4 +1,4 @@
-"""Run — one durable execution of a Definition against one input set (CRA-106).
+"""Run — one durable execution of a Definition against one input set.
 
 A Run drives execution through the :class:`AgentRuntime` seam (the product model
 never imports the SDK), binding fluid inputs as **session data** — never into the
@@ -153,7 +153,7 @@ class Run:
 
         # Output schema derives from the Definition's declared outputs. The result
         # is tainted if any input was fluid (untrusted) — taint originates here and
-        # propagates downstream (CRA-114).
+        # propagates downstream.
         from crawfish.runtime.prompt import split_inputs
 
         _static, fluid = split_inputs(self.definition, self.inputs)
@@ -187,7 +187,7 @@ class Run:
         runtime: AgentRuntime | None = None,
         org_id: str = "local",
     ) -> Run:
-        """Rebuild a Run from its persisted record (restart recovery; CRA-134)."""
+        """Rebuild a Run from its persisted record (restart recovery)."""
         record = store.get_record("run", run_id, org_id=org_id)
         if record is None:
             raise KeyError(f"no persisted run {run_id!r}")

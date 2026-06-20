@@ -1,10 +1,10 @@
-"""Output — the typed, self-describing envelope between nodes (CRA-101).
+"""Output — the typed, self-describing envelope between nodes.
 
 An ``Output`` carries a value, the schema of that value, and the id of the node
 that produced it. It is **immutable once produced** (frozen): Filters and other
 transforms derive a *fresh* Output via :meth:`derive`, keeping the upstream value
 intact for audit. Wiring two nodes is allowed only when an upstream Output's schema
-satisfies the downstream node's required inputs (structural check, CRA-132).
+satisfies the downstream node's required inputs (structural check).
 """
 
 from __future__ import annotations
@@ -33,11 +33,11 @@ class Output(BaseModel, Generic[T]):
     value: T
     produced_by: str  # node id that emitted it
     # Stable per-item lineage (the source item's identity), threaded through the
-    # pipeline so idempotency keys are deterministic across re-runs (CRA-104/CRA-122).
+    # pipeline so idempotency keys are deterministic across re-runs.
     # Distinct from `id` (a fresh UUID per Output instance).
     lineage: str | None = None
     # Taint: True when this value derives from fluid (untrusted) input. A tainted
-    # value must never become a Sink target or an idempotency key (CRA-114).
+    # value must never become a Sink target or an idempotency key.
     # Propagates through `derive`.
     tainted: bool = False
 

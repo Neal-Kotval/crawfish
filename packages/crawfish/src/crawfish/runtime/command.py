@@ -1,4 +1,4 @@
-"""CommandRuntime — the zero-key reference backend via ``claude -p`` (CRA-112).
+"""CommandRuntime — the zero-key reference backend via ``claude -p``.
 
 ``pip install crawfish`` + ``claude -p`` runs a pipeline with nothing hosted. The
 subprocess call is injected (the ``transport``) so tests feed canned ``stream-json``

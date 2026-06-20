@@ -1,4 +1,4 @@
-"""Persistence seam: the ``Store`` protocol + SQLite reference impl (CRA-99)."""
+"""Persistence seam: the ``Store`` protocol + SQLite reference impl."""
 
 from __future__ import annotations
 

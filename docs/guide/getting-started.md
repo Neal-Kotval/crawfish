@@ -135,5 +135,5 @@ store.put_record("definition", "d1", {"name": "clarity"})
 
 The M0 CLI ships `craw --version`, `craw run`, and `craw dev <path> -i name=value`. The
 fuller command surface (`init / install / list / freeze / publish / build / test / logs
-/ inspect`) lands in CRA-113/115/119/120 — those are noted as *coming* where relevant
+/ inspect`) is planned — those are noted as *coming* where relevant
 and are not yet runnable.

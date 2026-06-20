@@ -1,8 +1,8 @@
-"""``craw manage`` — see & control running pipelines (CRA-152).
+"""``craw manage`` — see & control running pipelines.
 
 A single view over every deployed pipeline, joining three Store-backed sources: the
-**deploy registry** (CRA-151, name/pid/session/schedule), the **execution ledger**
-(CRA-134, run state), and the **run-info surface** (CRA-154, last run / cost today).
+**deploy registry** (name/pid/session/schedule), the **execution ledger**
+(run state), and the **run-info surface** (last run / cost today).
 Control verbs (``stop`` / ``restart`` / ``logs``) act through the same registry.
 
 Dead-process detection runs on every read: a registry row whose PID is gone is

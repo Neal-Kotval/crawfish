@@ -100,5 +100,5 @@ data become instructions.** Concretely:
   `CostBudget`/`CostMeter` and prompt-injection boundary as any run; spend is metered.
 - **Tenancy everywhere** — every registry, ledger, and run-info row carries `org_id`.
 
-See [SECURITY.md](../architecture/SECURITY.md#the-operateobserve-layer-cra-150) for the
+See [SECURITY.md](../architecture/SECURITY.md#the-operateobserve-layer) for the
 canonical statement.

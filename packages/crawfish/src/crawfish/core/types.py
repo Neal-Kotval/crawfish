@@ -1,4 +1,4 @@
-"""Shared core types — the connective tissue every other primitive imports (CRA-99).
+"""Shared core types — the connective tissue every other primitive imports.
 
 These settle two foundational decisions: how data is typed (static vs. fluid
 ``Parameter``s) and what counts as a node (the ``Node`` ABC and ``NodeKind``).

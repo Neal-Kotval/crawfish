@@ -1,6 +1,6 @@
 # ADR 0001 — Three swappable seams
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M0 (CRA-99, CRA-131)
+**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M0
 
 ## Context
 

@@ -1,4 +1,4 @@
-"""RunContext and its cost/cancellation hooks (CRA-99).
+"""RunContext and its cost/cancellation hooks.
 
 The handle a node receives while executing: identity, store access, the cost
 ceiling the orchestrator can hard-kill on, and a cooperative cancel token for
@@ -78,12 +78,12 @@ class RunContext:
     store: Store
     run_id: str = field(default_factory=new_id)
     batch_id: str | None = None
-    org_id: str = "local"  # tenancy key, defaulted locally (CRA-99 gap review)
+    org_id: str = "local"  # tenancy key, defaulted locally
     cost_budget: CostBudget = field(default_factory=CostBudget)
     cancel_token: CancelToken = field(default_factory=CancelToken)
 
     def emit(self, event: ObserverEvent) -> None:
-        """Append an observer event to the run-info surface (CRA-154).
+        """Append an observer event to the run-info surface.
 
         Routes through this run's ``store`` so a :class:`ScrubbingStore` wrapper
         redacts secrets before the write — the prompt-injection/secret boundary.

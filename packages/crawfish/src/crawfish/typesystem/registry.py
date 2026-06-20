@@ -1,4 +1,4 @@
-"""Type model & registry — structural typed IO (CRA-132).
+"""Type model & registry — structural typed IO.
 
 ``Parameter.type`` is a string name (e.g. ``"str"``, ``"list[PR]"``). This module
 turns those names into resolved :class:`TypeDef`s and answers the one question the
@@ -182,5 +182,5 @@ class TypeRegistry:
 
 
 # Process-wide default registry. Plugins register their types here via the
-# "crawfish.types" entry-point group (CRA-113).
+# "crawfish.types" entry-point group.
 default_registry = TypeRegistry()

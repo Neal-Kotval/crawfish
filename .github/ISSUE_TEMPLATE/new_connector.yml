@@ -1,0 +1,97 @@
+name: New connector (Source / Sink / Definition)
+description: Propose a new connector to an external service. This is the canonical first contribution to Crawfish.
+title: "[connector]: "
+labels: ["connector", "type: feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A connector is a small, self-contained unit that plugs into a typed seam and
+        is discovered automatically via entry points (`crawfish.sources` /
+        `crawfish.sinks` / `crawfish.definitions`). New connectors are the best
+        first contribution — read the
+        [connector guide](https://github.com/TODO-maintainer/crawfish/blob/main/docs/guide/contributing-a-connector.md)
+        before you start.
+
+        Reference implementations to model yours on:
+        - Sources: `packages/crawfish/src/crawfish/nodes/source.py` (`RepoSource`, `PullRequestSource`)
+        - Sinks: `packages/crawfish/src/crawfish/nodes/sink.py` (`LinearSink`, `GitHubPRSink`)
+  - type: input
+    id: name
+    attributes:
+      label: Connector name
+      description: The unit name as it will be discovered (filename stem / entry-point name).
+      placeholder: "slack, notion, gmail, postgres, rss…"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: |
+        Source pulls data in (and may fan out), Sink pushes results out (the egress
+        boundary), Definition is an agent team/package.
+      options:
+        - Source
+        - Sink
+        - Definition
+    validations:
+      required: true
+  - type: input
+    id: service
+    attributes:
+      label: Service
+      description: The external service this connects to.
+      placeholder: "Slack, Notion, Gmail, GitHub, Jira, Postgres…"
+    validations:
+      required: true
+  - type: textarea
+    id: io
+    attributes:
+      label: Typed inputs / outputs
+      description: |
+        The per-item shape this connector produces (Source) or consumes (Sink), as
+        `Parameter`s — name, type, and `Flow` (STATIC vs FLUID). Remember: a Sink's
+        **target** slots (channel, repo, project) must be `Flow.STATIC`.
+      placeholder: |
+        Source `slack` outputs (multi, fans out one Run per message):
+          - channel: str  (STATIC)   # static target, set in config
+          - ts: str       (FLUID)    # message timestamp
+          - text: str     (FLUID)    # untrusted user content → tainted
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Target service auth model
+      description: |
+        How does the service authenticate? Crawfish holds credentials **by reference**
+        (an env-var name in config) and resolves them only at the egress boundary —
+        never in config, the Output, or logs.
+      options:
+        - API token / bearer (env-var reference)
+        - OAuth2
+        - Basic auth (user + token)
+        - No auth (public feed, e.g. RSS)
+        - Other (describe below)
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything else — rate limits, pagination, idempotency concerns, dry-run plan.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Implementation
+      options:
+        - label: I'd like to implement this connector myself (comment to claim, we'll assign it).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I read the connector guide and checked no existing connector covers this service.
+          required: true

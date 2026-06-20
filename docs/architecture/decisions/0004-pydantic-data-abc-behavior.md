@@ -1,6 +1,6 @@
 # ADR 0004 — Pydantic for data shapes, ABC for behavioural nodes; `str`-Enums
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M0 (CRA-99)
+**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M0
 
 ## Context
 

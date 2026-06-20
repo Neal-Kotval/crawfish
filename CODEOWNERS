@@ -1,0 +1,34 @@
+# Code owners for Crawfish.
+#
+# These owners are requested for review automatically when matching files change.
+# The load-bearing seams and security-critical paths get maintainer review so an
+# architecture or trust-boundary change can't merge without the right eyes.
+#
+# TODO(maintainer): replace @TODO-maintainer-handle with real GitHub handles or a
+# team (e.g. @your-org/maintainers). Order matters — the LAST match wins.
+
+# Default owner for everything.
+*                                               @TODO-maintainer-handle
+
+# --- The three swappable seams (protocols, not backends) ---
+/packages/crawfish/src/crawfish/runtime/        @TODO-maintainer-handle
+/packages/crawfish/src/crawfish/store/          @TODO-maintainer-handle
+/packages/crawfish/src/crawfish/artifacts/      @TODO-maintainer-handle
+
+# --- Core substrate + type system ---
+/packages/crawfish/src/crawfish/core/           @TODO-maintainer-handle
+/packages/crawfish/src/crawfish/typesystem/     @TODO-maintainer-handle
+
+# --- Security-critical paths (egress, secrets, sandboxing) ---
+/packages/crawfish/src/crawfish/nodes/sink.py   @TODO-maintainer-handle
+/packages/crawfish/src/crawfish/secrets.py      @TODO-maintainer-handle
+/packages/crawfish/src/crawfish/sandbox.py      @TODO-maintainer-handle
+
+# --- Architecture docs + ADRs ---
+/docs/architecture/                             @TODO-maintainer-handle
+
+# --- Release + legal surface ---
+/.github/workflows/                             @TODO-maintainer-handle
+/pyproject.toml                                 @TODO-maintainer-handle
+/packages/crawfish/pyproject.toml               @TODO-maintainer-handle
+/LICENSE                                        @TODO-maintainer-handle

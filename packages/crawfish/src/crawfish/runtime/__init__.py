@@ -1,4 +1,4 @@
-"""AgentRuntime backends — the swappable agent loop (CRA-112)."""
+"""AgentRuntime backends — the swappable agent loop."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ __all__ = [
     "compile_prompt",
     "pick_agent",
     "split_inputs",
-    # context strategies (CRA-138)
+    # context strategies
     "ContextStrategy",
     "ConversationTurn",
     "CompactionResult",
@@ -62,7 +62,7 @@ __all__ = [
     "estimate_tokens",
     "resolve_strategy",
     "manage_context",
-    # mcp (CRA-116)
+    # mcp
     "build_mcp_config",
     "allowed_mcp_tools",
     "resolve_secret",

@@ -12,7 +12,7 @@ Security is a **spine, not a phase** — enforced on every feature from day one.
 
 2. **Consequential Sink targets are static-only.** A Sink's *destination* (repo,
    project, channel) comes from `Flow.STATIC` config — never from fluid, model- or
-   data-derived values. A compromised item cannot redirect a write. (CRA-104/CRA-114)
+   data-derived values. A compromised item cannot redirect a write.
 
 3. **Idempotency keys derive from static config.** `key = hash(batch_id, item_id,
    static_sink_config)`; the check-then-write is a single transaction
@@ -21,14 +21,14 @@ Security is a **spine, not a phase** — enforced on every feature from day one.
 4. **Secrets matched to nodes; never logged or in-prompt.** `.env` is gitignored;
    a node receives only the secrets it declares (least privilege — the embryonic
    capability manifest). Credentials resolve **by reference**, never in `config`.
-   Transcripts are scrubbed. (CRA-114)
+   Transcripts are scrubbed.
 
 5. **Host-side node code runs out-of-process; taint propagates from fluid inputs.**
    Any value derived from a fluid input stays tainted and cannot silently become a
-   static Sink target or an idempotency key. (CRA-114)
+   static Sink target or an idempotency key.
 
 6. **Supply chain.** `crawfish.lock` carries integrity hashes; install-time
-   capability consent gates what a plugin may touch. (CRA-113/CRA-114)
+   capability consent gates what a plugin may touch.
 
 ## Implementation status (Phase 1)
 
@@ -49,7 +49,7 @@ egress *interception* (the broker is a cooperative `guard()` allowlist today, no
 network chokepoint) and runtime enforcement of the consented capability manifest;
 full microVM/seccomp hardening beyond out-of-process isolation.
 
-## The operate/observe layer (CRA-150)
+## The operate/observe layer
 
 The always-on layer — [deploy](../guide/deploy.md), [observers](../guide/observers.md),
 [visualize](../guide/visualize.md), [manage](../guide/manage.md),

@@ -1,6 +1,6 @@
 # ADR 0007 — Team coordination via hierarchical delegation, not a message bus
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M1 (CRA-135)
+**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M1
 
 ## Context
 

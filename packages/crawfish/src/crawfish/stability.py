@@ -1,4 +1,4 @@
-"""API stability contract: tiers, tagging decorators, and a semver helper (CRA-124).
+"""API stability contract: tiers, tagging decorators, and a semver helper.
 
 This module is the machine-readable half of the API-stability policy documented in
 ``docs/architecture/API-STABILITY.md``. It lets every public function or class declare
@@ -38,7 +38,7 @@ T = TypeVar("T")
 
 
 class Stability(str, Enum):
-    """The stability tier of a public API surface (CRA-124).
+    """The stability tier of a public API surface.
 
     ``str`` mix-in so a tier round-trips through JSON and config without conversion.
     """
@@ -66,7 +66,7 @@ def deprecated(
     removed_in: str,
     use: str | None = None,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """Mark a callable :attr:`Stability.DEPRECATED` and warn on every call (CRA-124).
+    """Mark a callable :attr:`Stability.DEPRECATED` and warn on every call.
 
     Args:
         since: Version in which the deprecation took effect (e.g. ``"0.4"``).
@@ -118,13 +118,13 @@ def is_breaking(old: str, new: str) -> bool:
     """Return ``True`` when going from ``old`` to ``new`` is a major (breaking) bump.
 
     Follows semver: a change is breaking when the major component increases. This is the
-    coarse signal used by tooling to require a migration note (CRA-124).
+    coarse signal used by tooling to require a migration note.
     """
     return _major(new) > _major(old)
 
 
 def migration_note(old: str, new: str) -> str:
-    """A one-line human summary of the migration step from ``old`` to ``new`` (CRA-124)."""
+    """A one-line human summary of the migration step from ``old`` to ``new``."""
     if is_breaking(old, new):
         return (
             f"{old} -> {new} is a breaking (major) change; a migration guide and "

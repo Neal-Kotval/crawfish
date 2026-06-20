@@ -6,7 +6,7 @@ name = "triage-bot"
 version = "0.1.0"
 default_profile = "dev"
 
-# Profiles select the AgentRuntime backend (CRA-112).
+# Profiles select the AgentRuntime backend.
 [profiles.dev]
 runtime = "command"   # `claude -p` — zero API key, the default dev loop
 

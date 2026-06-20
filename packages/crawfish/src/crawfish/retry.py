@@ -1,9 +1,9 @@
-"""Retries, backoff & dead-letter (CRA-122).
+"""Retries, backoff & dead-letter.
 
 Production-grade partial-failure handling: a failing item retries with exponential
 backoff, and on exhaustion lands in a **dead-letter** store rather than halting the
 batch. ``BudgetExceeded`` / ``Cancelled`` are never retried (a runaway must die fast).
-Replay re-runs only dead-lettered items; Sink idempotency (CRA-104) makes that safe.
+Replay re-runs only dead-lettered items; Sink idempotency makes that safe.
 """
 
 from __future__ import annotations

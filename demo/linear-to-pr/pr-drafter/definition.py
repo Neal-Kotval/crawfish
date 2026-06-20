@@ -10,7 +10,7 @@ from __future__ import annotations
 from crawfish.core import Parameter
 
 inputs = [
-    Parameter(name="identifier", type="str"),  # e.g. "CRA-201" (fluid)
+    Parameter(name="identifier", type="str"),  # e.g. "DEMO-201" (fluid)
     Parameter(name="title", type="str"),  # fluid
     Parameter(name="description", type="str"),  # fluid
     Parameter(name="branch", type="str"),  # ticket-provided head branch (fluid)

@@ -1,4 +1,4 @@
-"""Testing harness — fixtures, snapshots, replay, eval-as-test (CRA-119).
+"""Testing harness — fixtures, snapshots, replay, eval-as-test.
 
 Make Definitions and pipelines *testable* so people trust and ship them. The
 pieces here are the library a ``craw test`` command drives:

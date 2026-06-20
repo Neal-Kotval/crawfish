@@ -1,6 +1,6 @@
 # ADR 0002 — Structural type registry over stringly-typed parameters
 
-**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M0 (CRA-132, CRA-99)
+**Status:** Accepted · **Date:** 2026-06-19 · **Milestone:** M0
 
 ## Context
 

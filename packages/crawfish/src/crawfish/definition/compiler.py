@@ -1,7 +1,7 @@
-"""The directory compiler — files in, typed ``Definition`` out (CRA-102).
+"""The directory compiler — files in, typed ``Definition`` out.
 
 One **canonical loader** (:func:`load_definition`) backs both ``from_package(path)``
-and the installed-package / ``DefinitionRef`` route (CRA-113), so a directory and its
+and the installed-package / ``DefinitionRef`` route, so a directory and its
 installed package compile to byte-identical Definitions (ADR 0006). Identity is
 content-derived, never path- or time-derived.
 
@@ -15,8 +15,8 @@ Compile contract (see the spec table):
 Broken bindings (an agent referencing an unknown tool/policy) fail at **load time**.
 
 Security note: compiling imports ``definition.py``/``policies/*.py``/``tools/*.py`` —
-authoring-time trusted code. Out-of-process execution of host-side tool code at *run*
-time, with taint propagation, is CRA-114.
+authoring-time trusted code. Host-side tool code runs out-of-process at *run*
+time, with taint propagation.
 """
 
 from __future__ import annotations

@@ -1,0 +1,60 @@
+# Crawfish public label set.
+#
+# Source of truth for repo labels. `scripts/seed-github-backlog.sh` reads this
+# list (it mirrors the same names/colors inline) and creates/updates each label
+# via the `gh` CLI. Colors are 6-digit hex without the leading '#'.
+
+# --- contributor signals ---------------------------------------------------
+- name: "good first issue"
+  color: "7057ff"
+  description: "Small, well-scoped, has acceptance criteria — a great place to start."
+- name: "help wanted"
+  color: "008672"
+  description: "Maintainers would welcome a contributor picking this up."
+- name: "connector"
+  color: "1d76db"
+  description: "A new Source / Sink / Definition connector to an external service."
+
+# --- type ------------------------------------------------------------------
+- name: "type: bug"
+  color: "d73a4a"
+  description: "Something is broken or behaves unexpectedly."
+- name: "type: feature"
+  color: "0e8a16"
+  description: "A new capability or improvement."
+- name: "type: docs"
+  color: "0075ca"
+  description: "Documentation changes only."
+
+# --- area ------------------------------------------------------------------
+- name: "area: core"
+  color: "c5def5"
+  description: "Typed-IO atoms: Flow, Parameter, Node, Policy, RunContext."
+- name: "area: runtime"
+  color: "c5def5"
+  description: "AgentRuntime / claude -p loop and backends."
+- name: "area: store"
+  color: "c5def5"
+  description: "Persistence: Store, ledger, idempotency, artifact store."
+- name: "area: sink"
+  color: "c5def5"
+  description: "Egress boundary: sinks, approval gates, idempotency keys."
+- name: "area: docs"
+  color: "c5def5"
+  description: "Guides, cookbook, API reference, roadmap."
+
+# --- priority --------------------------------------------------------------
+- name: "priority: high"
+  color: "b60205"
+  description: "Should be addressed soon."
+- name: "priority: medium"
+  color: "fbca04"
+  description: "Normal priority."
+- name: "priority: low"
+  color: "fef2c0"
+  description: "Nice to have; no urgency."
+
+# --- status ----------------------------------------------------------------
+- name: "status: blocked"
+  color: "e11d21"
+  description: "Blocked on another issue or an external dependency."

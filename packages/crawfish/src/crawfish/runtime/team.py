@@ -1,4 +1,4 @@
-"""Team coordination — executing a TeamSpec topology (CRA-135).
+"""Team coordination — executing a TeamSpec topology.
 
 Decision (locked): lean on Claude's **hierarchical subagent model**, not a bespoke
 peer-to-peer message bus. Communication is **delegation-in / typed-result-out** — a

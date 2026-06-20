@@ -1,4 +1,4 @@
-"""Pipeline triggers: cron + webhook (CRA-115).
+"""Pipeline triggers: cron + webhook.
 
 A pipeline declares *how* it fires. Beyond cron (time-based polling), a webhook
 trigger is a true push: an HTTP endpoint enqueues a run and carries the payload,
@@ -97,19 +97,19 @@ class CronSchedule:
 
 
 class Trigger(ABC):
-    """Base for anything that can fire a pipeline run (CRA-115)."""
+    """Base for anything that can fire a pipeline run."""
 
     id: str
     kind: str
 
     @abstractmethod
     def describe(self) -> dict[str, JSONValue]:
-        """Return a JSON-serialisable description of this trigger (CRA-115)."""
+        """Return a JSON-serialisable description of this trigger."""
         raise NotImplementedError
 
 
 class CronTrigger(Trigger):
-    """Fire a run on a cron ``schedule`` (CRA-115)."""
+    """Fire a run on a cron ``schedule``."""
 
     def __init__(self, schedule: str) -> None:
         self.id = new_id()
@@ -117,12 +117,12 @@ class CronTrigger(Trigger):
         self.schedule = schedule
 
     def describe(self) -> dict[str, JSONValue]:
-        """Round-trippable description: kind + schedule (CRA-115)."""
+        """Round-trippable description: kind + schedule."""
         return {"id": self.id, "kind": self.kind, "schedule": self.schedule}
 
 
 class WebhookTrigger(Trigger):
-    """Fire a run from an inbound HTTP POST to ``path`` (CRA-115).
+    """Fire a run from an inbound HTTP POST to ``path``.
 
     ``secret_ref`` is the *name* of an environment variable holding the shared
     secret, never the secret value itself, so it is safe to serialise.
@@ -135,7 +135,7 @@ class WebhookTrigger(Trigger):
         self.secret_ref = secret_ref
 
     def describe(self) -> dict[str, JSONValue]:
-        """Round-trippable description; carries the secret *reference* only (CRA-115)."""
+        """Round-trippable description; carries the secret *reference* only."""
         return {
             "id": self.id,
             "kind": self.kind,
@@ -175,7 +175,7 @@ class IntervalSchedule:
 
 
 class IntervalTrigger(Trigger):
-    """Fire a run every ``seconds`` (CRA-115). Simpler than cron for sub-minute cadence.
+    """Fire a run every ``seconds``. Simpler than cron for sub-minute cadence.
 
     ``TRIGGER = IntervalTrigger(seconds=30)`` reads far more plainly than a cron string
     — and unlike cron it can fire faster than once a minute.
@@ -192,7 +192,7 @@ class IntervalTrigger(Trigger):
         return IntervalSchedule(self.seconds).expr
 
     def describe(self) -> dict[str, JSONValue]:
-        """Round-trippable description: kind + schedule (CRA-115)."""
+        """Round-trippable description: kind + schedule."""
         return {"id": self.id, "kind": self.kind, "schedule": self.schedule}
 
 
@@ -219,7 +219,7 @@ def parse_schedule(spec: str) -> CronSchedule | IntervalSchedule:
 
 
 def verify_webhook(secret: str, payload: bytes, signature: str) -> bool:
-    """Verify an inbound webhook ``signature`` against ``payload`` (CRA-115).
+    """Verify an inbound webhook ``signature`` against ``payload``.
 
     Computes ``HMAC-SHA256(secret, payload)`` as lowercase hex and compares it to
     ``signature`` in constant time to avoid timing oracles. The caller resolves

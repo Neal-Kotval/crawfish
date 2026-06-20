@@ -1,4 +1,4 @@
-"""Filter — a node that routes/narrows a list Output (CRA-105).
+"""Filter — a node that routes/narrows a list Output.
 
 A ``Filter`` takes an :class:`~crawfish.output.Output` whose value is a list and
 emits a *fresh* Output containing only the items that satisfy a predicate, with
@@ -6,7 +6,7 @@ order preserved. Because ``Output`` is frozen, a Filter never mutates its input:
 it always derives a new Output via :meth:`~crawfish.output.Output.derive`, leaving
 the upstream value intact for audit.
 
-Decision (CRA-105): Filter is a **first-class Node** — a pure, synchronous
+Decision: Filter is a **first-class Node** — a pure, synchronous
 transform with no side effects — rather than sugar over some other primitive.
 This keeps it inspectable in the pipeline graph (it carries an id/name/kind) and
 composable: the Output of one Filter feeds straight into the next.

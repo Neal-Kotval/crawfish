@@ -31,7 +31,7 @@ fmt:
 
 # typecheck with mypy (strict)
 typecheck:
-    uv run mypy packages/crawfish/src
+    uv run mypy packages/crawfish/src packages/crawfish-slack/src
 
 # run the test suite
 test:

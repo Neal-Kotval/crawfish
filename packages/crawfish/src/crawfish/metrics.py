@@ -1,4 +1,4 @@
-"""Metrics, Rubrics & Benchmarks — the improvement loop (CRA-110).
+"""Metrics, Rubrics & Benchmarks — the improvement loop.
 
 Make agent quality *measurable and comparable* across Definition versions. A
 :class:`Metric` scores a single :class:`~crawfish.output.Output` to a float; a

@@ -1,4 +1,4 @@
-"""Definition — the directory-first agent-team package (CRA-102)."""
+"""Definition — the directory-first agent-team package."""
 
 from __future__ import annotations
 

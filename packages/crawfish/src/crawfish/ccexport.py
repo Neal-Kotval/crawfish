@@ -1,4 +1,4 @@
-"""Claude Code export — a Definition as a CC subagent / skill (CRA-156).
+"""Claude Code export — a Definition as a CC subagent / skill.
 
 A Crawfish :class:`~crawfish.definition.types.Definition` is a self-contained agent
 team; Claude Code's **subagent** format is a Markdown file with YAML front-matter

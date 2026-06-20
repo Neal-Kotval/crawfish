@@ -1,4 +1,4 @@
-"""Profile → runtime selection (CRA-112).
+"""Profile → runtime selection.
 
 ``dev`` → CommandRuntime, ``prod`` → ManagedRuntime; switching profile is a runtime
 swap with no code change. Per-agent model overrides are honoured inside each runtime.

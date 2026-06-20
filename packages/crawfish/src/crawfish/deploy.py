@@ -1,4 +1,4 @@
-"""Always-on local pipeline deployment (CRA-151).
+"""Always-on local pipeline deployment.
 
 ``craw deploy`` launches a project's pipeline as a long-lived, **detached**
 supervisor process: it survives the shell closing (``start_new_session``), fires the
@@ -275,7 +275,7 @@ class Supervisor:
         self.ledger = ExecutionLedger(store, org_id=org_id)
 
     def reconcile(self) -> dict[str, list[str]]:
-        """On (re)start, resume/retry orphaned runs via the ledger (CRA-134)."""
+        """On (re)start, resume/retry orphaned runs via the ledger."""
         result = self.ledger.reconcile()
         if result["retried"]:
             self.surface.emit(
