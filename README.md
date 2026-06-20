@@ -1,6 +1,6 @@
 # Crawfish
 
-[![CI](https://github.com/Neal-Kotval/crawfish-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/Neal-Kotval/crawfish-framework/actions/workflows/ci.yml)
+[![CI](https://github.com/Neal-Kotval/crawfish/actions/workflows/ci.yml/badge.svg)](https://github.com/Neal-Kotval/crawfish/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/crawfish.svg)](https://pypi.org/project/crawfish/)
 [![Python](https://img.shields.io/pypi/pyversions/crawfish.svg)](https://pypi.org/project/crawfish/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -42,7 +42,7 @@ just check             # lint + typecheck + the full test suite
 ```
 
 Or drive the CLI directly with `uv run craw …`. See
-[`CONTRIBUTING.md`](CONTRIBUTING.md) to go from a clone to a merged PR — the most welcome
+[`CONTRIBUTING.md`](.github/CONTRIBUTING.md) to go from a clone to a merged PR — the most welcome
 first contribution is a connector.
 
 ## Docs
@@ -52,7 +52,7 @@ first contribution is a connector.
 - [Security spine](docs/architecture/SECURITY.md)
 - [Getting started](docs/guide/getting-started.md)
 - [Roadmap](ROADMAP.md) — what shipped and what's next
-- [Releasing](RELEASING.md) — the release process + semver/stability policy · [Changelog](CHANGELOG.md)
+- [Releasing](.github/RELEASING.md) — the release process + semver/stability policy · [Changelog](CHANGELOG.md)
 
 Browse the docs locally with `just docs` (serves at http://127.0.0.1:8000).
 

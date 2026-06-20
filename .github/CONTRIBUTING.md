@@ -14,7 +14,7 @@ issue for vulnerabilities.
 The most welcome — and most self-contained — first PR is a **connector** (a Source or
 Sink that wires Crawfish to a new system). It's a vertical slice you can build and test
 without touching the core seams. Start here:
-[`docs/guide/contributing-a-connector.md`](docs/guide/contributing-a-connector.md).
+[`docs/guide/contributing-a-connector.md`](../docs/guide/contributing-a-connector.md).
 
 ## Dev setup
 
@@ -65,7 +65,7 @@ uv run --group docs mkdocs build --strict
 - **Honour the security spine.** `Flow.FLUID` inputs are untrusted session data — they
   reach the model as data, never instructions; Sink targets and idempotency keys are
   static-only; secrets resolve by reference and are never logged or in-prompt. See
-  [`docs/architecture/SECURITY.md`](docs/architecture/SECURITY.md).
+  [`docs/architecture/SECURITY.md`](../docs/architecture/SECURITY.md).
 
 Match the style of the code around you. When an architectural or security fork comes up,
 record an ADR in `docs/architecture/decisions/` rather than deciding silently.

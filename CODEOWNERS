@@ -4,31 +4,30 @@
 # The load-bearing seams and security-critical paths get maintainer review so an
 # architecture or trust-boundary change can't merge without the right eyes.
 #
-# TODO(maintainer): replace @TODO-maintainer-handle with real GitHub handles or a
-# team (e.g. @your-org/maintainers). Order matters — the LAST match wins.
+# Order matters — the LAST match wins.
 
 # Default owner for everything.
-*                                               @TODO-maintainer-handle
+*                                               @Neal-Kotval
 
 # --- The three swappable seams (protocols, not backends) ---
-/packages/crawfish/src/crawfish/runtime/        @TODO-maintainer-handle
-/packages/crawfish/src/crawfish/store/          @TODO-maintainer-handle
-/packages/crawfish/src/crawfish/artifacts/      @TODO-maintainer-handle
+/packages/crawfish/src/crawfish/runtime/        @Neal-Kotval
+/packages/crawfish/src/crawfish/store/          @Neal-Kotval
+/packages/crawfish/src/crawfish/artifacts/      @Neal-Kotval
 
 # --- Core substrate + type system ---
-/packages/crawfish/src/crawfish/core/           @TODO-maintainer-handle
-/packages/crawfish/src/crawfish/typesystem/     @TODO-maintainer-handle
+/packages/crawfish/src/crawfish/core/           @Neal-Kotval
+/packages/crawfish/src/crawfish/typesystem/     @Neal-Kotval
 
 # --- Security-critical paths (egress, secrets, sandboxing) ---
-/packages/crawfish/src/crawfish/nodes/sink.py   @TODO-maintainer-handle
-/packages/crawfish/src/crawfish/secrets.py      @TODO-maintainer-handle
-/packages/crawfish/src/crawfish/sandbox.py      @TODO-maintainer-handle
+/packages/crawfish/src/crawfish/nodes/sink.py   @Neal-Kotval
+/packages/crawfish/src/crawfish/secrets.py      @Neal-Kotval
+/packages/crawfish/src/crawfish/sandbox.py      @Neal-Kotval
 
 # --- Architecture docs + ADRs ---
-/docs/architecture/                             @TODO-maintainer-handle
+/docs/architecture/                             @Neal-Kotval
 
 # --- Release + legal surface ---
-/.github/workflows/                             @TODO-maintainer-handle
-/pyproject.toml                                 @TODO-maintainer-handle
-/packages/crawfish/pyproject.toml               @TODO-maintainer-handle
-/LICENSE                                        @TODO-maintainer-handle
+/.github/workflows/                             @Neal-Kotval
+/pyproject.toml                                 @Neal-Kotval
+/packages/crawfish/pyproject.toml               @Neal-Kotval
+/LICENSE                                        @Neal-Kotval

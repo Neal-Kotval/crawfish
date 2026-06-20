@@ -5,7 +5,7 @@ describes capabilities, not internal tracker IDs. For claimable work and discuss
 see the project's GitHub **Issues** and **Discussions**.
 
 <!-- TODO(maintainer): link the real Issues/Discussions URLs once the repo slug is set
-     (e.g. https://github.com/TODO-maintainer/crawfish/issues). -->
+     (e.g. https://github.com/Neal-Kotval/crawfish/issues). -->
 
 ## Phase 1 — the local trust loop (shipped)
 
@@ -63,4 +63,4 @@ exploring (priorities will shift with contributor and user input):
 The best first contribution is a **connector** — a self-contained Source or Sink that
 doesn't touch the core seams. Start with
 [`docs/guide/contributing-a-connector.md`](docs/guide/contributing-a-connector.md) and
-[`CONTRIBUTING.md`](CONTRIBUTING.md). Have an idea for Phase 2? Open a Discussion.
+[`CONTRIBUTING.md`](.github/CONTRIBUTING.md). Have an idea for Phase 2? Open a Discussion.

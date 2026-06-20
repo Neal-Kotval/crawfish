@@ -4,7 +4,7 @@ All notable changes to Crawfish are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-See [`RELEASING.md`](RELEASING.md) for the full semver + stability-tier policy and the
+See [`RELEASING.md`](.github/RELEASING.md) for the full semver + stability-tier policy and the
 release process.
 
 ## [Unreleased]
@@ -63,5 +63,5 @@ benchmarked, with retries, dead-letter, and crash-resume. Runs end to end locall
 <!-- TODO(maintainer): set the published dist name (assumed `crawfish`; confirm
      availability on PyPI) and the org/repo slug in the comparison links below. -->
 
-[Unreleased]: https://github.com/TODO-maintainer/crawfish/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/TODO-maintainer/crawfish/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Neal-Kotval/crawfish/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Neal-Kotval/crawfish/releases/tag/v0.1.0

@@ -16,9 +16,6 @@
 #   3. Create the two GitHub Environments (Settings → Environments): `pypi` and
 #      `testpypi`. Add reviewers/branch rules to `pypi` if you want a manual gate.
 # No API tokens are created or stored — that is the point of trusted publishing.
-# TODO(maintainer): replace `TODO-maintainer/crawfish` with the real org/repo slug
-# when configuring the trusted publishers above (the slug only matters in the PyPI UI;
-# this workflow reads the repo from the GitHub OIDC token at runtime).
 # ─────────────────────────────────────────────────────────────────────────────────────
 
 name: release

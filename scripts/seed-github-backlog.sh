@@ -15,7 +15,7 @@
 #   - GitHub CLI installed:            https://cli.github.com
 #   - Authenticated:                   gh auth login
 #   - A repo to target. Either run this from inside the cloned repo (gh infers
-#     it) or set REPO explicitly:      REPO=TODO-maintainer/crawfish ./scripts/seed-github-backlog.sh
+#     it) or set REPO explicitly:      REPO=Neal-Kotval/crawfish ./scripts/seed-github-backlog.sh
 #
 #   This script contains NO tokens or secrets — it relies entirely on your
 #   `gh auth` session.

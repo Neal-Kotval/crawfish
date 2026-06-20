@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & discussion
-    url: https://github.com/TODO-maintainer/crawfish/discussions
+    url: https://github.com/Neal-Kotval/crawfish/discussions
     about: Ask "how do I…" questions, share what you built, or propose ideas before filing an issue.
   - name: Report a security vulnerability
-    url: https://github.com/TODO-maintainer/crawfish/blob/main/docs/architecture/SECURITY.md
+    url: https://github.com/Neal-Kotval/crawfish/blob/main/docs/architecture/SECURITY.md
     about: Do NOT open a public issue for security problems — follow the responsible-disclosure process in SECURITY.md.

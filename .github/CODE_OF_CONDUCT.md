@@ -28,8 +28,7 @@ Behavior that harasses, demeans, or excludes others is not tolerated.
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the project maintainers responsible for enforcement at:
 
-<!-- TODO(maintainer): enforcement contact email (e.g. conduct@your-domain) -->
-**`conduct@TODO-maintainer`**
+**`neal.kotval@gmail.com`**
 
 All complaints will be reviewed and investigated promptly and fairly. All
 community leaders are obligated to respect the privacy and security of the

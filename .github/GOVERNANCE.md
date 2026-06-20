@@ -21,7 +21,7 @@ approved by a maintainer can be merged. Anyone can review; a maintainer's
 approval is required to merge.
 
 - **Code owners.** Changes to the load-bearing seams require review from the
-  relevant owner (see [`CODEOWNERS`](CODEOWNERS)) — the runtime, store, and
+  relevant owner (see [`CODEOWNERS`](../CODEOWNERS)) — the runtime, store, and
   artifact protocols, the core type system, and the security-critical paths
   (sink egress, secrets, sandboxing).
 - **Architectural / security forks.** When a change reaches an architectural or

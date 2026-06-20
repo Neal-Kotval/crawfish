@@ -1,14 +1,14 @@
 # Releasing Crawfish
 
 How a Crawfish version gets cut and published. Publishing is automated by
-[`.github/workflows/release.yml`](.github/workflows/release.yml) — a human bumps the
+[`.github/workflows/release.yml`](workflows/release.yml) — a human bumps the
 version, updates the changelog, and pushes a tag; the workflow builds and publishes.
 
 ## Versioning policy (semver + stability tiers)
 
 Crawfish follows [SemVer 2.0.0](https://semver.org). Every public name (anything
 re-exported from `crawfish/__init__.py`) carries a **stability tier**, declared in code
-with the decorators in [`crawfish.stability`](packages/crawfish/src/crawfish/stability.py)
+with the decorators in [`crawfish.stability`](../packages/crawfish/src/crawfish/stability.py)
 and readable via `stability_of(obj)`. The three tiers are:
 
 | Tier | Decorator | Promise |
@@ -49,7 +49,7 @@ A stable API is never removed in one step:
 
 A breaking change is inseparable from a deprecation plus a migration note; both are
 required to merge a breaking PR. See
-[`docs/architecture/API-STABILITY.md`](docs/architecture/API-STABILITY.md) for the full
+[`docs/architecture/API-STABILITY.md`](../docs/architecture/API-STABILITY.md) for the full
 contract, including the migration-guide + codemod requirement.
 
 ## Cutting a release
@@ -58,9 +58,9 @@ contract, including the migration-guide + codemod requirement.
    - `just check` (ruff + `mypy packages/crawfish/src` strict + `pytest -q`)
    - `just docs-build` (`mkdocs build --strict`)
 2. **Bump the version** in
-   [`packages/crawfish/pyproject.toml`](packages/crawfish/pyproject.toml) (`[project]
+   [`packages/crawfish/pyproject.toml`](../packages/crawfish/pyproject.toml) (`[project]
    version`) per the policy above.
-3. **Update [`CHANGELOG.md`](CHANGELOG.md)**: rename `## [Unreleased]` to the new
+3. **Update [`CHANGELOG.md`](../CHANGELOG.md)**: rename `## [Unreleased]` to the new
    `## [X.Y.Z]`, add the date, start a fresh empty `## [Unreleased]`, and update the
    comparison links at the bottom.
 4. **Commit** both, signed off (`git commit -s`), and merge to `main` via PR.

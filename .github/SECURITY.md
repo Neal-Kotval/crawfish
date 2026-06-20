@@ -3,7 +3,7 @@
 Crawfish runs agent code over your data and touches credentials, so we take
 security reports seriously. This document is the **disclosure policy** — how to
 report a vulnerability privately. It is distinct from
-[`docs/architecture/SECURITY.md`](docs/architecture/SECURITY.md), which is the
+[`docs/architecture/SECURITY.md`](../docs/architecture/SECURITY.md), which is the
 framework's *threat model* (the security spine: the fluid/static trust boundary,
 static-only sink targets, secrets-by-reference, out-of-process node execution).
 
@@ -17,9 +17,7 @@ Report privately through either channel:
 1. **GitHub private vulnerability reporting** (preferred) — go to the
    repository's **Security** tab → **Report a vulnerability**. This opens a
    private advisory visible only to you and the maintainers.
-2. **Email** —
-   <!-- TODO(maintainer): security contact email (e.g. security@your-domain) -->
-   **`security@TODO-maintainer`**. Encrypt if you can; ask for a key if needed.
+2. **Email** — **`neal.kotval@gmail.com`**. Encrypt if you can; ask for a key if needed.
 
 Include, as far as you can: the affected version/commit, a description of the
 issue and its impact, and a minimal reproduction (proof-of-concept, steps, or a
