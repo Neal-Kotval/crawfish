@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "crawfish"
-version = "0.1.0"
+version = "0.1.1"
 description = "Agents for bulk work over your data: Source -> Batch -> Aggregator -> Router -> Sink, run locally."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,8 +31,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Neal-Kotval/crawfish"
-Documentation = "https://github.com/Neal-Kotval/crawfish#readme"
+Homepage = "https://neal-kotval.github.io/crawfish/"
+Documentation = "https://neal-kotval.github.io/crawfish/"
 Repository = "https://github.com/Neal-Kotval/crawfish"
 Issues = "https://github.com/Neal-Kotval/crawfish/issues"
 Changelog = "https://github.com/Neal-Kotval/crawfish/blob/main/CHANGELOG.md"

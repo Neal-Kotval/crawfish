@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/crawfish.svg)](https://pypi.org/project/crawfish/)
 [![Python](https://img.shields.io/pypi/pyversions/crawfish.svg)](https://pypi.org/project/crawfish/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](docs/index.md)
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://neal-kotval.github.io/crawfish/)
 
 **Agents for bulk work over your data.** Author a pipeline as a directory —
 `Source → Batch (fan-out) → Aggregator (reduce) → Router (branch) → Sink` — and run it
@@ -53,6 +53,8 @@ Or drive the CLI directly with `uv run craw …`. See
 first contribution is a connector.
 
 ## Docs
+
+📖 **Full documentation: [neal-kotval.github.io/crawfish](https://neal-kotval.github.io/crawfish/)**
 
 - [Product](docs/product/PRODUCT.md) — positioning, hero use case, personas
 - [Architecture](docs/architecture/ARCHITECTURE.md) — the three seams · [ADRs](docs/architecture/decisions)
