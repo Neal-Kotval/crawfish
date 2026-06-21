@@ -104,6 +104,34 @@ the whole reason cloud + scale are driver swaps, not rewrites.
   Callers that deliberately over-bind (the `Router`'s classifier) opt out via
   `validate_input_types=False` / `validate_output_schema=False`.
 
+## Schema migrations (Phase 2)
+
+An older `.crawfish` database must upgrade cleanly when a newer binary opens it. The
+schema version lives in SQLite's built-in `PRAGMA user_version`; `SqliteStore.__init__`
+runs `crawfish.store.migrations.apply_migrations` under its lock, applying every forward
+migration whose version exceeds the on-disk version (each in its own transaction), then
+stamps `user_version`. See ADR 0014.
+
+- **Migration 1 is the baseline** — the original table set, written `CREATE TABLE IF NOT
+  EXISTS`. So a brand-new DB and an existing *pre-versioning* DB (tables already present,
+  `user_version=0`) both converge. Re-opening a current DB applies nothing (idempotent).
+- **Downgrade is refused.** If `user_version` exceeds `CURRENT_SCHEMA_VERSION`, a newer
+  binary wrote the DB; `apply_migrations` raises `StoreMigrationError` rather than risk
+  corruption.
+- **Concurrency** is safe: migrations run under the store lock and SQLite's file lock; a
+  second opener sees the bumped `user_version` and applies nothing.
+
+**Migration-authoring contract.** Phase-2 work that persists a new shape does two things:
+(1) **append a `Migration`** in `store/migrations.py` with the next ascending `version`
+and bump `CURRENT_SCHEMA_VERSION`; keep the body additive/idempotent (`IF NOT EXISTS`,
+additive `ALTER TABLE`) so it is safe on a DB at any older version. (2) If the new shape
+changes how a stored record *kind* is interpreted, **register a read-path up-converter**
+in `RECORD_UPCONVERTERS` (keyed by `kind`); it lifts an individual legacy row's JSON
+envelope to the current shape lazily on read in `get_record` / `list_records` — the
+record analogue of CRA-171's `Emission.from_event`. A migration fixes the table; the
+up-converter fixes a row, without a bulk rewrite. (Emission retention/rotation and
+`max_per_run` are a separate concern, deliberately out of scope here.)
+
 ## Packaging
 
 - `packages/crawfish` — the OSS framework (the `pip install crawfish` distribution).
