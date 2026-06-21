@@ -144,3 +144,70 @@ def test_no_regression_when_candidate_improves_or_holds() -> None:
 def test_compare_handles_unaligned_vectors() -> None:
     deltas = compare({"a": 1.0}, {"b": 2.0})
     assert deltas == {"a": -1.0, "b": 2.0}
+
+
+# -- CRA-175: typed structured-output & semantic-diff scoring ----------------
+from crawfish.core.types import Parameter  # noqa: E402
+from crawfish.metrics import (  # noqa: E402
+    field_exact_match,
+    numeric_tolerance,
+    schema_conformance,
+    set_overlap,
+    structural_match,
+)
+
+
+def test_field_exact_match_reads_typed_value_canonically() -> None:
+    m = field_exact_match({"a": 1, "b": 2}, field="obj")
+    assert m.evaluate(_out({"obj": {"b": 2, "a": 1}})) == 1.0  # key order ignored
+    assert m.evaluate(_out({"obj": {"a": 1, "b": 3}})) == 0.0
+    assert field_exact_match("bug", field="cls").evaluate(_out({"cls": "bug"})) == 1.0
+    assert field_exact_match([1, 2, 3]).evaluate(_out([1, 2, 3])) == 1.0
+
+
+def test_set_overlap_f1_and_jaccard_order_free() -> None:
+    f1 = set_overlap(["a", "b", "c"], field="labels")
+    assert f1.evaluate(_out({"labels": ["c", "b", "a"]})) == 1.0  # order ignored
+    assert abs(f1.evaluate(_out({"labels": ["a", "b", "x"]})) - 2 / 3) < 1e-9
+    jac = set_overlap(["a", "b"], field="labels", mode="jaccard")
+    assert jac.evaluate(_out({"labels": ["a", "c"]})) == 1 / 3  # |∩|=1 |∪|=3
+    assert set_overlap([], field="labels").evaluate(_out({"labels": []})) == 1.0
+
+
+def test_numeric_tolerance_absolute_and_relative() -> None:
+    assert numeric_tolerance(10.0, field="n", tol=0.5).evaluate(_out({"n": 10.4})) == 1.0
+    assert numeric_tolerance(10.0, field="n", tol=0.5).evaluate(_out({"n": 11.0})) == 0.0
+    rel = numeric_tolerance(100.0, field="n", tol=0.05, relative=True)
+    assert rel.evaluate(_out({"n": 104.0})) == 1.0  # within 5%
+    assert rel.evaluate(_out({"n": 120.0})) == 0.0
+    assert numeric_tolerance(1.0, field="n").evaluate(_out({"n": "x"})) == 0.0
+
+
+def test_schema_conformance_scores_partial_records() -> None:
+    # SchemaConformance validates against the default registry; register the record there.
+    from crawfish.typesystem import default_registry
+
+    # Test-unique record name so this global-registry mutation can't collide with
+    # another test's "Triage" (cross-test landmine flagged in CRA-175 review).
+    default_registry.register_record("TriageMetricsTest", {"cls": "str", "score": "float"})
+    schema = [Parameter(name="out", type="TriageMetricsTest")]
+    full = Output(output_schema=[], value='{"cls": "bug", "score": 0.9}', produced_by="r")
+    assert schema_conformance(schema).evaluate(full) == 1.0
+    half = Output(output_schema=[], value='{"cls": "bug"}', produced_by="r")
+    assert schema_conformance(schema).evaluate(half) == 0.5  # 1 of 2 fields missing
+    junk = Output(output_schema=[], value="not json at all", produced_by="r")
+    assert schema_conformance(schema).evaluate(junk) == 0.0
+
+
+def test_structural_match_partial_credit() -> None:
+    m = structural_match({"a": 1, "b": 2, "c": 3})
+    assert m.evaluate(_out({"a": 1, "b": 2, "c": 3})) == 1.0
+    assert abs(m.evaluate(_out({"a": 1, "b": 2, "c": 9})) - 2 / 3) < 1e-9  # 1 of 3 leaves
+
+
+def test_structured_scoring_guards_multiple_json_objects() -> None:
+    # CRA-172 follow-up: a string emitting TWO objects must NOT silently score the first.
+    two = Output(output_schema=[], value='{"cls": "bug"}\n{"cls": "feature"}', produced_by="r")
+    assert field_exact_match("bug", field="cls").evaluate(two) == 0.0  # opaque, no false match
+    one = Output(output_schema=[], value='{"cls": "bug"}', produced_by="r")
+    assert field_exact_match("bug", field="cls").evaluate(one) == 1.0
