@@ -34,6 +34,11 @@ from crawfish.runtime.context_strategy import (
     resolve_carry_strategy,
     resolve_strategy,
 )
+from crawfish.runtime.local_provider import (
+    LocalHTTPProvider,
+    LocalTransport,
+    OpenAIChatRequest,
+)
 from crawfish.runtime.mcp import allowed_mcp_tools, build_mcp_config, resolve_secret
 from crawfish.runtime.mock import MockRuntime
 from crawfish.runtime.prompt import compile_prompt, pick_agent, split_inputs
@@ -44,6 +49,7 @@ from crawfish.runtime.provider_runtime import (
 )
 from crawfish.runtime.providers import ClientProvider, MockProvider
 from crawfish.runtime.replay import CassetteMiss, RecordReplayRuntime
+from crawfish.runtime.routing_runtime import RoutingRuntime
 from crawfish.runtime.select import RUNTIME_FACTORIES, get_runtime
 from crawfish.runtime.stubs import ClientRuntime, ManagedRuntime
 from crawfish.runtime.team import run_team
@@ -66,6 +72,10 @@ __all__ = [
     "expand_candidates",
     "MockProvider",
     "ClientProvider",
+    "LocalHTTPProvider",
+    "LocalTransport",
+    "OpenAIChatRequest",
+    "RoutingRuntime",
     "RecordReplayRuntime",
     "CassetteMiss",
     "get_runtime",
