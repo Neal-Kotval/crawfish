@@ -168,12 +168,46 @@ class Budget:
 
 
 def _event_cost(event: dict[str, object]) -> float:
-    """Pull a USD cost off a telemetry event, tolerating shape drift."""
-    for key in ("cost_usd", "total_cost_usd", "cost"):
-        value = event.get(key)
-        if isinstance(value, (int, float)):
-            return float(value)
+    """Pull a USD cost off a telemetry event, tolerating shape drift.
+
+    Looks both at the top level (legacy loose dicts) and under ``attrs`` (the typed
+    :class:`~crawfish.emission.Emission` envelope, which nests the cost there).
+    """
+    sources: list[dict[str, object]] = [event]
+    attrs = event.get("attrs")
+    if isinstance(attrs, dict):
+        sources.append(attrs)
+    for source in sources:
+        for key in ("cost_usd", "total_cost_usd", "cost"):
+            value = source.get(key)
+            if isinstance(value, (int, float)):
+                return float(value)
     return 0.0
+
+
+# Telemetry kinds that carry a run's model spend: the typed Emission kinds
+# (``model`` per turn, ``run_finish`` per run) plus the legacy loose-dict kinds
+# (``runtime.run`` / ``run.finish``) so old ledgers still total correctly.
+_COST_BEARING_KINDS = ("model", "run_finish", "runtime.run", "run.finish")
+
+
+def _parse_event_ts(ts: object) -> datetime | None:
+    """Parse a telemetry timestamp to a UTC datetime, or None if not usable.
+
+    Accepts an ISO-8601 string (legacy loose dicts) or an epoch-seconds float (the
+    typed :class:`~crawfish.emission.Emission` envelope). A zero/negative epoch
+    (the unstamped default) or an unparseable value returns None so the caller
+    counts the event rather than silently dropping it.
+    """
+    if isinstance(ts, str):
+        try:
+            parsed = datetime.fromisoformat(ts)
+        except ValueError:
+            return None
+        return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+    if isinstance(ts, (int, float)) and not isinstance(ts, bool) and ts > 0:
+        return datetime.fromtimestamp(float(ts), UTC)
+    return None
 
 
 def spent_today(
@@ -201,22 +235,14 @@ def spent_today(
     total = 0.0
     for run_id in run_ids:
         for event in store.events(run_id, org_id=org_id):
-            if event.get("kind") not in ("runtime.run", "run.finish"):
+            if event.get("kind") not in _COST_BEARING_KINDS:
                 continue
-            ts = event.get("ts")
-            if isinstance(ts, str):
-                try:
-                    parsed = datetime.fromisoformat(ts)
-                except ValueError:
-                    parsed = None
-                if parsed is not None:
-                    parsed = (
-                        parsed.replace(tzinfo=UTC)
-                        if parsed.tzinfo is None
-                        else parsed.astimezone(UTC)
-                    )
-                    if parsed.date() != today:
-                        continue
+            parsed = _parse_event_ts(event.get("ts"))
+            # A usable timestamp on another day is excluded; an unparseable/zero ts
+            # is counted (never silently undercount). Typed emissions carry an epoch
+            # float ``ts``; legacy loose dicts carry an ISO-8601 string.
+            if parsed is not None and parsed.date() != today:
+                continue
             total += _event_cost(event)
     return total
 

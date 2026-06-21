@@ -17,6 +17,7 @@ from crawfish.core.context import BudgetExceeded, RunContext
 from crawfish.core.ids import new_id
 from crawfish.core.types import JSONValue
 from crawfish.definition.types import Definition
+from crawfish.emission import Emission, EmissionKind, emit
 from crawfish.output import Output
 from crawfish.runtime.base import AgentRuntime
 from crawfish.runtime.team import run_team
@@ -87,10 +88,38 @@ class Run:
             org_id=ctx.org_id,
         )
 
-    def _span(self, ctx: RunContext, name: str, **attrs: JSONValue) -> None:
-        ctx.store.append_event(
-            ctx.run_id,
-            {"type": "span", "name": name, "trace_id": self.id, **attrs},
+    def _emit_start(self, ctx: RunContext, runtime_name: str, **attrs: JSONValue) -> None:
+        """Emit a typed RUN_START onto the ledger (replaces the loose run.start span)."""
+        emit(
+            ctx.store,
+            Emission(
+                kind=EmissionKind.RUN_START,
+                run_id=ctx.run_id,
+                org_id=ctx.org_id,
+                node_id=self.id,
+                attrs={"runtime": runtime_name, **attrs},
+            ),
+            org_id=ctx.org_id,
+        )
+
+    def _emit_finish(
+        self, ctx: RunContext, status: str, *, tainted: bool = False, **attrs: JSONValue
+    ) -> None:
+        """Emit a typed RUN_FINISH onto the ledger (replaces the loose run.finish span).
+
+        ``tainted`` propagates the producing ``Output.tainted`` marker across the
+        emission boundary where the run handled an Output.
+        """
+        emit(
+            ctx.store,
+            Emission(
+                kind=EmissionKind.RUN_FINISH,
+                run_id=ctx.run_id,
+                org_id=ctx.org_id,
+                node_id=self.id,
+                attrs={"status": status, **attrs},
+                tainted=tainted,
+            ),
             org_id=ctx.org_id,
         )
 
@@ -117,23 +146,22 @@ class Run:
         if self.requires_approval and not approve:
             self.status = RunStatus.SUSPENDED
             self._persist(ctx)
-            self._span(ctx, "run.suspended", reason="awaiting_approval")
+            self._emit_finish(ctx, "suspended", reason="awaiting_approval")
             raise RunSuspended(f"run {self.id} awaiting approval")
 
         self.status = RunStatus.RUNNING
         self._persist(ctx)
         start = time.perf_counter()
-        self._span(ctx, "run.start", definition=self.definition.id)
+        self._emit_start(ctx, rt.name, definition=self.definition.id)
 
         try:
             result = await run_team(self.definition, self.inputs, ctx, rt)
         except BudgetExceeded as exc:
             self.status = RunStatus.FAILED
             self._persist(ctx)
-            self._span(
+            self._emit_finish(
                 ctx,
-                "run.finish",
-                status="failed",
+                "failed",
                 reason="budget_exceeded",
                 detail=str(exc),
                 latency_ms=(time.perf_counter() - start) * 1000,
@@ -142,10 +170,9 @@ class Run:
         except Exception as exc:
             self.status = RunStatus.FAILED
             self._persist(ctx)
-            self._span(
+            self._emit_finish(
                 ctx,
-                "run.finish",
-                status="failed",
+                "failed",
                 detail=str(exc),
                 latency_ms=(time.perf_counter() - start) * 1000,
             )
@@ -167,10 +194,11 @@ class Run:
         self.output = out
         self.status = RunStatus.DONE
         self._persist(ctx)
-        self._span(
+        # Taint propagates from the produced Output across the emission boundary.
+        self._emit_finish(
             ctx,
-            "run.finish",
-            status="done",
+            "done",
+            tainted=out.tainted,
             cost_usd=result.cost_usd,
             latency_ms=(time.perf_counter() - start) * 1000,
         )

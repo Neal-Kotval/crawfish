@@ -43,6 +43,32 @@ the whole reason cloud + scale are driver swaps, not rewrites.
 - **`crawfish.config`** — `crawfish.toml` manifest + profile resolution
   (`dev`→command, `prod`→managed).
 
+## Emission stream (Phase 2 observability)
+
+- **`crawfish.emission`** — one typed signal, `Emission`, that every producer writes
+  onto the append-only event ledger and every consumer (inspector, dashboard, anomaly
+  engine) reads. It rides the existing `Store.append_event` transport — no new
+  persistence seam — so `ScrubbingStore` redaction still applies on write.
+- The envelope and the **closed** `EmissionKind` taxonomy (10 kinds: `run_start`,
+  `run_finish`, `model`, `tool`, `sink`, `compaction`, `observer`, `metric`,
+  `secret_lease`, `jail_violation`) are a frozen contract — see
+  [`emission-taxonomy.md`](emission-taxonomy.md) and
+  [ADR 0013](decisions/0013-emission-taxonomy-and-inline-output-value.md). Each kind's
+  required `attrs` keys are pinned in `REQUIRED_ATTRS`; `EMISSION_SCHEMA_VERSION` lets
+  the ledger evolve.
+- `emit(store, e, *, max_per_run=...)` writes an emission (with a lightweight per-run
+  volume cap as a flood/DoS guard); `read_emissions(store, run_id)` reads them back.
+  `Emission.from_event` is a **back-compat shim**: it lifts both new typed emissions
+  *and* the legacy loose telemetry dicts older runs wrote (mapping `runtime.run` →
+  `model`, run-lifecycle spans → `run_start`/`run_finish`, `sink.write` → `sink`,
+  `context.compaction` → `compaction`, `ObserverEvent` dumps → `observer`; anything
+  unrecognized lifts into a generic `metric` carrying the raw payload), so old runs
+  stay inspectable.
+- **Security:** `tainted` propagates the fluid/untrusted marker across the emission
+  boundary (set from the producing `Output.tainted` at every emit site that holds an
+  Output). Emissions never carry secret values — `secret_lease` carries the `ref`
+  only, and the ledger is written through `ScrubbingStore`.
+
 ## Packaging
 
 - `packages/crawfish` — the OSS framework (the `pip install crawfish` distribution).

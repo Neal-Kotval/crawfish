@@ -49,6 +49,32 @@ DoD gate: ruff clean · ruff format clean · mypy strict clean (70 files) · pyt
 Decisions (ADR 0013): EmissionKind closed+versioned; `Output.value` inline (ArtifactRef
 opt-in, single deref point); one `resolve_model` (no hardcoded vendor default in provider.py).
 
+### ✅ CRA-171 — Typed emission substrate — phase-2a — DONE (pending merge)
+Branch: `nealkotval/cra-171-...`. Implements the behavioural half of the CRA-184 emission contract.
+
+Shipped:
+- `emission.py` — `to_event`/`from_event` (typed + legacy back-compat shim, never raises),
+  `emit` (per-run volume cap; drop-only, rotation deferred to CRA-191), `read_emissions`.
+- Routed all existing telemetry through `Emission`: `runtime/base._emit_telemetry` → MODEL,
+  `run.py` → RUN_START/RUN_FINISH (taint from `Output.tainted`), `nodes/sink` → SINK,
+  `runtime/context_strategy` → COMPACTION, `observe` → OBSERVER.
+- `inspector.py` reads the typed stream via `read_emissions`.
+- **Cost-consumer regression fixed** (bug-reviewer BLOCKER): the new emission shape
+  (`kind="model"`/`"run_finish"`, cost under `attrs`) broke `cost.spent_today`/`_event_cost`.
+  Fixed: `_event_cost` reads nested `attrs`; `_COST_BEARING_KINDS` accepts typed+legacy kinds;
+  new `_parse_event_ts` handles ISO-string AND epoch-float ts. Tests rewritten to be load-bearing.
+- `emit`/`read_emissions` exported. Demo: `test_demo_run_produces_typed_emission_stream` runs
+  triage-bot on MockRuntime; secret-never-in-ledger test through ScrubbingStore.
+
+DoD gate: ruff clean · format clean · mypy strict clean (70 files) · pytest 390 passed.
+Reviews: Security & Architecture **APPROVE**; Bug **APPROVE** (after cost fix re-review).
+
+Non-blocking follow-ups (→ CRA-191): `from_event` typed/legacy disambiguation is implicit
+(known-kind + `attrs` dict) — not reachable from real producers but a latent trap; `emit`'s
+`max_per_run` guard is wired but unused by emit sites (O(n)/emit when enabled — revisit at rotation).
+Follow-up (→ emit sites): stamp real `ts` on MODEL/RUN_FINISH so per-day cost filtering is exact
+(currently `ts=0.0` ⇒ always counted, never undercounts).
+
 ## Review-surfaced notes for downstream issues
 - **CRA-185** (taint-conformance suite): add explicit acceptance criterion — `tool`/MCP-result
   emissions MUST be `tainted=True`. The Emission envelope *carries* taint; producers enforce it.

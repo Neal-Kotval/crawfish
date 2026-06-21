@@ -92,8 +92,10 @@ async def test_command_runtime_parses_stream_json(tmp_path: Path) -> None:
     assert result.session_id == "sess-1"
     kinds = [e.kind for e in result.events]
     assert EventKind.TOOL_USE in kinds and EventKind.RESULT in kinds
-    # telemetry landed in the Store; budget was charged
-    assert any(e["event"] == "runtime.run" for e in ctx.store.events(ctx.run_id))
+    # telemetry landed in the Store as a typed MODEL emission; budget was charged
+    from crawfish.emission import EmissionKind, read_emissions
+
+    assert any(em.kind is EmissionKind.MODEL for em in read_emissions(ctx.store, ctx.run_id))
     assert ctx.cost_budget.spent_usd == pytest.approx(0.012)
 
 

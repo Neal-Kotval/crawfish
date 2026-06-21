@@ -24,17 +24,23 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import Enum
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 from crawfish.core.ids import new_id
 from crawfish.core.types import JSONValue
 
+if TYPE_CHECKING:
+    from crawfish.store.base import Store
+
 __all__ = [
     "EMISSION_SCHEMA_VERSION",
     "EmissionKind",
     "REQUIRED_ATTRS",
     "Emission",
+    "emit",
+    "read_emissions",
 ]
 
 # Bump when the Emission envelope or any kind's required-attrs change. The Store
@@ -114,15 +120,250 @@ class Emission(BaseModel):
         return not self.missing_attrs()
 
     def to_event(self) -> dict[str, JSONValue]:
-        """Serialize to a ledger event dict (implemented in CRA-171)."""
-        raise NotImplementedError(
-            "Emission.to_event is part of the ledger serialization landed in CRA-171"
-        )
+        """Serialize to a ledger event dict written via ``Store.append_event``.
+
+        Uses ``model_dump(mode="json")`` so the dict is JSON-safe; ``kind`` is the
+        enum's value string. The presence of the ``schema_version`` key (plus a
+        ``kind`` that names a known :class:`EmissionKind`) is how :meth:`from_event`
+        distinguishes a typed emission from a legacy loose dict.
+        """
+        data = self.model_dump(mode="json")
+        # model_dump already serializes the Enum to its value via mode="json", but be
+        # explicit so the contract is unambiguous regardless of pydantic settings.
+        data["kind"] = self.kind.value
+        return data
 
     @classmethod
     def from_event(cls, event: Mapping[str, JSONValue]) -> Emission:
-        """Rehydrate from a (possibly legacy) ledger event dict, applying
-        ``schema_version`` migration (implemented in CRA-171 / CRA-191)."""
-        raise NotImplementedError(
-            "Emission.from_event is the back-compat shim landed in CRA-171/CRA-191"
+        """Rehydrate from a (possibly legacy) ledger event dict.
+
+        Lifts BOTH (a) typed emission dicts produced by :meth:`to_event` and
+        (b) legacy loose event dicts (the ad-hoc telemetry written before the typed
+        substrate landed) into a valid :class:`Emission`. Applies ``schema_version``
+        defaulting (a missing version migrates to the current one). Tolerant by
+        design: an unrecognized legacy dict still lifts into *some* emission (a
+        ``METRIC`` carrying the raw payload under ``attrs``) rather than raising — old
+        runs must remain inspectable.
+        """
+        data = dict(event)
+
+        # -- (a) a typed emission produced by to_event -------------------------
+        # The typed envelope is recognized by a known ``kind`` together with an
+        # ``attrs`` mapping (the contract's payload slot). ``schema_version`` may be
+        # absent on an older typed row — it is defaulted in ``_lift_typed`` — but a
+        # legacy ObserverEvent dump also carries ``kind``, so the ``attrs`` mapping is
+        # what disambiguates the typed envelope from a loose legacy dict.
+        kind_raw = data.get("kind")
+        if _is_known_kind(kind_raw) and isinstance(data.get("attrs"), dict):
+            return cls._lift_typed(data)
+
+        # -- (b) a legacy loose event dict -------------------------------------
+        return cls._lift_legacy(data)
+
+    # -- back-compat lifting helpers ---------------------------------------
+    @classmethod
+    def _lift_typed(cls, data: dict[str, JSONValue]) -> Emission:
+        """Rehydrate a dict that already carries the typed envelope shape."""
+        # schema_version migration: a future/lower version still lifts; we only
+        # default a missing one. Real field migrations land per-version in CRA-191.
+        # TODO(CRA-191): rotation/retention + per-version attr migrations.
+        if data.get("schema_version") is None:
+            data["schema_version"] = EMISSION_SCHEMA_VERSION
+        return cls.model_validate(data)
+
+    @classmethod
+    def _lift_legacy(cls, data: dict[str, JSONValue]) -> Emission:
+        """Map a known (or unknown) legacy loose dict to a typed Emission."""
+        run_id = str(data.get("run_id") or data.get("trace_id") or "unknown")
+        org_id = str(data.get("org_id") or "local")
+        tainted = bool(data.get("tainted", False))
+        kind, attrs, node_id = _classify_legacy(data)
+        return cls(
+            schema_version=EMISSION_SCHEMA_VERSION,
+            kind=kind,
+            run_id=run_id,
+            org_id=org_id,
+            pipeline=_opt_str(data.get("pipeline")),
+            node_id=node_id,
+            ts=_opt_float(data.get("ts")),
+            attrs=attrs,
+            tainted=tainted,
         )
+
+
+def _is_known_kind(value: JSONValue) -> bool:
+    if isinstance(value, EmissionKind):
+        return True
+    if not isinstance(value, str):
+        return False
+    return value in EmissionKind._value2member_map_
+
+
+def _opt_str(value: JSONValue) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _opt_float(value: JSONValue) -> float:
+    return float(value) if isinstance(value, (int, float)) else 0.0
+
+
+def _classify_legacy(
+    data: Mapping[str, JSONValue],
+) -> tuple[EmissionKind, dict[str, JSONValue], str | None]:
+    """Map a legacy loose event dict to (kind, attrs, node_id).
+
+    Recognizes the ad-hoc shapes the codebase wrote before the typed substrate:
+    ``runtime.run`` telemetry, ``span`` run-lifecycle events, ``sink.write``
+    records, ``context.compaction`` events, and ``ObserverEvent`` dumps. An
+    unrecognized dict falls through to a generic ``METRIC`` carrying the raw
+    payload so it still lifts and stays inspectable.
+    """
+    node_id = _opt_str(data.get("node_id"))
+
+    # runtime.run telemetry -> MODEL
+    if data.get("event") == "runtime.run":
+        return (
+            EmissionKind.MODEL,
+            {
+                "model": data.get("model", ""),
+                "cost_usd": data.get("cost_usd", 0.0),
+                "events": data.get("events", 0),
+                "session_id": data.get("session_id"),
+                "runtime": data.get("runtime", ""),
+            },
+            node_id,
+        )
+
+    # context.compaction -> COMPACTION
+    if data.get("event") == "context.compaction":
+        return (
+            EmissionKind.COMPACTION,
+            {
+                "strategy": data.get("strategy", ""),
+                "turns_before": data.get("turns_before"),
+                "turns_after": data.get("turns_after"),
+                "reclaimed_tokens": data.get("reclaimed_tokens"),
+            },
+            node_id,
+        )
+
+    # run-lifecycle spans -> RUN_START / RUN_FINISH
+    if data.get("type") == "span":
+        name = str(data.get("name") or "")
+        if name == "run.finish":
+            return (
+                EmissionKind.RUN_FINISH,
+                {
+                    "status": data.get("status", "unknown"),
+                    "cost_usd": data.get("cost_usd"),
+                    "latency_ms": data.get("latency_ms"),
+                    "reason": data.get("reason"),
+                    "detail": data.get("detail"),
+                },
+                node_id,
+            )
+        if name == "run.suspended":
+            return (
+                EmissionKind.RUN_FINISH,
+                {"status": "suspended", "reason": data.get("reason")},
+                node_id,
+            )
+        # run.start (and any other span) -> RUN_START; carry the span name.
+        return (
+            EmissionKind.RUN_START,
+            {
+                "runtime": data.get("runtime", ""),
+                "span": name,
+                "definition": data.get("definition"),
+            },
+            node_id,
+        )
+
+    # sink.write -> SINK
+    if data.get("type") == "sink.write":
+        return (
+            EmissionKind.SINK,
+            {
+                "target": data.get("sink", ""),
+                "committed": True,
+                "output_id": data.get("output_id"),
+                "batch_id": data.get("batch_id"),
+                "idempotency_key": data.get("idempotency_key"),
+            },
+            _opt_str(data.get("node_id")),
+        )
+
+    # ObserverEvent dumps (have pipeline + kind + severity) -> OBSERVER
+    if "severity" in data and "kind" in data and "pipeline" in data:
+        return (
+            EmissionKind.OBSERVER,
+            {
+                "kind": data.get("kind", ""),
+                "severity": data.get("severity", "info"),
+                "detail": data.get("detail", ""),
+                "observer": data.get("observer"),
+            },
+            _opt_str(data.get("observer")),
+        )
+
+    # Unknown legacy shape: lift into a generic METRIC carrying the raw payload,
+    # so nothing on an old ledger is ever lost or raises on inspect.
+    return (
+        EmissionKind.METRIC,
+        {"metric": "legacy_event", "value": 0, "raw": dict(data)},
+        node_id,
+    )
+
+
+def emit(
+    store: Store,
+    e: Emission,
+    *,
+    org_id: str = "local",
+    max_per_run: int | None = None,
+) -> None:
+    """Write a typed :class:`Emission` to the ledger via ``Store.append_event``.
+
+    ``ScrubbingStore`` (when the store is wrapped) redacts secrets on the write —
+    this never bypasses it. A lightweight per-run volume cap guards against an
+    emission-flood DoS: if ``max_per_run`` is set and the run already holds at least
+    that many events, the emission is dropped and a single capped-warning OBSERVER
+    emission is written in its place (only the first time the cap is crossed).
+
+    Determinism: ``ts`` is whatever the caller stamped on ``e`` (default ``0.0``);
+    this path reads no wall clock.
+    """
+    # TODO(CRA-191): rotation/retention — this cap only drops, it does not rotate.
+    if max_per_run is not None:
+        existing = store.events(e.run_id, org_id=org_id)
+        if len(existing) >= max_per_run:
+            already_capped = any(
+                ev.get("kind") == EmissionKind.OBSERVER.value
+                and isinstance(ev.get("attrs"), dict)
+                and ev["attrs"].get("kind") == "emission.capped"
+                for ev in existing
+            )
+            if not already_capped:
+                warning = Emission(
+                    kind=EmissionKind.OBSERVER,
+                    run_id=e.run_id,
+                    org_id=org_id,
+                    attrs={
+                        "kind": "emission.capped",
+                        "severity": "warn",
+                        "cap": max_per_run,
+                    },
+                )
+                store.append_event(e.run_id, warning.to_event(), org_id=org_id)
+            return
+    store.append_event(e.run_id, e.to_event(), org_id=org_id)
+
+
+def read_emissions(store: Store, run_id: str, *, org_id: str = "local") -> list[Emission]:
+    """Read a run's ledger and lift every event into a typed :class:`Emission`.
+
+    Mixed ledgers work: legacy loose dicts lift via :meth:`Emission.from_event`'s
+    back-compat shim, typed emissions round-trip exactly. Pure read — no clock.
+    """
+    rows = store.events(run_id, org_id=org_id)
+    return [Emission.from_event(row) for row in rows]

@@ -21,6 +21,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from crawfish.core.types import JSONValue
+from crawfish.emission import EmissionKind, read_emissions
 from crawfish.store.base import Store
 
 __all__ = [
@@ -73,74 +74,82 @@ def _as_str(value: JSONValue | None) -> str:
 def inspect_run(store: Store, run_id: str, *, org_id: str = "local") -> RunReport:
     """Summarize a run from the Store's event ledger (``craw inspect <run>``).
 
-    Derives status / total cost / latency from the ``span`` events Run emits
-    (``run.start`` / ``run.finish``), accumulates cost from ``runtime.run``
-    telemetry, and builds an ordered transcript + tool-call list. Performs no
-    live model call — pure read over append-only events.
+    Reads the typed :class:`~crawfish.emission.Emission` stream via
+    :func:`~crawfish.emission.read_emissions` — the back-compat shim lifts both new
+    typed emissions and legacy loose dicts, so old runs still inspect. Derives status
+    / total cost / latency from ``run_finish`` emissions, accumulates cost from
+    ``model`` emissions, and builds an ordered transcript + tool-call list. Performs
+    no live model call — pure read over append-only events.
     """
-    events = store.events(run_id, org_id=org_id)
-    report = RunReport(run_id=run_id, event_count=len(events))
-    if not events:
+    emissions = read_emissions(store, run_id, org_id=org_id)
+    report = RunReport(run_id=run_id, event_count=len(emissions))
+    if not emissions:
         return report
 
     report.found = True
     cost_from_finish: float | None = None
-    cost_from_runtime = 0.0
+    cost_from_model = 0.0
 
-    for event in events:
-        etype = _as_str(event.get("type"))
-        name = _as_str(event.get("name"))
-        kind = _as_str(event.get("kind"))
-        ekey = _as_str(event.get("event"))
+    for em in emissions:
+        attrs = em.attrs
 
-        # -- Run spans (status / cost / latency) ----------------------------
-        if etype == "span":
-            report.transcript.append(
-                TranscriptEntry(kind=f"span:{name}", detail=_as_str(event.get("status")) or None)
-            )
-            if name == "run.finish":
-                status = event.get("status")
-                if status is not None:
-                    report.status = str(status)
-                latency = event.get("latency_ms")
-                if isinstance(latency, (int, float)):
-                    report.latency_ms = float(latency)
-                cost = event.get("cost_usd")
-                if isinstance(cost, (int, float)):
-                    cost_from_finish = float(cost)
-            elif name == "run.suspended":
-                report.status = "suspended"
+        if em.kind is EmissionKind.RUN_START:
+            span = _as_str(attrs.get("span")) or "run.start"
+            report.transcript.append(TranscriptEntry(kind=f"span:{span}"))
             continue
 
-        # -- Runtime telemetry (model / cost) -------------------------------
-        if ekey == "runtime.run":
-            cost = event.get("cost_usd")
+        if em.kind is EmissionKind.RUN_FINISH:
+            status = _as_str(attrs.get("status"))
+            report.transcript.append(TranscriptEntry(kind="span:run.finish", detail=status or None))
+            if status:
+                report.status = status
+            latency = attrs.get("latency_ms")
+            if isinstance(latency, (int, float)):
+                report.latency_ms = float(latency)
+            cost = attrs.get("cost_usd")
             if isinstance(cost, (int, float)):
-                cost_from_runtime += float(cost)
-            model = _as_str(event.get("model"))
+                cost_from_finish = float(cost)
+            continue
+
+        if em.kind is EmissionKind.MODEL:
+            cost = attrs.get("cost_usd")
+            if isinstance(cost, (int, float)):
+                cost_from_model += float(cost)
+            model = _as_str(attrs.get("model"))
             report.transcript.append(TranscriptEntry(kind="runtime.run", detail=model or None))
             continue
 
-        # -- Transcript-shaped runtime events (TEXT/TOOL_USE/...) -----------
-        if kind:
-            report.transcript.append(TranscriptEntry(kind=kind, text=_as_str(event.get("text"))))
-            if kind == "tool_use":
-                tool = event.get("tool")
-                if isinstance(tool, dict):
-                    raw_input = tool.get("input")
-                    report.tool_calls.append(
-                        ToolCallRecord(
-                            name=_as_str(tool.get("name")),
-                            input=raw_input if isinstance(raw_input, dict) else {},
-                        )
-                    )
-                elif event.get("name"):
-                    report.tool_calls.append(ToolCallRecord(name=_as_str(event.get("name"))))
+        # Legacy transcript-shaped runtime events (TEXT/TOOL_USE/...) lift to a
+        # generic METRIC carrying the raw dict under attrs["raw"]; recover them.
+        if em.kind is EmissionKind.METRIC and attrs.get("metric") == "legacy_event":
+            _absorb_legacy_metric(report, attrs.get("raw"))
             continue
 
     # run.finish cost is authoritative when present; otherwise sum the telemetry.
-    report.cost_usd = cost_from_finish if cost_from_finish is not None else cost_from_runtime
+    report.cost_usd = cost_from_finish if cost_from_finish is not None else cost_from_model
     return report
+
+
+def _absorb_legacy_metric(report: RunReport, raw: JSONValue) -> None:
+    """Recover a transcript-shaped runtime event lifted under a generic METRIC."""
+    if not isinstance(raw, dict):
+        return
+    kind = _as_str(raw.get("kind"))
+    if not kind:
+        return
+    report.transcript.append(TranscriptEntry(kind=kind, text=_as_str(raw.get("text"))))
+    if kind == "tool_use":
+        tool = raw.get("tool")
+        if isinstance(tool, dict):
+            raw_input = tool.get("input")
+            report.tool_calls.append(
+                ToolCallRecord(
+                    name=_as_str(tool.get("name")),
+                    input=raw_input if isinstance(raw_input, dict) else {},
+                )
+            )
+        elif raw.get("name"):
+            report.tool_calls.append(ToolCallRecord(name=_as_str(raw.get("name"))))
 
 
 def tail_events(
