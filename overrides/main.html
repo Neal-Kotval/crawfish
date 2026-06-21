@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{#
+  Render the previous / next page links inline at the END of the article
+  (instead of the page footer), so they're reached as normal content and never
+  depend on the page's absolute bottom or a macOS overscroll. The built-in
+  footer prev/next is disabled via the theme features (no `navigation.footer`).
+#}
+{% block content %}
+  {{ super() }}
+
+  {% if page.previous_page or page.next_page %}
+  <nav class="craw-pagenav" aria-label="Previous and next page">
+    {% if page.previous_page %}
+    <a
+      href="{{ page.previous_page.url | url }}"
+      class="craw-pagenav__link craw-pagenav__link--prev"
+      rel="prev"
+    >
+      <span class="craw-pagenav__arrow" aria-hidden="true">&larr;</span>
+      <span class="craw-pagenav__title">{{ page.previous_page.title }}</span>
+    </a>
+    {% endif %}
+    {% if page.next_page %}
+    <a
+      href="{{ page.next_page.url | url }}"
+      class="craw-pagenav__link craw-pagenav__link--next"
+      rel="next"
+    >
+      <span class="craw-pagenav__title">{{ page.next_page.title }}</span>
+      <span class="craw-pagenav__arrow" aria-hidden="true">&rarr;</span>
+    </a>
+    {% endif %}
+  </nav>
+  {% endif %}
+{% endblock %}

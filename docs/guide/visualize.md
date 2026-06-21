@@ -2,7 +2,8 @@
 
 `craw visualize` serves a dashboard over the run-info surface: running pipelines, recent
 runs and their status, what you've spent today, and observer events. It's plain HTML and
-JS, with no build step and no framework, and it binds to loopback only.
+JS, with no build step and no framework, and it binds to loopback only — only your
+machine can reach it.
 
 ## Command
 
@@ -13,8 +14,13 @@ craw visualize [--port <port>]
 
 The server binds `127.0.0.1` only, so no other host can reach it. The default port is
 `7878`. Open the URL in a browser. The page reads the same Store-backed run-info surface
-that [observers](observers.md) write and [`craw manage`](manage.md) queries, so it
-reflects deployed pipelines live.
+that [observers](observers.md) write and [`craw manage`](manage.md) queries, so it shows
+deployed pipelines live.
+
+!!! warning "Loopback only — by design"
+    The dashboard binds `127.0.0.1`, never `0.0.0.0`. There is no auth layer because there
+    is no network surface to authenticate. Do not put it behind a reverse proxy to expose
+    it off the machine; that breaks the security model.
 
 ## What it shows
 
@@ -24,6 +30,10 @@ reflects deployed pipelines live.
 - **Observer events** — the `ObserverEvent` stream, newest first, with severity.
 
 The dashboard is a read-only mirror. It never triggers a run or changes state.
+
+!!! note "Good to know"
+    The page renders the scrubbed run-info surface, so no secret value reaches the UI. For
+    control actions — deploy, stop, restart — reach for [`craw manage`](manage.md).
 
 ## Worked example
 
@@ -49,7 +59,7 @@ craw visualize --port 9000
 
 ## Security
 
-The dashboard is small and closed by design:
+The dashboard is small and closed by design.
 
 - **Loopback-only.** It binds `127.0.0.1`, so nothing off the machine can reach it. There
   is no auth layer because there is no network surface to authenticate.
@@ -59,4 +69,9 @@ The dashboard is small and closed by design:
 - **Read-only.** It has no control actions. Deploy, stop, and restart live in
   [`craw manage`](manage.md).
 
-See the [operations overview](operations.md) and [SECURITY.md](../architecture/SECURITY.md).
+## See also
+
+- [Observers](observers.md) — emit the events the dashboard shows.
+- [`craw manage`](manage.md) — control actions and CLI queries.
+- [Deploy](deploy.md) — schedule the pipelines you watch here.
+- [Operations overview](operations.md) and [SECURITY.md](../architecture/SECURITY.md).

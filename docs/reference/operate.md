@@ -1,18 +1,21 @@
 # Operate — deploy, manage & triggers
 
-Everything that turns a finished pipeline into something that *runs by itself*: launching
-it as a long-lived background process, listing and restarting what's running, deciding
-*when* it fires, and packaging it as a container image. These live in `crawfish.deploy`,
+Everything that turns a finished pipeline into something that *runs by itself*. Launch it
+as a long-lived background process, list and restart what's running, decide *when* it
+fires, and package it as a container image. These live in `crawfish.deploy`,
 `crawfish.manage`, `crawfish.triggers`, and `crawfish.build`.
 
-**Symbols on this page:** `DeployEntry` · `DeployRegistry` · `DeployStatus` · `Supervisor` ·
-`deploy` · `stop` · `PipelineStatus` · `manage_list` · `format_table` · `restart_target` ·
-`Cron` · `CronSchedule` · `Trigger` · `CronTrigger` · `WebhookTrigger` · `verify_webhook` ·
+`DeployEntry` · `DeployRegistry` · `DeployStatus` · `Supervisor` · `deploy` · `stop` ·
+`PipelineStatus` · `manage_list` · `format_table` · `restart_target` · `Cron` ·
+`CronSchedule` · `Trigger` · `CronTrigger` · `WebhookTrigger` · `verify_webhook` ·
 `generate_containerfile` · `plan_build` · `write_containerfile` · `BuildPlan`
 
----
+**On this page:** [Deploying a pipeline](#deploying-a-pipeline) ·
+[Managing what's running](#managing-whats-running) · [Triggers](#triggers) ·
+[Building an image](#building-an-image) · [Under the hood](#under-the-hood) ·
+[Example](#example) · [API reference](#api-reference)
 
-## Core
+## Deploying a pipeline
 
 A pipeline you run by hand stops when you close the terminal. **Deploying** it means
 launching it as a **daemon** — a long-lived background process that survives the shell
@@ -26,11 +29,15 @@ in the project's [`Store`](persistence.md), recording each deployed pipeline's n
 row is a **`DeployEntry`**; `DeployRegistry` reads and writes them; `DeployStatus` is the
 running / stopped / dead label on each. `stop` signals the process and flips its status.
 
+## Managing what's running
+
 **`craw manage`** is the operator's window onto all of that. `manage_list` builds the
 view — one **`PipelineStatus`** per deployed pipeline, joining the registry row with how
 its runs actually went (uptime, last run, cost today, next fire time). `format_table`
 prints those rows as a plain text table. `restart_target` stops a pipeline and
 re-deploys it from its recorded directory and schedule.
+
+## Triggers
 
 A **trigger** answers *when does this fire?* Two kinds:
 
@@ -43,15 +50,15 @@ A **trigger** answers *when does this fire?* Two kinds:
   HTTP request, the sender proves it is genuine by attaching a **signature** computed from
   a shared secret; `verify_webhook` recomputes that signature and checks it matches.
 
-Finally, **`craw build`** packages a project as a container image — a self-contained,
-reproducible bundle of the project plus its pinned dependencies. You never hand-write the
-build recipe (the **`Containerfile`**): `generate_containerfile` derives it
-deterministically, `write_containerfile` saves it, and `plan_build` returns a
-**`BuildPlan`** summarising what the image will be without writing anything.
+## Building an image
 
----
+**`craw build`** packages a project as a container image — a self-contained, reproducible
+bundle of the project plus its pinned dependencies. You never hand-write the build recipe
+(the **`Containerfile`**): `generate_containerfile` derives it deterministically,
+`write_containerfile` saves it, and `plan_build` returns a **`BuildPlan`** summarising what
+the image will be without writing anything.
 
-## Ramps up
+## Under the hood
 
 ### Why a detached daemon, not tmux
 
@@ -73,13 +80,19 @@ and `supervise_main` wraps the project's Store in a `ScrubbingStore` so nothing 
 writes can leak a credential. A failed cycle's exception text is additionally passed
 through `redact` before it becomes an observer event — defence in depth.
 
+!!! warning "No secret ever reaches the daemon's argv"
+
+    Secrets are resolved by reference at run time, never passed on the command line, the
+    session name, or in an env dump. The deploy path holds to the same security spine as a
+    foreground run.
+
 ### Logic is split from the spawn, so it's testable
 
-`Supervisor`'s scheduling and one-cycle logic is deliberately separated from the act of
-launching a daemon. Tests drive `run_cycle(now)` and `due(now)` directly, and `serve`
-takes injectable `now_fn` / `sleep_fn` / `stop_flag` / `max_cycles` seams so the always-on
-loop runs in zero real time. Likewise `deploy` and `stop` take an injectable `spawn` /
-`kill` callable. Nothing on this page requires an actual daemon to exercise.
+`Supervisor`'s scheduling and one-cycle logic is kept separate from the act of launching a
+daemon. Tests drive `run_cycle(now)` and `due(now)` directly, and `serve` takes injectable
+`now_fn` / `sleep_fn` / `stop_flag` / `max_cycles` seams so the always-on loop runs in zero
+real time. `deploy` and `stop` likewise take an injectable `spawn` / `kill` callable.
+Nothing on this page needs an actual daemon to exercise.
 
 ### Liveness reconciliation: reality over stale state
 
@@ -109,6 +122,12 @@ a forged signature was correct. The `secret` itself is never stored inline —
 `WebhookTrigger.secret_ref` holds the *name* of an environment variable, and the caller
 resolves the value from there before calling `verify_webhook`.
 
+!!! note "Good to know"
+
+    The constant-time compare is the point. A naive `==` returns early on the first
+    differing byte, leaking through timing how much of a forged signature was correct.
+    `hmac.compare_digest` always compares the full length, so it gives a forger nothing.
+
 ### Builds are deterministic by construction
 
 Both `generate_containerfile` and `plan_build` are pure functions of the manifest plus two
@@ -118,7 +137,74 @@ tag is `<name>:<version>` from the manifest; the entrypoint is always `craw run`
 container *is* the runnable automation. When `lock_present` is true the recipe copies and
 installs `crawfish.lock` first for pinned dependencies.
 
----
+## Example
+
+Three pure operations, no daemons and no network: parse a cron schedule and compute its
+next fire from a **fixed** base time, verify a webhook signature, generate a Containerfile,
+and render a `manage` table over synthetic rows.
+
+```python
+import hashlib, hmac
+from datetime import datetime, UTC
+
+from crawfish.triggers import parse_schedule, verify_webhook
+from crawfish.build import generate_containerfile
+from crawfish.config import ProjectManifest
+from crawfish.manage import PipelineStatus, format_table
+
+# 1) Cron: next fire strictly after a FIXED base datetime (no real clock).
+base = datetime(2026, 6, 21, 7, 59, tzinfo=UTC)   # 07:59 UTC
+sched = parse_schedule("0 8 * * *")               # 08:00 every day
+print(type(sched).__name__, sched.expr)
+print("matches base:", sched.matches(base))
+print("next fire:   ", sched.next_after(base).isoformat())
+
+# 2) Webhook: recompute the HMAC-SHA256 signature and verify in constant time.
+secret, payload = "shh", b'{"event":"push"}'
+sig = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+print("verify good: ", verify_webhook(secret, payload, sig))
+print("verify bad:  ", verify_webhook(secret, payload, "deadbeef"))
+
+# 3) Deterministic Containerfile for a tiny manifest.
+manifest = ProjectManifest(name="triage-bot", version="0.1.0")
+print(generate_containerfile(manifest, python_version="3.11", lock_present=False), end="")
+
+# 4) Render the manage view over synthetic rows (no live deployment).
+rows = [
+    PipelineStatus(name="triage-bot", status="running", pid=4242,
+                   schedule="0 8 * * *", uptime_s=3725.0,
+                   last_run_status="done", last_run_ago_s=90.0,
+                   next_fire="08:00", cost_today_usd=0.42),
+    PipelineStatus(name="nightly", status="dead", pid=0,
+                   uptime_s=86461.0, cost_today_usd=0.0),
+]
+print(format_table(rows))
+```
+
+??? success "▶ Output"
+
+    ```text
+    CronSchedule 0 8 * * *
+    matches base: False
+    next fire:    2026-06-21T08:00:00+00:00
+    verify good:  True
+    verify bad:   False
+    # Generated by craw build for triage-bot:0.1.0.
+    # Do not edit by hand; regenerate with `craw build`.
+    FROM python:3.11-slim
+
+    WORKDIR /app
+
+    # Copy the self-contained project and install crawfish + the project.
+    COPY . .
+    RUN pip install --no-cache-dir .
+
+    # The container is the runnable automation.
+    ENTRYPOINT ["craw", "run"]
+    NAME          STATUS   UPTIME  LAST RUN    NEXT     $TODAY
+    triage-bot    running  1h2m    done 1m ago 08:00     $0.42
+    nightly       dead     1d      — —         —         $0.00
+    ```
 
 ## API reference
 
@@ -400,73 +486,8 @@ def write_containerfile(
 Write `generate_containerfile`'s output to `dest` and return the path. If `dest` is a
 directory, the file is written as `dest/Containerfile`.
 
----
+## See also
 
-## Example
-
-Three pure operations, no daemons and no network: parse a cron schedule and compute its
-next fire from a **fixed** base time, verify a webhook signature, generate a Containerfile,
-and render a `manage` table over synthetic rows.
-
-```python
-import hashlib, hmac
-from datetime import datetime, UTC
-
-from crawfish.triggers import parse_schedule, verify_webhook
-from crawfish.build import generate_containerfile
-from crawfish.config import ProjectManifest
-from crawfish.manage import PipelineStatus, format_table
-
-# 1) Cron: next fire strictly after a FIXED base datetime (no real clock).
-base = datetime(2026, 6, 21, 7, 59, tzinfo=UTC)   # 07:59 UTC
-sched = parse_schedule("0 8 * * *")               # 08:00 every day
-print(type(sched).__name__, sched.expr)
-print("matches base:", sched.matches(base))
-print("next fire:   ", sched.next_after(base).isoformat())
-
-# 2) Webhook: recompute the HMAC-SHA256 signature and verify in constant time.
-secret, payload = "shh", b'{"event":"push"}'
-sig = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
-print("verify good: ", verify_webhook(secret, payload, sig))
-print("verify bad:  ", verify_webhook(secret, payload, "deadbeef"))
-
-# 3) Deterministic Containerfile for a tiny manifest.
-manifest = ProjectManifest(name="triage-bot", version="0.1.0")
-print(generate_containerfile(manifest, python_version="3.11", lock_present=False), end="")
-
-# 4) Render the manage view over synthetic rows (no live deployment).
-rows = [
-    PipelineStatus(name="triage-bot", status="running", pid=4242,
-                   schedule="0 8 * * *", uptime_s=3725.0,
-                   last_run_status="done", last_run_ago_s=90.0,
-                   next_fire="08:00", cost_today_usd=0.42),
-    PipelineStatus(name="nightly", status="dead", pid=0,
-                   uptime_s=86461.0, cost_today_usd=0.0),
-]
-print(format_table(rows))
-```
-
-??? success "▶ Output"
-
-    ```text
-    CronSchedule 0 8 * * *
-    matches base: False
-    next fire:    2026-06-21T08:00:00+00:00
-    verify good:  True
-    verify bad:   False
-    # Generated by craw build for triage-bot:0.1.0.
-    # Do not edit by hand; regenerate with `craw build`.
-    FROM python:3.11-slim
-
-    WORKDIR /app
-
-    # Copy the self-contained project and install crawfish + the project.
-    COPY . .
-    RUN pip install --no-cache-dir .
-
-    # The container is the runnable automation.
-    ENTRYPOINT ["craw", "run"]
-    NAME          STATUS   UPTIME  LAST RUN    NEXT     $TODAY
-    triage-bot    running  1h2m    done 1m ago 08:00     $0.42
-    nightly       dead     1d      — —         —         $0.00
-    ```
+- [Persistence](persistence.md) — the `Store` that backs the deploy registry and ledger.
+- [Authoring](authoring.md) — the project a `deploy` or `build` runs from.
+- [Core types](core-types.md) — the static-only rule behind `secret_ref` and sink targets.

@@ -1,23 +1,21 @@
 # Type system
 
-The structural compatibility engine behind every port connection. It turns a parameter's
-string type name (`"str"`, `"list[PR]"`) into a resolved type and answers the one question
-the wiring guarantee rests on: *can a value of the producer's type flow into the consumer's
-port?* These live in `crawfish.typesystem`.
+The engine that decides whether two ports can connect. It turns a parameter's string type
+name (`"str"`, `"list[PR]"`) into a resolved type, then answers the one question wiring
+rests on: *can a value of the producer's type flow into the consumer's port?* It lives in
+`crawfish.typesystem`.
 
-**Symbols on this page:** `TypeKind` · `TypeDef` · `TypeRegistry` · `default_registry`
+`TypeKind` · `TypeDef` · `TypeRegistry` · `default_registry`
 
----
-
-## Core
+## Types are strings the registry gives meaning to
 
 Every [parameter](core-types.md#parameter) on a node carries a `type` as a **string name**,
-not a Python type object. The type system is what gives those strings meaning. It does two
-jobs: it **resolves** a name into a structured description, and it decides **compatibility** —
-whether one resolved type can satisfy another.
+not a Python type object. The type system does two jobs with those strings: it **resolves** a
+name into a structured description, and it decides **compatibility** — whether one resolved
+type can satisfy another.
 
 Compatibility is **structural**, never by spelling. Two types match because of their *shape*,
-not because their names are equal. The system understands four shapes (`TypeKind`):
+not because their names happen to be equal. The system understands four shapes (`TypeKind`):
 
 - **Primitive** — an atom like `str`, `int`, `bool`. The built-ins are `str`, `int`, `float`,
   `bool`, `null`, and `json` (any JSON value). Any unregistered bare name is also treated as a
@@ -27,31 +25,28 @@ not because their names are equal. The system understands four shapes (`TypeKind
 - **List** — a homogeneous sequence, written `list[X]`.
 - **Optional** — a value that may be absent, written `X?` or `Optional[X]`.
 
+A `TypeRegistry` holds the named records and primitives and answers these questions.
+`default_registry` is the single process-wide registry the rest of the framework uses unless
+you hand it your own.
+
+## Width subtyping
+
 The headline rule for records is **width subtyping**: a producer record satisfies a consumer
-record when it carries *at least* every field the consumer asks for, each field compatible. A
-richer record (more fields) can always stand in where a narrower one is needed — extra fields
-are harmless. The reverse fails: a record missing a field the consumer requires cannot satisfy
-it.
+record when it carries *at least* every field the consumer asks for, each one compatible. A
+richer record can always stand in for a narrower one — extra fields are harmless. The reverse
+fails: a record missing a field the consumer requires cannot satisfy it.
 
-A **registry** (`TypeRegistry`) holds the named records and primitives and answers these
-questions. `default_registry` is the single process-wide registry that the rest of the
-framework uses unless you hand it your own.
+## Structural, not nominal
 
----
-
-## Ramps up
-
-### Structural, not nominal — and why (ADR 0002)
-
-The desktop console and the unit registry must read a node's port shapes *without importing
-Python*. So compatibility cannot depend on Python class identity or string equality; it must
-be decidable from the type names alone. That is the structural-registry decision recorded in
+Compatibility never depends on Python class identity or string equality. The desktop console
+and the unit registry must read a node's port shapes *without importing Python*, so the answer
+has to be decidable from the type names alone. That is the structural-registry decision in
 [ADR 0002](../architecture/decisions/0002-structural-type-registry.md): types compare by shape,
 resolved through a registry, never by `==` on the strings. This is what lets
 [`parameters_compatible`](core-types.md#parameters_compatible) wire `"list[PR]"` to a record
 with the right fields.
 
-### How resolution parses a name
+## How resolution parses a name
 
 `resolve` is a small recursive-descent parser over the type string, tried in this order:
 
@@ -66,7 +61,13 @@ matched by name, so authoring a pipeline needs no registration until you want fi
 rules. Registering a record with `register_record` is precisely what unlocks width subtyping
 for that name.
 
-### The compatibility rules
+!!! note "Good to know"
+
+    An unregistered name still *resolves* — nominally, as a primitive matched by name. It just
+    can't do field-subset checks until you register it as a record. So `is_registered("PR")`
+    can be `False` while `resolve("PR")` succeeds.
+
+## The compatibility rules
 
 `is_compatible(producer, consumer)` resolves both names and walks the shapes. The directional
 rules, in the order they are checked:
@@ -84,7 +85,7 @@ rules, in the order they are checked:
 `explain(producer, consumer)` returns `None` when compatible, otherwise a one-line structural
 reason — useful for surfacing *why* a wire was rejected.
 
-### JSON-Schema round-trip
+## JSON-Schema round-trip
 
 `json_schema(type_str)` emits a standard JSON-Schema fragment for any resolved type:
 primitives map to their schema (`str` → `{"type": "string"}`), lists to `{"type": "array",
@@ -93,15 +94,73 @@ with `properties` and a `required` list of every field. A nominal type with no k
 emits a `{"$ref": "#/types/<name>"}` placeholder. This is the bridge that lets the console read
 type shapes without Python.
 
-### `default_registry` is a singleton
+## The default registry
 
-`default_registry` is one `TypeRegistry` instance created at import time. Plugins register their
-types into it via the `crawfish.types` entry-point group, and
+`default_registry` is one `TypeRegistry` instance created at import time. Plugins register
+their types into it via the `crawfish.types` entry-point group, and
 [`parameters_compatible`](core-types.md#parameters_compatible) falls back to it when no registry
 is passed. Construct your own `TypeRegistry` for isolation (tests, a sandboxed tenant); share
 `default_registry` for the normal process-wide view.
 
----
+## Example
+
+Register a narrow record and a wider one, resolve a generic, and watch width subtyping decide
+compatibility — extra fields satisfy a port needing fewer; a missing field does not.
+
+```python
+import json
+from crawfish.typesystem.registry import TypeRegistry, default_registry
+
+reg = TypeRegistry()
+
+# A record the consumer needs, plus a wider producer record (one extra field).
+reg.register_record("Ticket", {"id": "str", "body": "str"})
+reg.register_record("RichTicket", {"id": "str", "body": "str", "priority": "int"})
+
+# Resolve a generic over the record.
+td = reg.resolve("list[Ticket]")
+print(td.kind.value, td.name, td.item)
+
+# Width subtyping: a record with EXTRA fields satisfies one needing fewer.
+print(reg.is_compatible("RichTicket", "Ticket"))   # extra field -> ok
+print(reg.is_compatible("Ticket", "RichTicket"))   # missing field -> no
+
+# Lists ride the same rule, covariantly.
+print(reg.is_compatible("list[RichTicket]", "list[Ticket]"))
+
+# explain() gives a reason only on failure.
+print(reg.explain("RichTicket", "Ticket"))
+print(reg.explain("Ticket", "RichTicket"))
+
+# Optional widening: a plain str feeds Optional[str], but not the reverse.
+print(reg.is_compatible("str", "str?"))
+print(reg.is_compatible("str?", "str"))
+
+# json_schema round-trips a record for the console (no Python needed).
+print(json.dumps(reg.json_schema("Ticket"), sort_keys=True))
+
+# is_registered: a registered record vs an unregistered (but resolvable) name.
+print(reg.is_registered("Ticket"), reg.is_registered("PR"))
+
+# The process-wide singleton is a TypeRegistry.
+print(type(default_registry).__name__)
+```
+
+??? success "▶ Output"
+
+    ```text
+    list list[Ticket] Ticket
+    True
+    False
+    True
+    None
+    type 'Ticket' is not structurally compatible with 'RichTicket'
+    True
+    False
+    {"properties": {"body": {"type": "string"}, "id": {"type": "string"}}, "required": ["id", "body"], "type": "object"}
+    True False
+    TypeRegistry
+    ```
 
 ## API reference
 
@@ -189,64 +248,7 @@ Emit a JSON-Schema fragment for the resolved type — primitives, `array`, `anyO
 time. Plugins register types into it via the `crawfish.types` entry-point group; it is the
 fallback registry for [`parameters_compatible`](core-types.md#parameters_compatible).
 
----
+## See also
 
-## Example
-
-Register a narrow record and a wider one, resolve a generic, and watch width subtyping decide
-compatibility — extra fields satisfy a port needing fewer; a missing field does not.
-
-```python
-import json
-from crawfish.typesystem.registry import TypeRegistry, default_registry
-
-reg = TypeRegistry()
-
-# A record the consumer needs, plus a wider producer record (one extra field).
-reg.register_record("Ticket", {"id": "str", "body": "str"})
-reg.register_record("RichTicket", {"id": "str", "body": "str", "priority": "int"})
-
-# Resolve a generic over the record.
-td = reg.resolve("list[Ticket]")
-print(td.kind.value, td.name, td.item)
-
-# Width subtyping: a record with EXTRA fields satisfies one needing fewer.
-print(reg.is_compatible("RichTicket", "Ticket"))   # extra field -> ok
-print(reg.is_compatible("Ticket", "RichTicket"))   # missing field -> no
-
-# Lists ride the same rule, covariantly.
-print(reg.is_compatible("list[RichTicket]", "list[Ticket]"))
-
-# explain() gives a reason only on failure.
-print(reg.explain("RichTicket", "Ticket"))
-print(reg.explain("Ticket", "RichTicket"))
-
-# Optional widening: a plain str feeds Optional[str], but not the reverse.
-print(reg.is_compatible("str", "str?"))
-print(reg.is_compatible("str?", "str"))
-
-# json_schema round-trips a record for the console (no Python needed).
-print(json.dumps(reg.json_schema("Ticket"), sort_keys=True))
-
-# is_registered: a registered record vs an unregistered (but resolvable) name.
-print(reg.is_registered("Ticket"), reg.is_registered("PR"))
-
-# The process-wide singleton is a TypeRegistry.
-print(type(default_registry).__name__)
-```
-
-??? success "▶ Output"
-
-    ```text
-    list list[Ticket] Ticket
-    True
-    False
-    True
-    None
-    type 'Ticket' is not structurally compatible with 'RichTicket'
-    True
-    False
-    {"properties": {"body": {"type": "string"}, "id": {"type": "string"}}, "required": ["id", "body"], "type": "object"}
-    True False
-    TypeRegistry
-    ```
+- [Core types](core-types.md) — where `Parameter.type` strings come from and how wiring uses them.
+- [Output & wiring](output-and-wiring.md) — connecting one node's output to the next.

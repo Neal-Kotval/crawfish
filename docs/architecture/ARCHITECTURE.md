@@ -1,8 +1,10 @@
 # Crawfish Architecture
 
+How Crawfish turns a directory of files into typed, swappable runtime parts.
+
 ## The model
 
-An **agent is a directory**. Author markdown (instructions/skills) + Python (tools,
+An **agent is a directory**. Write markdown (instructions and skills) and Python (tools,
 typed IO); the framework **compiles** the directory into typed runtime objects. The
 control-flow model:
 
@@ -15,8 +17,8 @@ Source → Filter → Batch(Definition) → Aggregator → Router → Sink
 
 ## Three swappable seams
 
-The product model imports **none** of these directly — only their protocols. That is
-the whole reason cloud + scale are driver swaps, not rewrites.
+The product model imports **none** of these directly — only their protocols. That is what
+makes moving to cloud and scale a driver swap, not a rewrite.
 
 | Seam | Protocol | Local default | Later |
 |------|----------|---------------|-------|
@@ -45,10 +47,10 @@ the whole reason cloud + scale are driver swaps, not rewrites.
 
 ## Emission stream (Phase 2 observability)
 
-- **`crawfish.emission`** — one typed signal, `Emission`, that every producer writes
-  onto the append-only event ledger and every consumer (inspector, dashboard, anomaly
-  engine) reads. It rides the existing `Store.append_event` transport — no new
-  persistence seam — so `ScrubbingStore` redaction still applies on write.
+- **`crawfish.emission`** — one typed signal, `Emission`. Every producer writes it onto
+  the append-only event ledger, and every consumer (inspector, dashboard, anomaly engine)
+  reads it. It rides the existing `Store.append_event` transport, so there is no new
+  persistence seam and `ScrubbingStore` redaction still applies on write.
 - The envelope and the **closed** `EmissionKind` taxonomy (10 kinds: `run_start`,
   `run_finish`, `model`, `tool`, `sink`, `compaction`, `observer`, `metric`,
   `secret_lease`, `jail_violation`) are a frozen contract — see
@@ -64,10 +66,10 @@ the whole reason cloud + scale are driver swaps, not rewrites.
   `context.compaction` → `compaction`, `ObserverEvent` dumps → `observer`; anything
   unrecognized lifts into a generic `metric` carrying the raw payload), so old runs
   stay inspectable.
-- **Security:** `tainted` propagates the fluid/untrusted marker across the emission
-  boundary (set from the producing `Output.tainted` at every emit site that holds an
-  Output). Emissions never carry secret values — `secret_lease` carries the `ref`
-  only, and the ledger is written through `ScrubbingStore`.
+- **Security:** `tainted` carries the fluid/untrusted marker across the emission
+  boundary. Every emit site that holds an Output sets it from the producing
+  `Output.tainted`. Emissions never carry secret values — `secret_lease` carries the
+  `ref` only, and the ledger is written through `ScrubbingStore`.
 
 ## Typed outputs & validation (Phase 2)
 
@@ -80,11 +82,11 @@ the whole reason cloud + scale are driver swaps, not rewrites.
   (PRIMITIVE / RECORD / LIST / OPTIONAL) from `crawfish.typesystem`, so there is **no new
   runtime dependency** (no `jsonschema`).
 - **Extraction (parse-from-text).** `claude -p` (CommandRuntime) has no JSON mode and
-  returns free text, so `validate_output` extracts JSON *out of* the text: it strips
+  returns free text, so `validate_output` extracts JSON *out of* the text. It strips
   Markdown code fences and isolates the outermost `{...}` / `[...]` span before decoding.
   A single `str`-typed output (or a Definition with **no** declared outputs) is a
-  pass-through — the raw text becomes `Output.value`, so back-compat with the
-  string-output era holds. Otherwise the parsed value is **canonicalised** (record keys
+  pass-through: the raw text becomes `Output.value`, which keeps back-compat with the
+  string-output era. Otherwise the parsed value is **canonicalised** (record keys
   sorted) so golden-set equality and diffs are deterministic under record/replay.
 - **`Output.value` is the typed value, not a string.** On completion `run.py` builds
   `Output(value=<typed>, output_schema=definition.outputs, ...)` — a RECORD output yields
@@ -107,8 +109,8 @@ the whole reason cloud + scale are driver swaps, not rewrites.
 ## Schema migrations (Phase 2)
 
 An older `.crawfish` database must upgrade cleanly when a newer binary opens it. The
-schema version lives in SQLite's built-in `PRAGMA user_version`; `SqliteStore.__init__`
-runs `crawfish.store.migrations.apply_migrations` under its lock, applying every forward
+schema version lives in SQLite's built-in `PRAGMA user_version`. `SqliteStore.__init__`
+runs `crawfish.store.migrations.apply_migrations` under its lock: it applies every forward
 migration whose version exceeds the on-disk version (each in its own transaction), then
 stamps `user_version`. See ADR 0014.
 
@@ -148,3 +150,16 @@ up-converter fixes a row, without a bulk rewrite. (Emission retention/rotation a
   `AgentRuntime`. No raw SQL escapes the `Store` implementation.
 - See [`SECURITY.md`](SECURITY.md) for the security spine and
   [`decisions/`](decisions) for ADRs.
+
+!!! note "Good to know"
+    The three seams are the load-bearing rule. As long as the product model imports only
+    `AgentRuntime`, `Store`, and `ArtifactStore` protocols — never a concrete backend —
+    cloud and scale stay a configuration change. Breaking that rule is what turns a swap
+    into a rewrite.
+
+## See also
+
+- [Security](SECURITY.md) — the prompt-injection boundary, secrets, and taint
+- [Emission taxonomy](emission-taxonomy.md) — the frozen observability contract
+- [API stability](API-STABILITY.md) — semver and deprecation policy
+- [ADRs](decisions) — the decisions behind these seams

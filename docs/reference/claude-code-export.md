@@ -1,20 +1,17 @@
 # Claude Code export
 
-Render a Crawfish [`Definition`](definition.md) — a self-contained agent team — into
-Claude Code's own on-disk formats: a **subagent** (a Markdown file with YAML
-front-matter) and, optionally, a **skill** (an invocable slash-command). A team authored
-in Crawfish then runs as a native Claude Code teammate. These live in `crawfish.ccexport`.
+Render a Crawfish [`Definition`](definition.md) — a self-contained agent team — into Claude
+Code's own on-disk formats. A team you author in Crawfish then runs as a native Claude Code
+teammate. This lives in `crawfish.ccexport`.
 
-**Symbols on this page:** `ClaudeCodeAgent` · `ClaudeCodeSkill` · `definition_to_cc_agent` ·
-`export_claude_code` · `map_tools` · `model_alias`
+`ClaudeCodeAgent` · `ClaudeCodeSkill` · `definition_to_cc_agent` · `export_claude_code` ·
+`map_tools` · `model_alias`
 
----
+## Two on-disk shapes
 
-## Core
-
-A **Definition** is Crawfish's packaged agent team — the agents, their prompts, the
-tools they may use, and the model each is pinned to. **Claude Code** (the CLI) has its
-own way of describing an agent on disk:
+A **Definition** is Crawfish's packaged agent team — the agents, their prompts, the tools
+they may use, and the model each is pinned to. Claude Code (the CLI) describes an agent on
+disk in one of two shapes:
 
 - A **subagent** is a single Markdown file at `.claude/agents/<name>.md`. The top of the
   file is **YAML front-matter** — a small `key: value` header fenced by `---` lines —
@@ -24,26 +21,25 @@ own way of describing an agent on disk:
   hands the task to the exported subagent.
 
 This module is the translator. `definition_to_cc_agent` turns one Definition into a
-`ClaudeCodeAgent` (the in-memory shape of that subagent file). `export_claude_code`
-writes the file(s) to disk under a project's `.claude/` directory. Two helpers do the
-field-level mapping: `map_tools` builds the tool allowlist, and `model_alias` picks the
-Claude Code model name.
+`ClaudeCodeAgent` (the in-memory shape of that subagent file). `export_claude_code` writes
+the file(s) to disk under a project's `.claude/` directory. Two helpers do the field-level
+mapping: `map_tools` builds the tool allowlist, and `model_alias` picks the Claude Code
+model name.
 
-The **load-bearing rule**: the export carries **no secrets**. A Definition names its
-credentials by reference — an MCP connection stores an environment-variable *name* (like
-`GITHUB_TOKEN`), never the token itself. The export emits tool *names* only, never the
-auth reference or any credential. The generated files are therefore safe to commit and
-share.
+!!! note "Good to know"
 
-> **MCP** (Model Context Protocol) is the standard by which an agent reaches an external
-> tool server. A Crawfish Definition can declare MCP connections; each exposes a set of
-> named tools the agent may call.
+    **MCP** (Model Context Protocol) is the standard by which an agent reaches an external
+    tool server. A Crawfish Definition can declare MCP connections; each exposes a set of
+    named tools the agent may call.
 
----
+!!! warning "The export carries no secrets"
 
-## Ramps up
+    A Definition names its credentials by reference — an MCP connection stores an
+    environment-variable *name* (like `GITHUB_TOKEN`), never the token itself. The export
+    emits tool *names* only, never the auth reference or any credential. The generated files
+    are safe to commit and share.
 
-### The subagent body is composed, not copied
+## How the body is built
 
 `definition_to_cc_agent` does not paste one prompt. It composes the body from the whole
 team, in a fixed order so the file is deterministic:
@@ -57,7 +53,7 @@ team, in a fixed order so the file is deterministic:
 When the team has more than one agent, each block is titled with `## <role>`; a
 single-agent team emits its prompt bare, with no heading. Empty prompts are skipped.
 
-### The `tools` allowlist names tools, never secrets
+## The tools allowlist
 
 `map_tools` produces the subagent's `tools` allowlist as the **union** of every agent's
 declared tools and every MCP-exposed tool. An MCP tool is rendered in Claude Code's
@@ -67,7 +63,7 @@ on an agent's own allowlist is dropped in favour of that qualified form (no dupl
 The result is **sorted and de-duplicated** so the same Definition always yields the same
 file. The MCP connection's `auth` reference is never emitted.
 
-### Model mapping is Claude-first but universal
+## Model mapping
 
 A Crawfish agent's `model` is **model-universal by default** — `None` means "let the
 platform pick". `model_alias` maps whatever is pinned to one of Claude Code's three
@@ -75,31 +71,101 @@ aliases (`opus` / `sonnet` / `haiku`) by substring match, case-insensitively, so
 `"claude-opus-4"` resolves to `opus` and `"haiku-3.5"` to `haiku`. A **list** of models
 (a universal pin with preferences) resolves on its **first** entry. Anything
 unrecognised — `"mock"`, an unknown id, or `None` — resolves to `inherit` (the platform
-decides). It never raises, so an export always produces a runnable file. The
-Claude-first runtime with a universal model type is [ADR
-0005](../architecture/decisions/0005-claude-first-universal-model-type.md).
+decides).
 
-### Which agent's model wins
+!!! note "Good to know"
+
+    `model_alias` never raises, so an export always produces a runnable file. The
+    Claude-first runtime with a universal model type is [ADR
+    0005](../architecture/decisions/0005-claude-first-universal-model-type.md).
 
 `definition_to_cc_agent` reads the model from the **lead** (or `"main"`) agent if that
 agent has one pinned; otherwise it falls back to the first agent that pins any model;
 otherwise `None` (which `model_alias` turns into `inherit`).
 
-### The `description` is the lead's first prompt line
+## Name and description
 
 The front-matter `description` is the first non-empty line of the lead's (or `"main"`'s)
 prompt, falling back to the first prompt line of any agent, and finally to
 `"Crawfish definition <id>"`. The `name` is the Definition's `id` normalised to
 kebab-case (Claude Code requires it).
 
-### What `export_claude_code` writes
+## What gets written
 
 `export_claude_code` always writes `.claude/agents/<name>.md`, creating parent
 directories as needed. With `skill=True` it **also** writes
 `.claude/skills/<name>/SKILL.md` — a `ClaudeCodeSkill` whose body tells Claude Code to
 invoke the exported subagent. It returns the list of written paths.
 
----
+## Example
+
+Build a small two-agent Definition with one MCP connection, convert it to a
+`ClaudeCodeAgent`, and read the mapped fields — all in memory, nothing written to disk.
+
+```python
+from crawfish.definition.types import (
+    Definition, TeamSpec, AgentSpec, Coordination, DefinitionAssets, MCPConnection,
+)
+from crawfish.ccexport import definition_to_cc_agent, map_tools, model_alias
+
+team = TeamSpec(
+    agents=[
+        AgentSpec(
+            role="main",
+            prompt="Triage incoming issues and route them.\nUse the linked board.",
+            model=["claude-opus-4", "sonnet"],   # universal pin, first entry wins
+            tools=["Read", "Grep", "search_issues"],
+        ),
+        AgentSpec(role="fixer", prompt="Apply the fix.", tools=["Edit"]),
+    ],
+    coordination=Coordination.LEAD,
+    lead="main",
+)
+assets = DefinitionAssets(
+    # auth is a secret *reference* (an env-var name) — never emitted by the export
+    mcp=[MCPConnection(name="github", auth="GITHUB_TOKEN",
+                       tools=["search_issues", "create_pr"])]
+)
+d = Definition(id="Triage Bot", team=team, assets=assets)
+
+agent = definition_to_cc_agent(d)
+print("name:", agent.name)
+print("description:", agent.description)
+print("model:", agent.model)
+print("tools:", agent.tools)
+print("body:")
+print(agent.body)
+print("---")
+print("map_tools:", map_tools(d))
+print("model_alias(['claude-opus-4','sonnet']):", model_alias(["claude-opus-4", "sonnet"]))
+print("model_alias('haiku-3.5'):", model_alias("haiku-3.5"))
+print("model_alias('mock'):", model_alias("mock"))
+print("model_alias(None):", model_alias(None))
+```
+
+??? success "▶ Output"
+
+    ```text
+    name: triage-bot
+    description: Triage incoming issues and route them.
+    model: opus
+    tools: ['Edit', 'Grep', 'Read', 'mcp__github__create_pr', 'mcp__github__search_issues']
+    body:
+    ## main
+
+    Triage incoming issues and route them.
+    Use the linked board.
+
+    ## fixer
+
+    Apply the fix.
+    ---
+    map_tools: ['Edit', 'Grep', 'Read', 'mcp__github__create_pr', 'mcp__github__search_issues']
+    model_alias(['claude-opus-4','sonnet']): opus
+    model_alias('haiku-3.5'): haiku
+    model_alias('mock'): inherit
+    model_alias(None): inherit
+    ```
 
 ## API reference
 
@@ -189,74 +255,8 @@ string is matched case-insensitively against `opus` / `sonnet` / `haiku` by subs
 | `["claude-opus-4", "sonnet"]` (list) | `"opus"` (first entry) |
 | `"mock"`, unknown id, `None`, `[]` | `"inherit"` |
 
----
+## See also
 
-## Example
-
-Build a small two-agent Definition with one MCP connection, convert it to a
-`ClaudeCodeAgent`, and read the mapped fields — all in memory, nothing written to disk.
-
-```python
-from crawfish.definition.types import (
-    Definition, TeamSpec, AgentSpec, Coordination, DefinitionAssets, MCPConnection,
-)
-from crawfish.ccexport import definition_to_cc_agent, map_tools, model_alias
-
-team = TeamSpec(
-    agents=[
-        AgentSpec(
-            role="main",
-            prompt="Triage incoming issues and route them.\nUse the linked board.",
-            model=["claude-opus-4", "sonnet"],   # universal pin, first entry wins
-            tools=["Read", "Grep", "search_issues"],
-        ),
-        AgentSpec(role="fixer", prompt="Apply the fix.", tools=["Edit"]),
-    ],
-    coordination=Coordination.LEAD,
-    lead="main",
-)
-assets = DefinitionAssets(
-    # auth is a secret *reference* (an env-var name) — never emitted by the export
-    mcp=[MCPConnection(name="github", auth="GITHUB_TOKEN",
-                       tools=["search_issues", "create_pr"])]
-)
-d = Definition(id="Triage Bot", team=team, assets=assets)
-
-agent = definition_to_cc_agent(d)
-print("name:", agent.name)
-print("description:", agent.description)
-print("model:", agent.model)
-print("tools:", agent.tools)
-print("body:")
-print(agent.body)
-print("---")
-print("map_tools:", map_tools(d))
-print("model_alias(['claude-opus-4','sonnet']):", model_alias(["claude-opus-4", "sonnet"]))
-print("model_alias('haiku-3.5'):", model_alias("haiku-3.5"))
-print("model_alias('mock'):", model_alias("mock"))
-print("model_alias(None):", model_alias(None))
-```
-
-??? success "▶ Output"
-
-    ```text
-    name: triage-bot
-    description: Triage incoming issues and route them.
-    model: opus
-    tools: ['Edit', 'Grep', 'Read', 'mcp__github__create_pr', 'mcp__github__search_issues']
-    body:
-    ## main
-
-    Triage incoming issues and route them.
-    Use the linked board.
-
-    ## fixer
-
-    Apply the fix.
-    ---
-    map_tools: ['Edit', 'Grep', 'Read', 'mcp__github__create_pr', 'mcp__github__search_issues']
-    model_alias(['claude-opus-4','sonnet']): opus
-    model_alias('haiku-3.5'): haiku
-    model_alias('mock'): inherit
-    model_alias(None): inherit
-    ```
+- [Definition](definition.md) — the agent team this export renders.
+- [Providers](providers.md) — how a model id resolves before `model_alias` maps it.
+- [Authoring](authoring.md) — the project layout the `.claude/` files land in.

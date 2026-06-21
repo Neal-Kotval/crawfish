@@ -1,32 +1,31 @@
 # Providers
 
-A **provider** is the backend that actually serves a model request — the thing that
-turns "run agent X on this input" into text. This page covers the provider contract,
-the config that decides *which* model id a request uses, and the three providers that
-ship: a deterministic test double and two real-backend adapters. These live in
-`crawfish.provider` and `crawfish.runtime`.
+A **provider** is the backend that actually serves a model request — the thing that turns
+"run agent X on this input" into text. This page covers the provider contract, the config
+that decides *which* model id a request uses, and the three providers that ship: a
+deterministic test double and two real-backend adapters. These live in `crawfish.provider`
+and `crawfish.runtime`.
 
-**Symbols on this page:** `Provider` · `ProviderPolicy` · `ModelsConfig` ·
-`resolve_model` · `MockProvider` · `ClientProvider` · `LocalHTTPProvider` ·
-`OpenAIChatRequest` · `LocalTransport`
-
----
-
-## Core
+`Provider` · `ProviderPolicy` · `ModelsConfig` · `resolve_model` · `MockProvider` ·
+`ClientProvider` · `LocalHTTPProvider` · `OpenAIChatRequest` · `LocalTransport`
 
 When a pipeline reaches a step that calls a model, two questions must be answered:
 *which model id do we run*, and *who serves it*.
 
-The **which** is `resolve_model`. An agent's `model` field may be unset, a single id, a
-friendly alias like `"fast"`, or a list (a failover order). `resolve_model` collapses
-all of those to one concrete model id, using a `ModelsConfig` — a small bundle of a
-project default plus a name→id alias map. There is no vendor model baked into the
-framework; the caller always supplies the ultimate `default`.
+## Which model: `resolve_model`
 
-The **who** is a `Provider`. A provider is any object that can list the models it
-serves, say whether it supports a given model, and run one model turn. It is a
-**structural protocol** — Crawfish never asks "is this a subclass of Provider", only
-"does this object have the right methods". Three providers ship:
+The **which** is `resolve_model`. An agent's `model` field may be unset, a single id, a
+friendly alias like `"fast"`, or a list (a failover order). `resolve_model` collapses all of
+those to one concrete model id, using a `ModelsConfig` — a small bundle of a project default
+plus a name→id alias map. No vendor model is baked into the framework; the caller always
+supplies the ultimate `default`.
+
+## Who serves it: `Provider`
+
+The **who** is a `Provider`. A provider is any object that can list the models it serves, say
+whether it supports a given model, and run one model turn. It is a **structural protocol** —
+Crawfish never asks "is this a subclass of Provider", only "does this object have the right
+methods". Three providers ship:
 
 - **`MockProvider`** — a deterministic, in-memory fake. No model call, no network, zero
   cost. Its reply is a pure function of the request, so tests (and the examples in these
@@ -49,11 +48,7 @@ The two HTTP-adjacent helpers — **`OpenAIChatRequest`** (the request body a lo
 accepts) and **`LocalTransport`** (the one callable that actually sends it) — exist so
 `LocalHTTPProvider` holds no transport or network policy of its own.
 
----
-
-## Ramps up
-
-### One resolver, no hardcoded vendor (ADR 0005)
+## One resolver, no hardcoded vendor (ADR 0005)
 
 `resolve_model` is the **single** model resolver in the framework. Model selection once
 lived duplicated inside the command runtime and the cost estimator; both now delegate
@@ -76,7 +71,13 @@ None (unpinned)  → config.default if set, else the caller's `default`
 Alias expansion is a **single hop**: an alias must map to a concrete model id, never to
 another alias. The whole function is pure and deterministic — same inputs, same id.
 
-### A `Provider` is structural, frozen-shaped behaviour
+!!! note "Good to know"
+
+    No vendor model id is hardcoded in this module. Every caller passes its own `default`,
+    so swapping the default model is config, not a code change. The cost preview and the
+    runtime both delegate here, so an estimate can never drift from what actually runs.
+
+## A `Provider` is structural, frozen-shaped behaviour
 
 `Provider` is a `runtime_checkable` `Protocol`, not a base class. Any object exposing a
 `name: str`, `models()`, `supports()`, and an async `run()` *is* a provider — the three
@@ -87,16 +88,19 @@ added without touching the protocol.
 The payoff: observability and cost capture are written once, against the protocol, and
 every backend inherits them.
 
-### Fluid inputs stay data, never instructions
+## Fluid inputs stay data, never instructions
 
-Both serving providers treat the request's **fluid** inputs — the untrusted, per-item
-session data (a PR body, a ticket) — as data to read, never instructions to obey, which
-is the framework's prompt-injection boundary (see the [security spine](../architecture/SECURITY.md)).
-`MockProvider` echoes fluid inputs back as a JSON string; `LocalHTTPProvider` runs them
-through `compile_prompt`, which fences untrusted data into a delimited block. Neither
-ever splices fluid text into the instruction position.
+!!! warning "Fluid inputs reach the model as data"
 
-### Why `ClientProvider` refuses to run
+    Both serving providers treat the request's **fluid** inputs — the untrusted, per-item
+    session data (a PR body, a ticket) — as data to read, never instructions to obey. This
+    is the framework's prompt-injection boundary (see the
+    [security spine](../architecture/SECURITY.md)). `MockProvider` echoes fluid inputs back
+    as a JSON string; `LocalHTTPProvider` runs them through `compile_prompt`, which fences
+    untrusted data into a delimited block. Neither ever splices fluid text into the
+    instruction position.
+
+## Why `ClientProvider` refuses to run
 
 `ClientProvider` is a skeleton on purpose. It holds no secret and reads nothing from
 `.env`. The thing that would actually reach a vendor API is an **injected `caller`**
@@ -109,7 +113,7 @@ Note its `supports()` quirk: an **empty** model set is read as "unconfigured stu
 it claims support for *any* model so the call reaches `run` (and raises loudly) instead
 of being silently skipped.
 
-### Why `LocalHTTPProvider` is the cheap leg ([ADR 0011](../architecture/decisions/0011-ruvllm-rvagent-evaluation.md))
+## Why `LocalHTTPProvider` is the cheap leg ([ADR 0011](../architecture/decisions/0011-ruvllm-rvagent-evaluation.md))
 
 ADR 0011 settles the local-model path as a thin adapter — a seed-pinned,
 OpenAI-compatible HTTP POST to a local server — rather than a vendored inference engine.
@@ -130,7 +134,55 @@ rule (or an agent/alias) targeting `model="local"` lands here.
 `""` for a malformed/empty body rather than raising — so even a cassette of a degenerate
 response still replays.
 
----
+## Example
+
+Resolving a model id through a small `ModelsConfig`, gating with a `ProviderPolicy`, and
+serving a canned response from a `MockProvider` — all deterministic, no network.
+
+```python
+import asyncio
+from crawfish.provider import resolve_model, ModelsConfig, ProviderPolicy
+from crawfish.runtime.providers import MockProvider
+from crawfish.core.context import RunContext
+from crawfish.runtime.base import RunRequest
+from crawfish.definition.types import AgentSpec, Definition, TeamSpec
+from crawfish.store import SqliteStore
+
+# A small config: a project default + one friendly alias.
+cfg = ModelsConfig(default="claude-haiku", aliases={"fast": "claude-haiku"})
+print(resolve_model(None, default="fallback", config=cfg))    # unpinned -> config.default
+print(resolve_model("fast", default="fallback", config=cfg))  # alias expands
+print(resolve_model(["x", "y"], default="fallback"))          # list -> first, no config
+print(resolve_model(None, default="fallback"))                # no config -> caller default
+
+# A policy gates which providers may serve.
+pol = ProviderPolicy(allowed=("anthropic", "local"))
+print(pol.permits("local"), pol.permits("openai"), ProviderPolicy().permits("any"))
+
+# A MockProvider: deterministic, zero-cost, canned reply.
+mock = MockProvider("mock", ["claude-haiku"], cost_usd=0.0)
+print(mock.name, mock.supports("claude-haiku"), mock.supports("gpt"))
+
+d = Definition(team=TeamSpec(agents=[AgentSpec(role="scout", prompt="scan")]))
+req = RunRequest(definition=d, role="scout", inputs={"pr_body": "untrusted text"})
+ctx = RunContext(store=SqliteStore(), run_id="r1")
+res = asyncio.run(mock.run(req, ctx))
+print(res.text)                                # fluid input echoed back AS DATA
+print(res.cost_usd, res.model, res.session_id)
+```
+
+??? success "▶ Output"
+
+    ```text
+    claude-haiku
+    claude-haiku
+    x
+    fallback
+    True False True
+    mock True False
+    [mock:scout] {"pr_body": "untrusted text"}
+    0.0 claude-haiku mock-r1
+    ```
 
 ## API reference
 
@@ -281,54 +333,9 @@ return the raw JSON response **text** (a `str`). The production implementation i
 stdlib POST to `localhost`; tests inject a fake that returns canned JSON and performs no
 network I/O. Kept narrow so the provider holds no transport policy.
 
----
+## See also
 
-## Example
-
-Resolving a model id through a small `ModelsConfig`, gating with a `ProviderPolicy`, and
-serving a canned response from a `MockProvider` — all deterministic, no network.
-
-```python
-import asyncio
-from crawfish.provider import resolve_model, ModelsConfig, ProviderPolicy
-from crawfish.runtime.providers import MockProvider
-from crawfish.core.context import RunContext
-from crawfish.runtime.base import RunRequest
-from crawfish.definition.types import AgentSpec, Definition, TeamSpec
-from crawfish.store import SqliteStore
-
-# A small config: a project default + one friendly alias.
-cfg = ModelsConfig(default="claude-haiku", aliases={"fast": "claude-haiku"})
-print(resolve_model(None, default="fallback", config=cfg))    # unpinned -> config.default
-print(resolve_model("fast", default="fallback", config=cfg))  # alias expands
-print(resolve_model(["x", "y"], default="fallback"))          # list -> first, no config
-print(resolve_model(None, default="fallback"))                # no config -> caller default
-
-# A policy gates which providers may serve.
-pol = ProviderPolicy(allowed=("anthropic", "local"))
-print(pol.permits("local"), pol.permits("openai"), ProviderPolicy().permits("any"))
-
-# A MockProvider: deterministic, zero-cost, canned reply.
-mock = MockProvider("mock", ["claude-haiku"], cost_usd=0.0)
-print(mock.name, mock.supports("claude-haiku"), mock.supports("gpt"))
-
-d = Definition(team=TeamSpec(agents=[AgentSpec(role="scout", prompt="scan")]))
-req = RunRequest(definition=d, role="scout", inputs={"pr_body": "untrusted text"})
-ctx = RunContext(store=SqliteStore(), run_id="r1")
-res = asyncio.run(mock.run(req, ctx))
-print(res.text)                                # fluid input echoed back AS DATA
-print(res.cost_usd, res.model, res.session_id)
-```
-
-??? success "▶ Output"
-
-    ```text
-    claude-haiku
-    claude-haiku
-    x
-    fallback
-    True False True
-    mock True False
-    [mock:scout] {"pr_body": "untrusted text"}
-    0.0 claude-haiku mock-r1
-    ```
+- [Runtimes](runtimes.md) — `ProviderRuntime`, which fails over across these providers, and
+  who calls `resolve_model`.
+- [Definition](definition.md) — where an agent's `model` field is authored.
+- [Core types](core-types.md) — the `Flow` boundary that fluid inputs honor.

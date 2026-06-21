@@ -1,17 +1,12 @@
 # Observer
 
-The watchdog tier: a primitive that polls a pipeline's recent runs and raises
-structured findings when something looks wrong, plus the read-only surface those
-findings (and the run summaries they judge) live on. The rules engine is
-`crawfish.observer`; the surface/facade is `crawfish.observe`.
+The watchdog tier. It polls a pipeline's recent runs and raises structured findings when
+something looks wrong, and it provides the read-only surface those findings (and the run
+summaries they judge) live on. The rules engine is `crawfish.observer`; the
+surface/facade is `crawfish.observe`.
 
-**Symbols on this page:** `Observer` · `ObserverContext` · `Rule` · `FailureRateAbove` ·
-`CostSpike` · `StuckRun` · `ObserverEvent` · `ObserverSurface` · `RunInfo` · `Severity` ·
-`parse_since`
-
----
-
-## Core
+`Observer` · `ObserverContext` · `Rule` · `FailureRateAbove` · `CostSpike` · `StuckRun` ·
+`ObserverEvent` · `ObserverSurface` · `RunInfo` · `Severity` · `parse_since`
 
 A **pipeline** is a chain of steps that runs over your data; each execution of one is a
 **run**. As runs pile up you want to know — without watching a terminal — when failures
@@ -28,12 +23,20 @@ a human-readable `detail`, and a `severity`. The three built-in rules are:
 - `StuckRun` — a run has been `running` longer than allowed.
 
 The observer can also carry an optional **judge**: a model-backed reviewer that reads
-recent runs as *data* (never as instructions — the prompt-injection boundary) and reports
-run quality in plain English, under a hard per-evaluation cost cap.
+recent runs as *data* and reports run quality in plain English, under a hard
+per-evaluation cost cap.
 
-Where do the runs come from, and where do findings go? Both live on the **observer
+!!! warning "The judge reads runs as data, never as instructions"
+
+    Recent runs reach the judge as **fluid inputs** — the prompt-injection boundary.
+    They're untrusted data to *read*, never commands to *obey*. The judge's spend is
+    capped by a `CostBudget` (default `$0.50`) and its free-text finding is redacted and
+    truncated before it becomes an event. See the
+    [security spine](../architecture/SECURITY.md).
+
+Where do the runs come from, and where do the findings go? Both live on the **observer
 surface**, `ObserverSurface` — a read/write **facade** (a thin, stable API) over the
-framework's `Store` (its persistence layer). The surface holds two shapes:
+framework's `Store`. The surface holds two shapes:
 
 - `RunInfo` — a per-run summary row: status, cost, timing. This is what a dashboard or
   `craw manage` renders.
@@ -47,14 +50,12 @@ they are written — the security guarantee for this surface.
 `parse_since` is the small helper that turns a window like `"-1h"` into an epoch-seconds
 cutoff, so every "recent runs" query agrees on what *recent* means.
 
-> The Observer **reports**; it does not act. For the related engine that *auto-halts* a
-> misbehaving pipeline, see [anomaly](anomaly.md).
+!!! note "Good to know"
 
----
+    The Observer **reports**; it does not act. For the related engine that *auto-halts* a
+    misbehaving pipeline, see [anomaly](anomaly.md).
 
-## Ramps up
-
-### Two modules, one job
+## Two modules, one job
 
 `crawfish.observer` is the **rules engine** — `Observer`, `Rule` and its subclasses,
 `ObserverContext`. `crawfish.observe` is the **surface** — `ObserverSurface`, the
@@ -62,7 +63,7 @@ cutoff, so every "recent runs" query agrees on what *recent* means.
 the surface, not the reverse. Keep the split in mind: a rule consumes `RunInfo` and
 produces `ObserverEvent`, both defined in `observe`.
 
-### The surface is a facade over the Store (ADR 0008)
+## The surface is a facade over the Store (ADR 0008)
 
 `ObserverSurface` owns no storage. It serialises `RunInfo` through `Store.put_record` /
 `Store.list_records` (keyed by `run_id`, kind `"run_info"`) and rides `ObserverEvent`s on
@@ -76,7 +77,7 @@ When an emitted event names a specific `run_id`, `emit` *also* writes a typed `O
 emission onto that run's own stream, so the finding joins the unified emission stream the
 inspector reads — the `observer:<pipeline>` copy is still written unchanged.
 
-### How each rule decides
+## How each rule decides
 
 All three rules read from an `ObserverContext` — the window under judgement: the pipeline
 name, its recent `runs`, recent `events`, and `now`. `ObserverContext.runs_since(window)`
@@ -95,7 +96,7 @@ filters `runs` to those whose `started_at` is at or after the `parse_since` cuto
 A rule returning `None` means "nothing to report"; `Observer.evaluate` emits only the
 non-`None` events.
 
-### The judge is data-bounded, never instruction-bound
+## The judge is data-bounded, never instruction-bound
 
 If an `Observer` is given a `judge` (a `Definition`) and a `judge_runtime`, `evaluate`
 also runs it: recent runs are summarised to text and passed as **fluid inputs** — model
@@ -106,7 +107,7 @@ impossible. The judge's free-text finding is run through `redact(...)` and trunc
 observer reads a raw (unwrapped) store. `judge_flag` decides flagged-vs-clean; by default
 any reply that isn't one of `{"", "ok", "pass", "none", "fine", "good"}` is flagged.
 
-### `parse_since` never raises
+## `parse_since` never raises
 
 `parse_since` is called inside dashboard and poll loops, so a malformed window must not
 crash a render. Accepted forms: `None` → `0.0` (epoch 0, i.e. *everything*); an absolute
@@ -115,12 +116,10 @@ epoch `int`/`float` → itself; a relative string `"-<n><unit>"` where unit ∈
 epoch). Anything malformed (`"-xh"`, `"garbage"`) falls back to `0.0` rather than raising.
 `now` defaults to wall-clock `time.time()`; pass it explicitly for deterministic results.
 
-### Enums are `(str, Enum)`
+## Enums are `(str, Enum)`
 
 `Severity` subclasses `(str, Enum)`, so `Severity.WARN == "warn"` and Pydantic coerces raw
 strings into members at the boundary (the project-wide convention; Ruff `UP042` is disabled).
-
----
 
 ## API reference
 
@@ -287,8 +286,6 @@ A `str` `poll` is wrapped in `CronSchedule`. Key methods:
 | `evaluate(store, *, now=None, run_judge=True)` | `list[ObserverEvent]` | Run every rule (and the judge, if configured) once; emit + return findings. `now` defaults to `datetime.now(UTC)`. |
 | `watch_loop(store, *, max_polls=None, now_fn=None, sleep_fn=None, stop_flag=None)` | `int` | Block, evaluating on each poll tick; returns the number of evaluations. Injectable clock/sleep/stop for testing. |
 
----
-
 ## Example
 
 `parse_since` on a few inputs, then two rules over synthetic runs — all pure, fixed clock,
@@ -334,3 +331,9 @@ for rule in (FailureRateAbove(0.2, window="-1h"), CostSpike(2.0, window="-5m")):
     failure.rate [critical] 2/4 runs failed (50% > 20%)
     cost.spike [warn] $3.10 spent in 5m (≥ $2.00)
     ```
+
+## See also
+
+- [Anomaly & auto-halt](anomaly.md) — the engine that *acts* on the same signals the Observer reports.
+- [Emission, inspector & visualize](emission-inspector-visualize.md) — where emitted findings land on the run stream.
+- [Cost, routing & cache](cost-routing-cache.md) — the spend figures the cost rules judge.

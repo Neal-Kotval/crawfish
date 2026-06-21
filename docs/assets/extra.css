@@ -290,12 +290,101 @@
   background: var(--craw-red);
 }
 
-/* Footer */
-.md-footer {
-  background-color: var(--craw-ink);
+/* ============================================================================
+   PRIMARY NAV — readable section headers with breathing room
+   The sidebar groups (Guide, Operate & Observe, Reference, and the Reference
+   sub-groups: Foundations, Building pipelines, …) read as labelled sections.
+   ========================================================================== */
+
+/* Level 1 — section headers (Guide, Operate & Observe, Reference, …):
+   small, quiet, uppercase category labels with a hairline rule. */
+.md-nav--primary .md-nav__item--section > .md-nav__link {
+  font-family: var(--md-code-font-family, "JetBrains Mono", monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.58rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+  opacity: 0.7;
+  margin: 1.4rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--craw-glass-line);
 }
+.md-nav--primary > .md-nav__list > .md-nav__item--section:first-child > .md-nav__link {
+  margin-top: 0.3rem;
+}
+
+/* Level 2 — group toggles (Foundations, Building pipelines, …):
+   medium weight, body font, normal case — readable parents, not shouting. */
+.md-nav--primary .md-nav__item--nested > .md-nav__link {
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  color: var(--md-default-fg-color);
+  margin: 0.5rem 0 0.1rem;
+}
+
+/* Level 3 — leaf links: lighter, comfortable, consistent size. */
+.md-nav--primary .md-nav__link {
+  font-size: 0.72rem;
+}
+.md-nav--primary .md-nav__item--nested .md-nav__list .md-nav__link {
+  font-size: 0.7rem;
+  color: var(--md-default-fg-color--light);
+}
+.md-nav--primary .md-nav__item--nested .md-nav__list .md-nav__link:hover,
+.md-nav--primary .md-nav__link--active {
+  color: var(--craw-red);
+}
+
+/* ============================================================================
+   PREV / NEXT — rendered inline at the END of the article (overrides/main.html),
+   so it's reached as normal content and never depends on the page bottom or an
+   overscroll. The built-in footer is disabled (no navigation.footer) and hidden.
+   ========================================================================== */
+.md-footer,
 .md-footer-meta {
-  background-color: #0e1216;
+  display: none;
+}
+
+/* Minimal centred arrows + page name, with a hairline above to part it from the
+   article. Lives inside .md-typeset, so override the global link styling. */
+.craw-pagenav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  margin: 3rem 0 0.5rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--craw-glass-line);
+}
+.md-typeset .craw-pagenav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 18rem;
+  padding: 0.25rem 1.4rem;
+  color: var(--md-default-fg-color--light);
+  font-family: var(--craw-display);
+  font-weight: 600;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  background-image: none; /* kill the global animated underline */
+  transition: color 0.2s ease;
+}
+.md-typeset .craw-pagenav__link:hover {
+  color: var(--craw-red);
+}
+.craw-pagenav__link--next:not(:only-child) {
+  border-left: 1px solid var(--craw-glass-line);
+}
+.craw-pagenav__link--next {
+  text-align: right;
+}
+.craw-pagenav__arrow {
+  font-size: 1.05rem;
+  line-height: 1;
+  opacity: 0.75;
 }
 
 /* Thin techy scrollbar */
@@ -370,10 +459,13 @@
 .md-header__topic:first-child {
   display: none; /* logo already spells "crawfish" */
 }
+/* Specific enough to beat Material's `.md-header__button.md-logo img` default. */
+.md-header__button.md-logo img,
 .md-logo img {
-  height: 1.7rem;
+  height: 1rem;
   width: auto;
 }
+[data-md-color-scheme="slate"] .md-header__button.md-logo img,
 [data-md-color-scheme="slate"] .md-logo img {
   content: url("logo-dark.svg");
 }

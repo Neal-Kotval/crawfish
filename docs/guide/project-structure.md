@@ -1,8 +1,9 @@
 # Project structure & `craw doctor`
 
-A Crawfish project is a directory of authored components plus generated state. By default,
-discovery follows the standard layout. When a different shape fits your repo, you can move
-folders via `crawfish.toml`. `craw doctor` checks the structure and flags problems.
+A Crawfish project is a directory of components you author plus state Crawfish generates.
+By default, Crawfish discovers components from the standard layout. When a different shape
+fits your repo, move folders via `crawfish.toml`. `craw doctor` checks the structure and
+flags problems.
 
 ## The canonical layout
 
@@ -23,6 +24,11 @@ You write and commit the first seven folders. `.crawfish/` is generated: locks, 
 execution ledger, cassettes, and the deploy registry. Crawfish keeps the two separate so
 your intent and the machine's state never mix.
 
+!!! warning "Don't hand-edit `.crawfish/`"
+    Everything under `.crawfish/` is machine state — the ledger, registry, and cassettes.
+    Gitignore it and leave it alone. `craw doctor` flags a hand-edited generated artifact,
+    because a tampered artifact must never pass for trusted authored config.
+
 ## Relocating folders — `[project.paths]`
 
 Override any folder location in `crawfish.toml`. The CLI, the compiler, and `craw doctor`
@@ -40,15 +46,21 @@ resolve against the relocated tree; nothing else changes.
 
 ## `craw doctor`
 
+Run `craw doctor` to confirm your project matches the layout Crawfish expects.
+
 ```bash
 craw doctor
 ```
 
-`craw doctor` checks three things. It confirms each configured folder exists. It flags
-misplaced files, such as a Definition sitting in `tools/` or a stray Python file outside
-any known folder. And it verifies that authored and generated state stay separate: nothing
-under `.crawfish/` is hand-edited, and no generated artifact has leaked into the authored
-tree.
+`craw doctor` checks three things. First, it confirms each configured folder exists.
+Second, it flags misplaced files — a Definition sitting in `tools/`, or a stray Python
+file outside any known folder. Third, it verifies that authored and generated state stay
+separate: nothing under `.crawfish/` is hand-edited, and no generated artifact has leaked
+into the authored tree.
+
+!!! note "Good to know"
+    `craw doctor` reads the filesystem and `crawfish.toml` only. It never resolves a secret
+    or runs a model, so it is safe to run anytime — in CI, in a hook, or on a fresh clone.
 
 ## Worked example
 
@@ -66,15 +78,19 @@ craw doctor
 # doctor: 1 warning
 ```
 
-To fix the warning, move the misplaced directory. If you meant to use a custom layout,
-declare it in `[project.paths]` instead and re-run. The warning clears once discovery and
+To fix the warning, move the misplaced directory. Or, if you meant to use a custom
+layout, declare it in `[project.paths]` and re-run. The warning clears once discovery and
 the filesystem agree.
 
 ## Security
 
-`craw doctor` reads the filesystem and `crawfish.toml` only. It never resolves a secret or
-runs a model. The authored-vs-generated check is itself a guardrail. Keeping `.crawfish/`
-(the ledger, registry, cassettes) separate from authored components means a generated
-artifact can't be mistaken for trusted authored config. That's the same boundary that
-keeps [deploy](deploy.md) and [observers](observers.md) honest. See
-[SECURITY.md](../architecture/SECURITY.md).
+The authored-vs-generated check is itself a guardrail. Keeping `.crawfish/` (the ledger,
+registry, cassettes) separate from authored components means a generated artifact can't be
+mistaken for trusted authored config. That's the same boundary that keeps
+[deploy](deploy.md) and [observers](observers.md) honest.
+
+## Next steps
+
+- [Deploy](deploy.md) — schedule a pipeline from the layout above.
+- [Observers](observers.md) — author the watchers in `observers/`.
+- [SECURITY.md](../architecture/SECURITY.md) — the authored-vs-generated boundary in full.

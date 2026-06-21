@@ -5,14 +5,10 @@ Three cost levers that all stay deterministic and never make a live model call:
 or stronger model, and *cache* repeated calls so the second one costs nothing. They
 live in `crawfish.cost`, `crawfish.routing`, and `crawfish.cache`.
 
-**Symbols on this page:** `estimate_cost` · `CostEstimate` · `Budget` · `BudgetState` ·
-`CostMeter` · `spent_today` · `CostTier` · `RoutingRule` · `RoutingPolicy` ·
-`RoutingDecision` · `agent_tier` · `route_model` · `route_decision` · `routing_emission` ·
-`cache_key` · `CacheStats` · `CachingRuntime`
-
----
-
-## Core
+`estimate_cost` · `CostEstimate` · `Budget` · `BudgetState` · `CostMeter` · `spent_today` ·
+`CostTier` · `RoutingRule` · `RoutingPolicy` · `RoutingDecision` · `agent_tier` ·
+`route_model` · `route_decision` · `routing_emission` · `cache_key` · `CacheStats` ·
+`CachingRuntime`
 
 A **definition** is a compiled agent team — a package of one or more agents authored as
 a directory. Each agent names (or leaves unset) the **model** it runs on. Running a
@@ -29,22 +25,30 @@ which model dominates the bill.
 **Cap the spend.** A `Budget` is a warn/stop policy: a `stop_usd` hard ceiling and a
 `warn_usd` soft line (defaulting to 80% of the stop). Ask it `check(spent)` and it
 classifies where you stand as a `BudgetState` — `OK`, `WARN`, or `STOPPED`. A `CostMeter`
-is the live accumulator: call `charge(amount)` as runs finish and it tracks running spend
-and the headroom left against the budget. To total *yesterday-and-before-excluded* spend
-already recorded in the store, `spent_today` sums today's cost-bearing events — but it
-returns `0.0` unless you tell it which runs to scan (see the
+is the live accumulator: call `charge(amount)` as runs finish, and it tracks running spend
+and the headroom left against the budget. To total spend already recorded in the store for
+*today only*, `spent_today` sums today's cost-bearing events — but it returns `0.0` unless
+you tell it which runs to scan (see the
 [edge case below](#spent_today-needs-run_ids)).
+
+!!! warning "`spent_today` returns $0 unless you pass `run_ids`"
+
+    `spent_today(store)` with no `run_ids` returns `0.0` *unconditionally* — it never scans
+    the store. The Store seam is per-run, so you must hand it the runs to total. A meter
+    wired with a bare `spent_today(store)` reports $0 regardless of actual recorded spend.
+    Always pass `run_ids=[...]`.
 
 **Pick the model per step.** Routing sends low-stakes steps to cheap or local models and
 hard steps to strong ones. A `RoutingPolicy` is an ordered list of `RoutingRule`s; the
 first rule that *matches* an agent names the model field that agent should use. A rule
 matches by exact `role`, by a coarse `CostTier` (`CHEAP` / `STANDARD` / `STRONG`), or
 unconditionally. `CostTier` is advisory metadata an author pins on an agent (read back by
-`agent_tier`); it labels the step, it does not itself pick a model. `route_decision`
-resolves one agent through the policy and returns a `RoutingDecision` (the concrete model
-id plus *why* it was chosen); `route_model` is the thin wrapper that returns just the id.
-`routing_emission` turns a decision into a telemetry record so a dashboard can show why a
-model was chosen.
+`agent_tier`) — it labels the step, it does not itself pick a model.
+
+To resolve a model, `route_decision` runs one agent through the policy and returns a
+`RoutingDecision` — the concrete model id plus *why* it was chosen; `route_model` is the
+thin wrapper that returns just the id. `routing_emission` turns a decision into a
+telemetry record so a dashboard can show why a model was chosen.
 
 **Skip the call entirely.** When the same definition-version and inputs run twice, the
 second run can replay the first instead of paying again. `cache_key` hashes a request to
@@ -53,11 +57,7 @@ recording. `CachingRuntime` wraps a [replay runtime](runtimes.md) and reports, p
 request, whether it **hit** (free) or **missed** (paid), tallying both the dollars saved
 and the dollars spent into a `CacheStats`.
 
----
-
-## Ramps up
-
-### The single resolution path (preview can't drift from the run)
+## The single resolution path (preview can't drift from the run)
 
 A rule's chosen `model` is never a final id on its own — it is a *field* (`"local"`, a
 configured alias, or a concrete id) handed to one shared resolver,
@@ -66,7 +66,7 @@ configured alias, or a concrete id) handed to one shared resolver,
 resolution path, so a routed step is previewed at exactly the model that will run. This
 is the drift guarantee verified by CRA-186.
 
-### `estimate_cost` heuristics and edge cases
+## `estimate_cost` heuristics and edge cases
 
 The estimate is approximate by design and follows three rules:
 
@@ -83,7 +83,7 @@ Pass the project's `config` (a `ModelsConfig`) so the preview expands aliases an
 configured default exactly as the runtime will. Pass a `RoutingPolicy` and each agent's
 model is resolved through routing first, so the preview prices the *routed* model.
 
-### `Budget` vs the hard ceiling
+## `Budget` vs the hard ceiling
 
 `Budget` is the *soft* layer — it decides ok / warn / stopped. It does not kill a run;
 the orchestrator's [`CostBudget`](context-and-budgets.md) is the *hard* ceiling that
@@ -92,7 +92,7 @@ raises `BudgetExceeded`. `Budget.as_cost_budget()` projects the `stop_usd` onto 
 `stop_usd` of `None` means unbounded — every `check` returns `OK`. `__post_init__` defaults
 `warn_usd` to 80% of `stop_usd` and raises `ValueError` if you set `warn_usd > stop_usd`.
 
-### `spent_today` needs `run_ids`
+## `spent_today` needs `run_ids`
 
 `spent_today(store)` with no `run_ids` **returns `0.0` unconditionally** — it does not
 scan the store. The Store seam is per-run (there is no cheap cross-run scan), so the
@@ -104,7 +104,7 @@ cost-bearing (`model`, `run_finish`, `runtime.run`, `run.finish`) and its `ts` l
 `today` (UTC); an event with an unparseable or zero timestamp is **counted**, never
 silently dropped. (Surfaced as a doc finding — see `docs/BUILD-LOG.md`.)
 
-### `CostTier` is advisory, read from string policies
+## `CostTier` is advisory, read from string policies
 
 A tier is declared on an agent as a string in its `policies` list (`"tier:cheap"` etc.)
 and read back by `agent_tier`, which returns the `CostTier` or `None` if none is declared.
@@ -112,7 +112,7 @@ A `RoutingRule` with `tier=CostTier.CHEAP` matches only agents whose declared ti
 `CHEAP`; a rule with `tier=None` matches any tier. The tier never picks a model by itself —
 it is a match condition the author uses to target a rule.
 
-### `RoutingDecision.source` records why
+## `RoutingDecision.source` records why
 
 `route_decision` always succeeds and records its reason in `source`: `"rule"` (a policy
 rule fired), `"agent"` (no rule matched; the agent's own pinned `model` was used), or
@@ -121,7 +121,7 @@ rule fired), `"agent"` (no rule matched; the agent's own pinned `model` was used
 matches, the agent's own `model` field is left intact; routing never strips an explicit
 pin.
 
-### Caching: keys, hits, and the within-session price
+## Caching: keys, hits, and the within-session price
 
 `cache_key` re-exports the replay layer's private `_key`, so a caller can compute hit/miss
 without reaching into the runtime. The key hashes the definition id + version, role, model,
@@ -134,7 +134,12 @@ even before the cassette is re-read. `CacheStats.hit_rate` is `hits / total`, or
 before anything runs. `CachingRuntime` is a [swappable `AgentRuntime`](runtimes.md) — it
 wraps a `RecordReplayRuntime` and performs no model call itself.
 
----
+!!! note "Good to know"
+
+    `Budget` is the *soft* layer — it classifies ok / warn / stopped but never kills a run.
+    The orchestrator's [`CostBudget`](context-and-budgets.md) is the *hard* ceiling that
+    raises `BudgetExceeded`. Use `Budget.as_cost_budget()` to configure one number and hand
+    the hard half to the runtime.
 
 ## API reference
 
@@ -360,8 +365,6 @@ live `stats: CacheStats`. Each `async run(request, ctx)` checks the cassette: a 
 nothing and adds to `saved_usd`; a miss records, spends, and adds to `spent_usd`. Performs
 no model call itself.
 
----
-
 ## Example
 
 Preview a two-agent run's cost, route by tier, and check cache-key determinism — all pure,
@@ -414,3 +417,9 @@ print("keylen:", len(cache_key(req_a)))
     a == c: False
     keylen: 16
     ```
+
+## See also
+
+- [Context & budgets](context-and-budgets.md) — the hard `CostBudget` ceiling behind `Budget`.
+- [Runtimes](runtimes.md) — the replay runtime `CachingRuntime` wraps.
+- [Emission, inspector & visualize](emission-inspector-visualize.md) — where `routing_emission` and spend land.

@@ -1,23 +1,21 @@
 # Testing
 
-The public test-harness toolkit that makes everything else testable: pin an output
-to a file, run canned fixtures, replay a recorded model run instead of calling one
-live, and assert that untrusted data stays flagged across every boundary. These live
-in `crawfish.testing` and are what a future `craw test` command drives.
+The public test-harness toolkit that makes everything else testable. Pin an output to a
+file, run canned fixtures, replay a recorded model run instead of calling one live, and
+assert that untrusted data stays flagged across every boundary. These live in
+`crawfish.testing` and are what a future `craw test` command drives.
 
-**Symbols on this page:** `snapshot_match` · `assert_snapshot` · `run_fixtures` ·
-`assert_rubric` · `replaying` · `canned_transport` · `load_stream_fixture` ·
-`injection_tool_result` · `scoring_runtime` · `TaintCase` · `taint_conformance_cases` ·
-`assert_taint_conformance` · `INJECTION_INPUTS` · `STREAM_FIXTURES`
+`snapshot_match` · `assert_snapshot` · `run_fixtures` · `assert_rubric` · `replaying` ·
+`canned_transport` · `load_stream_fixture` · `injection_tool_result` · `scoring_runtime` ·
+`TaintCase` · `taint_conformance_cases` · `assert_taint_conformance` · `INJECTION_INPUTS` ·
+`STREAM_FIXTURES`
 
----
+## The one enemy: non-determinism
 
-## Core
-
-A test for an agent pipeline has one enemy: **non-determinism**. If a test calls a
-live model, the answer changes run to run, the network can fail, and CI is unreliable.
-Every helper here exists to remove that — tests run on canned data, recorded responses,
-or pure checks, never a live call.
+A test for an agent pipeline has one enemy: **non-determinism**. If a test calls a live
+model, the answer changes run to run, the network can fail, and CI is unreliable. Every
+helper here exists to remove that — tests run on canned data, recorded responses, or pure
+checks, never a live call.
 
 **Snapshot testing** pins a value to a file. The first run writes the file (the
 *baseline*); later runs compare against it. If the value changes, the comparison fails
@@ -53,11 +51,14 @@ The remaining helpers support a shared determinism setup used across the framewo
   conformance helpers (`TaintCase`, `taint_conformance_cases`, `assert_taint_conformance`)
   check that the taint flag survives every step a value travels through.
 
----
+!!! note "Good to know"
 
-## Ramps up
+    Every helper here is deterministic by design. Snapshots compare canonical JSON,
+    fixtures run in sorted order, replay refuses a live call on a cache miss, and the
+    scoring runtime returns a fixed verdict — so the same test gives the same answer on
+    every machine and every run.
 
-### Snapshots: write-on-missing, compare-after
+## Snapshots: write-on-missing, compare-after
 
 `snapshot_match` serialises the value to **canonical JSON** — `json.dumps` with sorted
 keys, two-space indent, and `default=str` for anything non-JSON. Two consequences follow:
@@ -72,7 +73,7 @@ a new snapshot always passes; you commit the file and subsequent runs compare ag
 (expected snapshot vs actual) and raises `SnapshotMismatch` (a subclass of
 `AssertionError`) carrying that diff.
 
-### Fixtures run the pipeline once each, in sorted order
+## Fixtures run the pipeline once each, in sorted order
 
 `run_fixtures` globs `*.json` in the directory and processes them in **sorted filename
 order** for stable reporting. Each file is `{"inputs": {...}, "expected": <optional>}`.
@@ -85,7 +86,7 @@ Output value equals it. A fixture with no `expected` passes on clean execution a
 file read error, or any exception during the run becomes a `FixtureResult` with
 `passed=False` and the message in `error`. `run_fixtures` is `async` — `await` it.
 
-### Replay guarantees no live call
+## Replay guarantees no live call
 
 `replaying` wraps an inner runtime in a `RecordReplayRuntime` (see
 [runtimes](runtimes.md)). With `record=False` — the CI default — a cache miss raises
@@ -94,7 +95,7 @@ once to capture cassettes from the inner runtime, then commit them and run repla
 forever after. Pair it with a `MockRuntime` or `scoring_runtime` as the inner backend to
 capture a deterministic cassette.
 
-### Canned transports vs cassettes
+## Canned transports vs cassettes
 
 These are two layers. A **cassette** (`replaying`) records at the runtime level — whole
 request/response pairs. A **canned transport** (`canned_transport`) records one layer
@@ -107,7 +108,7 @@ these recordings — a provider stem like `"anthropic_clean"` (no `.jsonl` suffi
 `anthropic`, `openai`, `gemini`, and `local`; an `*_injection` variant carries an
 untrusted tool result that attempts prompt injection.
 
-### The static / fluid boundary and taint
+## The static / fluid boundary and taint
 
 Crawfish marks every input as **static** (set once per batch, trusted) or **fluid**
 (varies per item, untrusted — see [core types](core-types.md)). Untrusted data must never
@@ -119,15 +120,55 @@ silently become trusted. Two mechanisms in this module test that:
 - **Taint** is the flag that records "this came from something untrusted." The conformance
   suite asserts taint propagates across every Phase-2 boundary: the `Output.derive` step,
   the `Emission` that carries a value, and the transferable `Context` artifact (taint must
-  survive compaction — a summary of a tainted entry stays tainted). The load-bearing rule:
-  a value that came back through a **tool / MCP result** is tainted regardless of whether
-  the originating input was static — tool results re-enter the model as untrusted content.
-  See [sandbox and jail](sandbox-and-jail.md) for how taint is enforced at runtime.
+  survive compaction — a summary of a tainted entry stays tainted).
 
 The conformance matrix has exactly one clean row — static input, no tool result — because
 that is the only path where nothing untrusted ever touched the value.
 
----
+!!! warning "A tool result is always untrusted"
+
+    A value that came back through a **tool / MCP result** is tainted regardless of whether
+    the originating input was static — tool results re-enter the model as untrusted content.
+    See [sandbox and jail](sandbox-and-jail.md) for how taint is enforced at runtime.
+
+## Example
+
+Snapshot testing a value (match then mismatch), and reading the shipped taint matrix —
+all pure and in-memory, no runtime needed.
+
+```python
+import tempfile, os
+from crawfish.testing import snapshot_match, taint_conformance_cases
+
+d = tempfile.mkdtemp()
+snap = os.path.join(d, "report.json")
+
+# First call writes the baseline (file missing -> True).
+print(snapshot_match(snap, {"status": "ok", "count": 3}))
+# Same value, different key order, matches the written baseline.
+print(snapshot_match(snap, {"count": 3, "status": "ok"}))
+# A changed value diverges.
+print(snapshot_match(snap, {"status": "ok", "count": 4}))
+
+# How many taint conformance cases ship, and each expected verdict.
+cases = taint_conformance_cases()
+print(len(cases))
+for c in cases:
+    print(c.name, c.expected)
+```
+
+??? success "▶ Output"
+
+    ```text
+    True
+    True
+    False
+    4
+    fluid_input True
+    static_plus_tool True
+    fluid_plus_tool True
+    static_no_tool False
+    ```
 
 ## API reference
 
@@ -304,43 +345,8 @@ purely as data.
 per-provider `*.jsonl` `stream-json` recordings. Imported rather than hard-coded by tests
 that load a stream fixture.
 
----
+## See also
 
-## Example
-
-Snapshot testing a value (match then mismatch), and reading the shipped taint matrix —
-all pure and in-memory, no runtime needed.
-
-```python
-import tempfile, os
-from crawfish.testing import snapshot_match, taint_conformance_cases
-
-d = tempfile.mkdtemp()
-snap = os.path.join(d, "report.json")
-
-# First call writes the baseline (file missing -> True).
-print(snapshot_match(snap, {"status": "ok", "count": 3}))
-# Same value, different key order, matches the written baseline.
-print(snapshot_match(snap, {"count": 3, "status": "ok"}))
-# A changed value diverges.
-print(snapshot_match(snap, {"status": "ok", "count": 4}))
-
-# How many taint conformance cases ship, and each expected verdict.
-cases = taint_conformance_cases()
-print(len(cases))
-for c in cases:
-    print(c.name, c.expected)
-```
-
-??? success "▶ Output"
-
-    ```text
-    True
-    True
-    False
-    4
-    fluid_input True
-    static_plus_tool True
-    fluid_plus_tool True
-    static_no_tool False
-    ```
+- [Runtimes](runtimes.md) — the `RecordReplayRuntime` and `MockRuntime` these helpers wrap.
+- [Core types](core-types.md) — the static / fluid boundary taint builds on.
+- [Sandbox and jail](sandbox-and-jail.md) — how taint is enforced at runtime.

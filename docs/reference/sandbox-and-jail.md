@@ -1,19 +1,15 @@
 # Sandbox & jail
 
-The host-side leg of the security spine: how *your* and *users'* node code runs
-isolated from the engine, scoped to a folder, with the network shut off — and how the
-untrusted-data tag (taint) follows values across that process edge. These live in
-`crawfish.jail` and `crawfish.sandbox`.
+The host-side leg of the security spine. It runs *your* and *users'* node code isolated
+from the engine — scoped to a folder, with the network shut off — and carries the
+untrusted-data tag (taint) along with any value that crosses that process edge. These live
+in `crawfish.jail` and `crawfish.sandbox`.
 
 **Symbols on this page:** `Jail` · `FakeJail` · `NoJail` · `BwrapJail` · `SeatbeltJail` ·
 `JailPath` · `PathMode` · `JailResult` · `Denial` · `DenialKind` · `SandboxPolicy` ·
 `StaticOnlyError` · `UnsupportedPlatformError` · `select_jail` · `registry_descriptors` ·
 `rehydrate_registry` · `emit_denials` · `EgressBroker` · `EgressDenied` ·
 `run_out_of_process` · `TaintSet`
-
----
-
-## Core
 
 Some pipeline nodes — a source that reads files, a sink that writes them, a filter that
 shells out — run **host-side Python**: code on your machine, not the `claude -p` child.
@@ -22,6 +18,8 @@ outside your control* (a ticket body, a fetched page). A prompt injection riding
 fluid data could try to make such a node read `/etc/shadow` or phone home. So host-side
 node code does not run inside the engine. It runs **out-of-process** — in a *separate OS
 process that shares none of the engine's memory or credentials* — inside a **jail**.
+
+## What a jail does
 
 A **jail** does three things to that separate process:
 
@@ -32,35 +30,33 @@ A **jail** does three things to that separate process:
   jailed child read fluid data, called a tool, or touched the network, every value it
   hands back comes out tagged untrusted, so downstream code knows not to trust it.
 
-`Jail` is the abstract contract. The concrete backends are OS-specific: **`BwrapJail`**
-on Linux (the `bwrap` sandbox), **`SeatbeltJail`** on macOS (`sandbox-exec`). For tests
-there is **`FakeJail`**, which spawns nothing but applies the exact same allow/deny
-policy in-process; and **`NoJail`**, an explicit opt-out for code that is provably never
-reached by fluid data. **`select_jail`** picks the right backend for the current
-platform, or raises **`UnsupportedPlatformError`** where none exists (Windows).
+`Jail` is the abstract contract. The concrete backends are OS-specific: **`BwrapJail`** on
+Linux (the `bwrap` sandbox), **`SeatbeltJail`** on macOS (`sandbox-exec`). For tests there
+is **`FakeJail`**, which spawns nothing but applies the exact same allow/deny policy
+in-process; and **`NoJail`**, an explicit opt-out for code that is provably never reached
+by fluid data. **`select_jail`** picks the right backend for the current platform, or
+raises **`UnsupportedPlatformError`** where none exists (Windows).
 
 You declare what the jail may reach with a **`JailPath`** — a path plus a **`PathMode`**
-(read-only or read-write). The full ruleset is a **`SandboxPolicy`**. When the child
-tries to step outside the rules, the jail records a **`Denial`** (its **`DenialKind`**
-says why) and surfaces it on the run's **`JailResult`**. **`emit_denials`** writes those
-denials to the audit ledger.
-
-The single hard rule: the allow-list of folders is **static-only** — each allowed path
-may only come from trusted node configuration, never from fluid data. A fluid value can
-never widen the jail. Offer a fluid path where only static is allowed and you get a
-**`StaticOnlyError`**. (Whether the network is open is a plain static flag with no
-per-value provenance — it cannot carry a fluid value in the first place.)
+(read-only or read-write). The full ruleset is a **`SandboxPolicy`**. When the child tries
+to step outside the rules, the jail records a **`Denial`** (its **`DenialKind`** says why)
+and surfaces it on the run's **`JailResult`**. **`emit_denials`** writes those denials to
+the audit ledger.
 
 A **`TaintSet`** is just the set of those untrusted-labels on a value. **`EgressBroker`**
 is the network allow-list host-side code checks before connecting (**`EgressDenied`** if
 the host isn't on it). **`run_out_of_process`** is the primitive that actually runs a
 function in a child process.
 
----
+!!! warning "The folder allow-list is static-only"
 
-## Ramps up
+    Each allowed path may only come from trusted node configuration, never from fluid data
+    — a fluid value can never widen the jail. Offer a fluid path where only static is
+    allowed and you get a `StaticOnlyError`, raised *before* any child process spawns.
+    (Whether the network is open is a plain static `bool` with no per-value provenance, so
+    it cannot carry a fluid value in the first place.)
 
-### One contract, OS-specific backends (ADR 0016)
+## One contract, OS-specific backends (ADR 0016)
 
 The enforcement primitive is unavoidably OS-sensitive, so the design is a single `Jail`
 ABC with one `run` contract and per-platform backends rather than one cross-platform
@@ -83,23 +79,29 @@ alternatives.
 - **`NoJail`** still runs out-of-process and still propagates taint, but enforces no
   folder or network scope. It is the explicit opt-out — never the default for fluid code.
 
-### `select_jail` and unsupported platforms
+## `select_jail` and unsupported platforms
 
 `select_jail` sniffs the OS: Linux → `BwrapJail`, macOS → `SeatbeltJail`. A
 `SandboxPolicy.kind` of `'bwrap'`, `'seatbelt'`, `'fake'`, or `'nojail'` pins a backend
 (used by tests and the opt-out). Windows has no clean unprivileged primitive and is
 deferred (ADR 0009), so it raises `UnsupportedPlatformError`.
 
-### Static-only is enforced before any process spawns
+## Static-only is enforced before any process spawns
 
-`allow_paths` and `allow_net` derive from static node config only. Every backend calls
-the shared `Jail._check_static(allow_paths)` first thing in `run`: a `JailPath` whose
-`flow` is `Flow.FLUID` raises `StaticOnlyError` **before** a child is launched. This is
-the spine rule made executable — a fluid (untrusted) value can never widen the jail.
-(`allow_net` is a bare `bool` with no `flow` field, so it is static by construction; the
-check covers the one input that *could* carry provenance — `allow_paths`.)
+`allow_paths` and `allow_net` derive from static node config only. Every backend calls the
+shared `Jail._check_static(allow_paths)` first thing in `run`: a `JailPath` whose `flow` is
+`Flow.FLUID` raises `StaticOnlyError` **before** a child is launched. This is the spine
+rule made executable — a fluid (untrusted) value can never widen the jail. (`allow_net` is
+a bare `bool` with no `flow` field, so it is static by construction; the check covers the
+one input that *could* carry provenance — `allow_paths`.)
 
-### The child is the taint boundary
+!!! warning "`allow_paths` is static-only; a fluid path raises `StaticOnlyError`"
+
+    The check runs before any process spawns, so an injected agent can never hand the jail
+    a fluid path and widen its own folder scope. The escape is refused at the door, not
+    after the fact.
+
+## The child is the taint boundary
 
 Input `taint` is serialized into the child; every value crossing back is re-tagged via
 `JailResult.out_taint`. Under `FakeJail`, the result is tagged `"fluid"` (the
@@ -109,7 +111,7 @@ for untrusted scope. The real backends carry input taint forward and, when netwo
 was explicitly granted, presumptively taint the output (a net-granted child may have
 pulled in untrusted remote data); under the default deny-net there is no egress path.
 
-### Denials are blocked *and* audited
+## Denials are blocked *and* audited
 
 A blocked escape is a `Denial` on `JailResult.denied`. `emit_denials` writes one
 `JAIL_VIOLATION` emission per denial to the store, each carrying the required `attempt`
@@ -117,7 +119,7 @@ and `severity` attrs and marked `tainted=True` (a denial is by definition untrus
 code's attempt). "Blocked and audited" is the broker's contract and feeds the red-team
 demo and dashboard.
 
-### Type registry crosses the boundary
+## Type registry crosses the boundary
 
 The jailed child is a fresh process and cannot inherit Python identities, so structural
 type compatibility would break across the edge. `registry_descriptors` serializes the
@@ -125,7 +127,7 @@ type compatibility would break across the edge. `registry_descriptors` serialize
 `rehydrate_registry` at startup to reconstruct them, so `parameters_compatible` behaves
 identically on both sides.
 
-### `EgressBroker` is the Phase-1 network floor
+## `EgressBroker` is the Phase-1 network floor
 
 `EgressBroker` is a cooperative allow-list: host-side code calls `broker.guard(host)`
 before connecting and gets `EgressDenied` if the host isn't permitted. It is the portable
@@ -133,7 +135,55 @@ Phase-1 floor, not the final boundary — a transparent interception layer that 
 undeclared egress even without a cooperative call, plus full microVM/seccomp isolation,
 is tracked separately.
 
----
+## Example
+
+A `FakeJail` run that allows one folder, catches a folder escape, refuses a fluid
+allow-path, and shows taint propagating out of a network-touching child. Pure and
+in-process — no real sandbox needed.
+
+```python
+from crawfish.jail import FakeJail, JailPath, PathMode, StaticOnlyError
+from crawfish.jail import _Probe          # the test-injected child description
+from crawfish.core.types import Flow
+
+# 1. A jailed child reads inside its allowed folder, then tries to escape to /etc/shadow.
+def program(cmd):
+    return _Probe(reads=["/work/in.txt", "/etc/shadow"])
+
+jail = FakeJail(program=program)                       # in-process, real policy
+allowed = JailPath(path="/work", mode=PathMode.RO)     # STATIC by default
+res = jail.run(["node-code"], allow_paths=[allowed])
+
+print("backend     :", jail.kind)
+print("exit_code   :", res.exit_code)                  # nonzero: the child escaped
+for d in res.denied:
+    print("denial      :", d.kind.value, d.attempt, d.severity)
+
+# 2. allow_paths is STATIC-only: a FLUID path can never widen the jail.
+fluid = JailPath(path="/secrets", mode=PathMode.RW, flow=Flow.FLUID)
+try:
+    jail.run(["x"], allow_paths=[fluid])
+except StaticOnlyError:
+    print("static-only : StaticOnlyError raised for FLUID allow_path")
+
+# 3. Taint boundary: a child that touched the network re-tags its output fluid.
+def net(cmd):
+    return _Probe(connects=["evil.example:443"])
+out = FakeJail(program=net).run(["x"], allow_net=False)
+print("out_taint   :", sorted(out.out_taint))
+print("net denial  :", out.denied[0].kind.value)
+```
+
+??? success "▶ Output"
+
+    ```text
+    backend     : fake
+    exit_code   : 1
+    denial      : folder_escape /etc/shadow high
+    static-only : StaticOnlyError raised for FLUID allow_path
+    out_taint   : ['fluid']
+    net denial  : undeclared_egress
+    ```
 
 ## API reference
 
@@ -360,54 +410,11 @@ def run_out_of_process(
 Execute `func` (which must be importable/picklable) in a separate process and return its
 result, so host-side code never shares the engine's process memory or credentials.
 
----
+## See also
 
-## Example
-
-A `FakeJail` run that allows one folder, catches a folder escape, refuses a fluid
-allow-path, and shows taint propagating out of a network-touching child. Pure and
-in-process — no real sandbox needed.
-
-```python
-from crawfish.jail import FakeJail, JailPath, PathMode, StaticOnlyError
-from crawfish.jail import _Probe          # the test-injected child description
-from crawfish.core.types import Flow
-
-# 1. A jailed child reads inside its allowed folder, then tries to escape to /etc/shadow.
-def program(cmd):
-    return _Probe(reads=["/work/in.txt", "/etc/shadow"])
-
-jail = FakeJail(program=program)                       # in-process, real policy
-allowed = JailPath(path="/work", mode=PathMode.RO)     # STATIC by default
-res = jail.run(["node-code"], allow_paths=[allowed])
-
-print("backend     :", jail.kind)
-print("exit_code   :", res.exit_code)                  # nonzero: the child escaped
-for d in res.denied:
-    print("denial      :", d.kind.value, d.attempt, d.severity)
-
-# 2. allow_paths is STATIC-only: a FLUID path can never widen the jail.
-fluid = JailPath(path="/secrets", mode=PathMode.RW, flow=Flow.FLUID)
-try:
-    jail.run(["x"], allow_paths=[fluid])
-except StaticOnlyError:
-    print("static-only : StaticOnlyError raised for FLUID allow_path")
-
-# 3. Taint boundary: a child that touched the network re-tags its output fluid.
-def net(cmd):
-    return _Probe(connects=["evil.example:443"])
-out = FakeJail(program=net).run(["x"], allow_net=False)
-print("out_taint   :", sorted(out.out_taint))
-print("net denial  :", out.denied[0].kind.value)
-```
-
-??? success "▶ Output"
-
-    ```text
-    backend     : fake
-    exit_code   : 1
-    denial      : folder_escape /etc/shadow high
-    static-only : StaticOnlyError raised for FLUID allow_path
-    out_taint   : ['fluid']
-    net denial  : undeclared_egress
-    ```
+- [Secret broker](secret-broker.md) — how a credential reaches the network without ever
+  entering the jailed child.
+- [Secrets & consent](secrets-and-consent.md) — resolving secrets by reference and
+  scrubbing them out of the ledger.
+- [Core types](core-types.md) — `Flow`, the static-vs-fluid distinction the static-only
+  rule rests on.

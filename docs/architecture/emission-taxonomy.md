@@ -1,8 +1,11 @@
 # Emission taxonomy (frozen)
 
-The canonical contract for `crawfish.emission.Emission` — the one typed signal every
-producer emits onto the append-only ledger and every consumer (dashboard CRA-181, anomaly
-engine CRA-190, inspector) reads. Frozen in CRA-184; see
+The frozen contract for the one typed signal every producer writes and every consumer
+reads.
+
+`crawfish.emission.Emission` is the single signal every producer emits onto the
+append-only ledger and every consumer (dashboard CRA-181, anomaly engine CRA-190,
+inspector) reads. Frozen in CRA-184; see
 [ADR 0013](decisions/0013-emission-taxonomy-and-inline-output-value.md).
 
 `EmissionKind` is **closed**. Adding a kind or changing a kind's required attrs is a
@@ -51,3 +54,9 @@ pure, deterministic check used by the emit path and the CRA-185 conformance suit
   (`ref`) only, and the ledger is written through `ScrubbingStore` (secrets/PII redacted).
 - `tainted` must survive serialization to/from the ledger (CRA-171) so downstream
   consumers cannot launder untrusted content into a trusted decision.
+
+## See also
+
+- [Architecture → Emission stream](ARCHITECTURE.md) — how emissions ride the Store transport
+- [Security](SECURITY.md) — why `tool`, `secret_lease`, and `jail_violation` are tainted
+- [ADR 0013](decisions/0013-emission-taxonomy-and-inline-output-value.md) — the taxonomy and inline-output decision

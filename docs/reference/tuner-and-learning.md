@@ -1,18 +1,18 @@
 # Tuner & learning
 
-How an agent gets *better* at its job without a human editing it by hand, and without a
-live model in the loop. The Tuner searches a space of candidate configurations and keeps
-the one that scores best; the learning loop wraps that search in a safe, reversible
-promotion policy. These live in `crawfish.tuner` and `crawfish.learning`.
+The **Tuner** makes an agent better at its job by trying many candidate configurations and
+keeping the one that scores best — no human editing it by hand, no live model in the loop.
+The **LearningLoop** wraps that search in a safe, reversible promotion policy. You reach for
+these to close the iterate→measure→tune→promote loop: turn knobs, score against a benchmark,
+promote only a winner that clears the bar.
 
-**Symbols on this page:** `Mutation` · `Candidate` · `PromptMutator` ·
-`PromptVariantMutator` · `KnobGridMutator` · `FewShotMutator` · `ChainMutator` ·
-`SearchStrategy` · `TrialResult` · `TuneResult` · `Tuner` · `LearningLoop` ·
-`PromotionOutcome` · `VersionRecord`
+`Mutation` · `Candidate` · `PromptMutator` · `PromptVariantMutator` · `KnobGridMutator` ·
+`FewShotMutator` · `ChainMutator` · `SearchStrategy` · `TrialResult` · `TuneResult` ·
+`Tuner` · `LearningLoop` · `PromotionOutcome` · `VersionRecord`
 
----
+These live in `crawfish.tuner` and `crawfish.learning`.
 
-## Core
+## Definitions, knobs, mutators, and the gate
 
 An agent in Crawfish is described by a **Definition** — its team of agents, each agent's
 prompt, its model, and other settings. Those settings are the **knobs** you can turn:
@@ -45,9 +45,15 @@ a stored quality bar (the **baseline**). Every version — the base and any prom
 is fully reversible: you can roll back to any earlier version. The result of one improve
 cycle is a **PromotionOutcome**.
 
----
+!!! note "Good to know"
 
-## Ramps up
+    Nothing in this loop calls a live model to *invent* configuration. Mutators only select
+    and recombine settings the author already supplied, scoring is deterministic under a
+    `MockRuntime` or replayed cassette, and the same `base` plus the same `seed` always yield
+    the same result. That is what makes a tune reproducible and keeps an autonomous search
+    auditable.
+
+## Mutators: producing candidates
 
 The Tuner's design — propose prompt variants and few-shot examples, search, keep the
 benchmark-best, regression-gate the winner — is borrowed from DSPy's ideas while
@@ -85,7 +91,7 @@ combine, say, a prompt sweep with a knob grid in one search.
 The "primary agent" the knobs apply to is the team **lead** if one is set, otherwise the
 first agent. Tuning a Definition with no agents raises `ValueError`.
 
-### Each candidate is a fresh frozen artifact
+## Each candidate is a fresh frozen artifact
 
 A frozen Definition rejects mutation, so the search never edits in place. For every candidate
 the mutator builds a new Definition and **re-freezes** it with a fresh content-hash version:
@@ -95,7 +101,7 @@ the new `version.sha`. Two structurally-identical candidates collapse to the sam
 a real model is replayed from a recorded cassette, the cassette key varies on the Definition's
 version, so distinct candidates never collide on replay.
 
-### How the search decides
+## How the search decides
 
 `Tuner.tune` scores the base first (the bar to beat). For each candidate it computes the score
 deltas against the current running best. A candidate is **accepted** when it strictly improves
@@ -108,7 +114,7 @@ exist (the mutator owns that). `GRID` keeps the mutator's proposal order. `RANDO
 seeded sample of `sample_size` candidates (a fixed seed gives a fixed sample). `EVOLUTIONARY`
 is a seeded shuffle — a reproducible reordering of the full pool.
 
-### The autonomy ceiling
+## The autonomy ceiling
 
 Before scoring *anything*, `tune` checks the ceiling: an already-cancelled or
 already-exhausted context returns the base unscored with an empty trial log, so the search
@@ -118,7 +124,7 @@ even on a replay hit). `CostBudget.charge` raises `BudgetExceeded` past the hard
 `stopped_reason` on the result records which bound fired: `"exhausted"`, `"budget"`,
 `"cancelled"`, or `"max_trials"`. The loop is never bounded by wall clock.
 
-### The promotion gate
+## The promotion gate
 
 `LearningLoop.improve` is a thin policy over `Tuner.tune`. It runs the search, records the
 tuned-from base as a frozen `VersionRecord` (seeding the regression baseline on first use),
@@ -133,15 +139,80 @@ then decides:
 - Otherwise the winner is **promoted**: recorded as a frozen `VersionRecord`, marked the single
   active version, and the baseline advances to its scores.
 
-The loop mutates only static configuration (through the pure mutators), so a promotion can
-never introduce a fluid — untrusted, per-item — sink target, and untrusted content can never
-drive a promotion.
-
 `rollback(sha)` re-activates any prior recorded version and resets the baseline to that
 version's scores, so subsequent cycles are gated against the version actually in force. An
 unknown `sha` raises `KeyError`.
 
----
+!!! warning "Promotion only ever changes static configuration"
+
+    The loop mutates only **static** configuration through the pure mutators, so a promotion
+    can never introduce a **FLUID (untrusted)**, per-item sink target, and untrusted content
+    can never drive a promotion. The improvement loop stays inside the
+    [security spine](../architecture/SECURITY.md) — a noisy or adversarial output can move
+    scores, but it can't move the instruction path.
+
+## Example
+
+A deterministic tune: a `KnobGridMutator` sweeps the agent's `model` knob, scored by a fixed
+function (`slow`→1, `mid`→5, `fast`→9) through a `MockRuntime` — no live model. The grid sorts
+the models alphabetically, so `fast` is tried first and accepted as the best.
+
+```python
+import asyncio
+import os
+import tempfile
+
+from crawfish.batch import Task
+from crawfish.core.context import CostBudget, RunContext
+from crawfish.core.types import Flow, Parameter
+from crawfish.definition.types import AgentSpec, Definition, TeamSpec
+from crawfish.metrics import Benchmark, OutputNumber, Rubric
+from crawfish.runtime.base import RunRequest
+from crawfish.runtime.mock import MockRuntime
+from crawfish.runtime.prompt import pick_agent
+from crawfish.store import SqliteStore
+from crawfish.tuner import KnobGridMutator, Tuner
+
+
+# A fixed deterministic scorer: the score depends only on the `model` knob.
+def responder(request: RunRequest) -> str:
+    agent = pick_agent(request.definition, request.role)
+    return str({"slow": 1, "mid": 5, "fast": 9}.get(agent.model or "", 0))
+
+
+base = Definition(
+    team=TeamSpec(agents=[AgentSpec(role="worker", prompt="do the thing", model="slow")]),
+    inputs=[Parameter(name="task", type="text", flow=Flow.FLUID)],
+)
+benchmark = Benchmark(Rubric([OutputNumber(name="score")]), [Task(description="a"), Task(description="b")])
+tuner = Tuner(benchmark, KnobGridMutator(models=["slow", "mid", "fast"]))
+
+with tempfile.TemporaryDirectory() as d:
+    store = SqliteStore(os.path.join(d, "t.db"))
+    ctx = RunContext(store=store, cost_budget=CostBudget(limit_usd=None))
+    result = asyncio.run(tuner.tune(base, ctx, MockRuntime(responder), seed=0))
+
+print("improved:", result.improved)
+print("best model:", result.best.team.agents[0].model)
+print("base score:", result.base_scores["score"])
+print("best score:", result.best_scores["score"])
+print("stopped:", result.stopped_reason)
+for t in result.trials:
+    print(f"  trial {t.index}: {t.mutation.label!r} score={t.scores['score']} accepted={t.accepted}")
+```
+
+??? success "▶ Output"
+
+    ```text
+    improved: True
+    best model: fast
+    base score: 1.0
+    best score: 9.0
+    stopped: exhausted
+      trial 0: 'model=fast' score=9.0 accepted=True
+      trial 1: 'model=mid' score=5.0 accepted=False
+      trial 2: 'model=slow' score=1.0 accepted=False
+    ```
 
 ## API reference
 
@@ -382,67 +453,8 @@ Other methods: `history() -> list[VersionRecord]` (the full lineage); `active() 
 | None` (the currently-active record); `rollback(sha) -> Definition` (re-activate a prior
 version and reset the baseline to its scores; raises `KeyError` if `sha` is unknown).
 
----
+## See also
 
-## Example
-
-A deterministic tune: a `KnobGridMutator` sweeps the agent's `model` knob, scored by a fixed
-function (`slow`→1, `mid`→5, `fast`→9) through a `MockRuntime` — no live model. The grid sorts
-the models alphabetically, so `fast` is tried first and accepted as the best.
-
-```python
-import asyncio
-import os
-import tempfile
-
-from crawfish.batch import Task
-from crawfish.core.context import CostBudget, RunContext
-from crawfish.core.types import Flow, Parameter
-from crawfish.definition.types import AgentSpec, Definition, TeamSpec
-from crawfish.metrics import Benchmark, OutputNumber, Rubric
-from crawfish.runtime.base import RunRequest
-from crawfish.runtime.mock import MockRuntime
-from crawfish.runtime.prompt import pick_agent
-from crawfish.store import SqliteStore
-from crawfish.tuner import KnobGridMutator, Tuner
-
-
-# A fixed deterministic scorer: the score depends only on the `model` knob.
-def responder(request: RunRequest) -> str:
-    agent = pick_agent(request.definition, request.role)
-    return str({"slow": 1, "mid": 5, "fast": 9}.get(agent.model or "", 0))
-
-
-base = Definition(
-    team=TeamSpec(agents=[AgentSpec(role="worker", prompt="do the thing", model="slow")]),
-    inputs=[Parameter(name="task", type="text", flow=Flow.FLUID)],
-)
-benchmark = Benchmark(Rubric([OutputNumber(name="score")]), [Task(description="a"), Task(description="b")])
-tuner = Tuner(benchmark, KnobGridMutator(models=["slow", "mid", "fast"]))
-
-with tempfile.TemporaryDirectory() as d:
-    store = SqliteStore(os.path.join(d, "t.db"))
-    ctx = RunContext(store=store, cost_budget=CostBudget(limit_usd=None))
-    result = asyncio.run(tuner.tune(base, ctx, MockRuntime(responder), seed=0))
-
-print("improved:", result.improved)
-print("best model:", result.best.team.agents[0].model)
-print("base score:", result.base_scores["score"])
-print("best score:", result.best_scores["score"])
-print("stopped:", result.stopped_reason)
-for t in result.trials:
-    print(f"  trial {t.index}: {t.mutation.label!r} score={t.scores['score']} accepted={t.accepted}")
-```
-
-??? success "▶ Output"
-
-    ```text
-    improved: True
-    best model: fast
-    base score: 1.0
-    best score: 9.0
-    stopped: exhausted
-      trial 0: 'model=fast' score=9.0 accepted=True
-      trial 1: 'model=mid' score=5.0 accepted=False
-      trial 2: 'model=slow' score=1.0 accepted=False
-    ```
+- [Metrics](metrics.md) — the `Benchmark` and `Rubric` that turn a candidate run into scores.
+- [Evals](evals.md) — the golden set and `gate_against_baseline` the promotion gate leans on.
+- [Definition](definition.md) — the agents, prompts, and knobs the mutators turn.

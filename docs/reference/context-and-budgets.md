@@ -1,43 +1,34 @@
 # Context & budgets
 
-The handle a node holds while it runs: who it is, where it persists state, and the
-two levers the orchestrator pulls to stop runaway work — a cost ceiling and a
-cooperative cancel signal. These live in `crawfish.core.context` and are threaded
-through every step of a run.
+The handle a node holds while it runs: who it is, where it saves state, and the two levers
+the orchestrator uses to stop runaway work — a cost ceiling and a cooperative cancel signal.
+These live in `crawfish.core.context` and are threaded through every step of a run.
 
-**Symbols on this page:** `RunContext` · `CostBudget` · `CancelToken` · `BudgetExceeded` · `Cancelled`
+`RunContext` · `CostBudget` · `CancelToken` · `BudgetExceeded` · `Cancelled`
 
----
+## What a node gets when it runs
 
-## Core
+When a node executes, it receives a **run context** — one object carrying everything that
+step needs to know about *this* run: a `run_id` identifying the run, the `org_id` it belongs
+to (the tenancy key — which customer or workspace owns the data), a `store` for reading and
+writing state, and the two safety levers below.
 
-When a node executes, it receives a **run context** — a single object carrying
-everything that step needs to know about *this* run: a `run_id` identifying the run,
-the `org_id` it belongs to (the tenancy key — which customer/workspace owns the data),
-a `store` for reading and writing persistent state, and the two safety levers below.
+A **cost budget** is a spending ceiling in dollars. Each unit of work (usually a model call)
+**charges** its cost against the budget. While the running total stays under the cap, charges
+succeed silently. The first charge that pushes the total *over* the cap raises
+`BudgetExceeded` — the orchestrator's hard kill on a run that is burning money too fast. A
+budget with no cap (the local-dev default) never raises.
 
-A **cost budget** is a spending ceiling measured in dollars. Each unit of work
-(typically a model call) **charges** its cost against the budget. While the running
-total stays under the cap, charges succeed silently. The first charge that pushes the
-total *over* the cap raises `BudgetExceeded` — the orchestrator's hard kill on a run
-that is burning money faster than allowed. A budget with no cap (the local-dev default)
-never raises.
+A **cancel token** is a cooperative stop signal. *Cooperative* means nothing force-kills the
+node mid-instruction. Instead, long-running loops **check in** now and then by calling
+`raise_if_cancelled`. While the token is clear, that check does nothing. Once something
+**trips** the token by calling `cancel`, the next check-in raises `Cancelled` and the loop
+unwinds. You can also poll the token without raising, via its `cancelled` property.
 
-A **cancel token** is a cooperative stop signal. Cancellation here is *cooperative*:
-nothing force-kills the node mid-instruction. Instead, long-running loops periodically
-**check in** by calling `raise_if_cancelled`. While the token is clear, that check does
-nothing. Once something **trips** the token (by calling `cancel`), the next check-in
-raises `Cancelled` and the loop unwinds. The token can also be polled without raising,
-via its `cancelled` property.
+`BudgetExceeded` and `Cancelled` are the exceptions these two levers raise — the signals that
+travel up the stack when a run hits its ceiling or is told to stop.
 
-`BudgetExceeded` and `Cancelled` are both the exceptions these two levers raise — the
-signals that travel up the stack when a run hits its ceiling or is told to stop.
-
----
-
-## Ramps up
-
-### One context, threaded everywhere
+## One context, shared by every node
 
 `RunContext` is a plain dataclass, not a Pydantic model — it bundles live handles
 (a `Store`, a `threading.Event`-backed token), not serialisable data. Every node in a
@@ -49,28 +40,34 @@ The `Store` type is imported only under `TYPE_CHECKING` — `core` is the substr
 rest of the framework sits on, so it depends on the store *protocol*, never a concrete
 backend. This keeps the module dependency-light and free of import cycles.
 
-### Charging is additive, and the check fires after
+## How charging works
 
 `CostBudget.charge` adds to `spent_usd` *first*, then tests the total against the cap.
-So the spend total reflects the charge even when that charge is the one that trips the
-limit — after a `BudgetExceeded`, `spent_usd` already includes the over-the-line amount.
-The comparison is strict (`>`): spending *exactly* the cap is allowed; only spending
-*past* it raises.
-
-A cap of `None` means unbounded. `charge` then never raises (the `limit_usd is not None`
+A cap of `None` means unbounded: `charge` never raises (the `limit_usd is not None`
 guard short-circuits), and `remaining_usd` returns `None` rather than a number — there is
 no remaining budget to report when there is no limit.
 
-### Cancellation is cooperative, not pre-emptive
+!!! warning "The trip charge is still recorded"
+
+    The spend total reflects a charge even when that charge is the one that trips the limit —
+    after a `BudgetExceeded`, `spent_usd` already includes the over-the-line amount. The
+    comparison is strict (`>`): spending *exactly* the cap is allowed; only spending *past* it
+    raises.
+
+## Cancellation is cooperative, not pre-emptive
 
 `CancelToken` wraps a `threading.Event`. `cancel()` sets it; `cancelled` reads it;
-`raise_if_cancelled()` raises `Cancelled` only if it is set. Because nothing interrupts
-the node on its behalf, a node that never calls `raise_if_cancelled` will run to
-completion regardless of cancellation — the contract is that long loops opt in by
-checking in. The `threading.Event` backing means a token tripped from another thread
-(an orchestrator watchdog) is observed safely by the node thread.
+`raise_if_cancelled()` raises `Cancelled` only if it is set. The `threading.Event` backing
+means a token tripped from another thread (an orchestrator watchdog) is observed safely by
+the node thread.
 
-### `emit` routes through the store
+!!! note "Good to know"
+
+    Nothing interrupts the node on its behalf. A node that never calls `raise_if_cancelled`
+    runs to completion regardless of cancellation — the contract is that long loops opt in by
+    checking in.
+
+## How `emit` routes through the store
 
 `RunContext.emit` appends an observer event for the run-info surface, but it does so
 *through this run's `store`*. That indirection is load-bearing: a `ScrubbingStore`
@@ -78,7 +75,51 @@ wrapper around the store redacts secrets before the write, so emitted events can
 credentials — the secret/prompt-injection boundary. The import of `ObserverSurface` is
 deliberately function-local to avoid a `core ↔ observe` import cycle.
 
----
+## Example
+
+A budget that charges under its cap, then trips it; an unbounded budget; and a cancel
+token polled and tripped — all pure, no runtime needed.
+
+```python
+from crawfish.core.context import CostBudget, BudgetExceeded, CancelToken, Cancelled
+
+# A budget with a $1.00 cap.
+budget = CostBudget(limit_usd=1.00)
+budget.charge(0.60)                       # under the cap — ok
+print(f"spent ${budget.spent_usd:.2f}, remaining ${budget.remaining_usd:.2f}")
+
+try:
+    budget.charge(0.75)                    # would push spend to $1.35 > $1.00
+except BudgetExceeded as exc:
+    print(f"BudgetExceeded: {exc}")
+
+# An unbounded budget never raises and reports no remaining.
+free = CostBudget()
+free.charge(1000.0)
+print(f"unbounded remaining: {free.remaining_usd}")
+
+# A cancel token: clear, then tripped.
+token = CancelToken()
+token.raise_if_cancelled()                 # no-op while clear
+print(f"cancelled before: {token.cancelled}")
+token.cancel()
+print(f"cancelled after: {token.cancelled}")
+try:
+    token.raise_if_cancelled()
+except Cancelled as exc:
+    print(f"Cancelled: {exc}")
+```
+
+??? success "▶ Output"
+
+    ```text
+    spent $0.60, remaining $0.40
+    BudgetExceeded: cost budget exceeded: spent $1.3500 > $1.0000
+    unbounded remaining: None
+    cancelled before: False
+    cancelled after: True
+    Cancelled: run was cancelled
+    ```
 
 ## API reference
 
@@ -137,50 +178,8 @@ token has been cancelled.
 | --- | --- | --- |
 | `emit` | `emit(self, event: ObserverEvent) -> None` | Appends an observer event, routed through `store` so a `ScrubbingStore` wrapper can redact secrets before the write. |
 
----
+## See also
 
-## Example
-
-A budget that charges under its cap, then trips it; an unbounded budget; and a cancel
-token polled and tripped — all pure, no runtime needed.
-
-```python
-from crawfish.core.context import CostBudget, BudgetExceeded, CancelToken, Cancelled
-
-# A budget with a $1.00 cap.
-budget = CostBudget(limit_usd=1.00)
-budget.charge(0.60)                       # under the cap — ok
-print(f"spent ${budget.spent_usd:.2f}, remaining ${budget.remaining_usd:.2f}")
-
-try:
-    budget.charge(0.75)                    # would push spend to $1.35 > $1.00
-except BudgetExceeded as exc:
-    print(f"BudgetExceeded: {exc}")
-
-# An unbounded budget never raises and reports no remaining.
-free = CostBudget()
-free.charge(1000.0)
-print(f"unbounded remaining: {free.remaining_usd}")
-
-# A cancel token: clear, then tripped.
-token = CancelToken()
-token.raise_if_cancelled()                 # no-op while clear
-print(f"cancelled before: {token.cancelled}")
-token.cancel()
-print(f"cancelled after: {token.cancelled}")
-try:
-    token.raise_if_cancelled()
-except Cancelled as exc:
-    print(f"Cancelled: {exc}")
-```
-
-??? success "▶ Output"
-
-    ```text
-    spent $0.60, remaining $0.40
-    BudgetExceeded: cost budget exceeded: spent $1.3500 > $1.0000
-    unbounded remaining: None
-    cancelled before: False
-    cancelled after: True
-    Cancelled: run was cancelled
-    ```
+- [Core types](core-types.md) — the nodes and parameters a run context threads through.
+- [Persistence](persistence.md) — the `Store` protocol the context carries.
+- [Run & engine](run-and-engine.md) — where a `RunContext` is created and driven.

@@ -1,67 +1,45 @@
 # Nodes — source & filter
 
-The two ends of the front half of a pipeline: a **source** pulls outside data *in*,
-and a **filter** narrows the stream back *down* before the expensive work happens.
-Both live in `crawfish.nodes` and produce typed [`Output`](nodes-aggregator.md)
-values that flow to the next node.
+A **source** pulls outside data *in*; a **filter** narrows that stream back *down*
+before the expensive work begins. Together they are the front half of a pipeline — the
+ingress and the trim. Both live in `crawfish.nodes` and produce typed
+[`Output`](nodes-aggregator.md) values that flow to the next node.
 
-**Symbols on this page:** `Source` · `RepoSource` · `PullRequestSource` · `fan_out` ·
-`Filter` · `title_contains` · `field_equals` · `field_matches` · `limit`
+`Source` · `RepoSource` · `PullRequestSource` · `fan_out` · `Filter` ·
+`title_contains` · `field_equals` · `field_matches` · `limit`
 
----
+## Sources, runs, and fan-out
 
-## Core
-
-A **pipeline** is a chain of nodes. The first node is always a **source** — it
-*fetches* data from the outside world (a repo, a list of pull requests) and hands the
-rest of the pipeline a typed [`Output`](nodes-aggregator.md): a value plus a record of
-the ports it fills and where it came from.
+A pipeline is a chain of nodes, and the first node is always a **source**. It fetches
+data from the outside world — a repo, a list of pull requests — and hands the rest of
+the pipeline a typed [`Output`](nodes-aggregator.md): a value plus a record of the ports
+it fills and where it came from.
 
 Sources come in two shapes:
 
 - A **single** source emits one Output that seeds one **run** (one pass of the
   pipeline over one item).
-- A **multi** source emits an Output whose value is a *list*. That list is split
-  into one Output per item so each item gets its own independent run. That split —
-  spreading one list into many parallel runs — is **fan-out**, performed by
-  `fan_out`. `RepoSource` is single (one repo);
-  `PullRequestSource` is multi (a list of PRs).
+- A **multi** source emits an Output whose value is a *list*. That list is split into
+  one Output per item, so each item gets its own independent run. That split — spreading
+  one list into many parallel runs — is **fan-out**, performed by `fan_out`.
 
-Credentials are held **by reference**, never by value. A source's `config` stores the
-*name* of the environment variable that holds the token (e.g. `"GITHUB_TOKEN"`), not
-the token itself — the real value is looked up only at fetch time and never written
-into `config`, the Output, or any log.
+`RepoSource` is single (one repo); `PullRequestSource` is multi (a list of PRs).
 
-A **filter** narrows a list. Given an Output whose value is a list, a `Filter` keeps
-only the items that pass a **predicate** (a one-item yes/no test) and emits a fresh
-Output with the survivors, original order preserved. It never changes its input: an
-Output is **frozen** (immutable), so a filter always *derives* a new one — the
-upstream value stays intact for audit.
+The model runs once per **run**. A single source maps cleanly: one Output, one run. A
+multi source returns *one* Output whose value is a list of N items — not yet N runs.
+`fan_out` is the explode step that makes it so, turning one list Output into N per-item
+Outputs, each seeding its own run.
 
-The four helpers build ready-to-use filters for the common dict-item cases:
-`title_contains`, `field_equals`, and `field_matches` each build a per-item test;
-`limit` is different — keeping "the first N" needs to *count*, which a per-item test
-cannot, so `limit` slices the list instead.
+!!! note "Good to know"
 
----
+    `fan_out` is conservative. If `multi` is `False`, or the value is not a list, it
+    returns the input wrapped in a single-element list `[output]` — unchanged. Only a
+    genuine multi-item list is split.
 
-## Ramps up
-
-### Single vs multi, and why fan-out exists
-
-The model runs once per **run**. A single source maps cleanly to that: one Output,
-one run. But a multi source returns *one* Output whose value is a list of N items —
-that is not yet N runs. `fan_out` is the explode step that makes it so: it turns one
-list Output into N per-item Outputs, each seeding its own run.
-
-`fan_out` is conservative. If `multi` is `False`, or the value is not a list,
-it returns the input wrapped in a single-element list `[output]` — unchanged. Only a
-genuine multi-item list is split.
-
-### Fan-out lineage is deterministic, never random
+### Fan-out lineage is deterministic
 
 Each fanned item needs a stable **lineage** key — an identity used downstream for
-idempotency (so re-running the same input does the same thing once, not twice).
+idempotency, so re-running the same input does the same thing once, not twice.
 `fan_out` derives it without any randomness:
 
 - If the item is a dict carrying an `"id"` (or, failing that, a `"number"`), that
@@ -69,45 +47,107 @@ idempotency (so re-running the same input does the same thing once, not twice).
 - Otherwise it falls back to `f"{produced_by}#{i}"` — the producer id plus the item's
   index.
 
-The same input therefore yields the same lineage on every re-run. This determinism is
-what lets idempotency keys stay stable, and it is why the example output below is
-reproducible.
+The same input therefore yields the same lineage on every re-run. That determinism is
+what keeps idempotency keys stable, and why the example output below is reproducible.
 
 ### Fanned items are tainted
 
-Every Output produced by `fan_out` is marked `tainted=True`. Per-item data from a
-multi source is **fluid** — untrusted session data that crosses the
-[prompt-injection boundary](../architecture/SECURITY.md): it reaches the model as
-data to read, never as instructions to obey. Marking it tainted at the fan-out point
-propagates that distrust through the rest of the run. (See
-[`NodeKind`](core-types.md) for where these nodes sit in the fixed set of roles, and
-`Flow.FLUID` in [core types](core-types.md) for the static-vs-fluid distinction.)
+Every Output produced by `fan_out` is marked `tainted=True`. Per-item data from a multi
+source is **fluid** — untrusted session data that crosses the
+[prompt-injection boundary](../architecture/SECURITY.md). It reaches the model as data
+to read, never as instructions to obey. Marking it tainted at the fan-out point
+propagates that distrust through the rest of the run.
 
-### Filter is a first-class node, not sugar
+!!! warning "Fluid data is untrusted"
 
-`Filter` carries its own `id`, `name`, and `kind` (`NodeKind.FILTER`) like any other
-node, so it shows up inspectably in the pipeline graph rather than hiding as a lambda
-on some other primitive. It is a pure, synchronous transform with no side effects, and
-because `apply` derives a fresh Output, filters compose: the Output of one feeds
+    See [`NodeKind`](core-types.md) for where these nodes sit in the fixed set of roles,
+    and `Flow.FLUID` in [core types](core-types.md) for the static-vs-fluid distinction.
+    Credentials are held **by reference**, never by value: a source's `config` stores the
+    *name* of the env var that holds the token (e.g. `"GITHUB_TOKEN"`), not the token
+    itself — the real value is looked up only at fetch time, and never written into
+    `config`, the Output, or any log.
+
+## Filters narrow a list
+
+A **filter** narrows a list. Hand a `Filter` an Output whose value is a list, and it
+keeps only the items that pass a **predicate** — a one-item yes/no test — emitting a
+fresh Output with the survivors in their original order. It never edits its input: an
+Output is **frozen** (immutable), so a filter always *derives* a new one and the
+upstream value stays intact for audit.
+
+`Filter` is a first-class node, not sugar. It carries its own `id`, `name`, and `kind`
+(`NodeKind.FILTER`) like any other node, so it shows up in the pipeline graph instead of
+hiding as a lambda. It is a pure, synchronous transform with no side effects, and since
+`apply` derives a fresh Output, filters compose freely — the Output of one feeds
 straight into the next.
 
-### Why `limit` is a subclass, not a predicate
+Four helpers build ready-made filters for common dict-item cases. `title_contains`,
+`field_equals`, and `field_matches` each build a per-item test. `limit` is the odd one
+out: keeping "the first N" means *counting*, which a per-item test can't do, so it
+returns a small internal `Filter` subclass whose `apply` slices `inp.value[:n]` instead
+of testing items. Its stored predicate accepts everything, so a caller that inspects the
+predicate still sees a valid `Filter` — the contract holds.
 
-`title_contains`, `field_equals`, and `field_matches` all return a plain `Filter`
-wrapping a per-item predicate. `limit` cannot: "keep the first N" is a property of the
-list, not of any single item. So `limit` returns a small internal `Filter` subclass
-whose `apply` slices `inp.value[:n]` instead of testing items. Its stored predicate
-accepts everything, so any caller that inspects the predicate still sees a valid
-`Filter` — the contract holds.
+!!! note "Good to know"
 
-### Predicates are defensive about shape
+    The predicate helpers are defensive about shape. `title_contains` and `field_matches`
+    check `isinstance(..., str)` before doing string work; all three use `item.get(field)`
+    so a missing key is a non-match, not an error. A filter applied to ragged dicts narrows
+    safely rather than raising.
 
-The three predicate helpers never assume a field is present or well-typed.
-`title_contains` and `field_matches` check `isinstance(..., str)` before doing string
-work; all three use `item.get(field)` so a missing key is a non-match, not an error.
-A filter applied to ragged dicts narrows safely rather than raising.
+## Example
 
----
+A small in-memory batch of PR-like dicts, narrowed by a `field_equals` filter and then
+a `limit` — pure helpers, no source and no network.
+
+```python
+from crawfish.nodes.filter import field_equals, limit
+from crawfish.output import Output
+from crawfish.core.types import Parameter
+
+# A small in-memory batch of PR-like dict items (no source, no network).
+items = [
+    {"number": 1, "title": "Fix login bug", "state": "open"},
+    {"number": 2, "title": "Bump deps", "state": "closed"},
+    {"number": 3, "title": "Add dark mode", "state": "open"},
+    {"number": 4, "title": "Refactor cache", "state": "open"},
+]
+batch = Output(
+    output_schema=[Parameter(name="number", type="int"), Parameter(name="title", type="str")],
+    value=items,
+    produced_by="src",
+)
+
+# Build two pure Filters: keep only open PRs, then cap at 2.
+open_only = field_equals("state", "open")
+first_two = limit(2)
+
+# Filters are first-class Nodes: each carries an id/name/kind.
+print(open_only.kind.value, open_only.name)
+print(first_two.kind.value, first_two.name)
+
+# Apply in sequence. Each derives a FRESH Output; the input is never mutated.
+step1 = open_only.apply(batch)
+step2 = first_two.apply(step1)
+
+print(len(batch.value), "->", len(step1.value), "->", len(step2.value))
+for pr in step2.value:
+    print(pr["number"], pr["title"])
+
+# The original batch is untouched (frozen Output, audit-safe).
+print("input intact:", len(batch.value))
+```
+
+??? success "▶ Output"
+
+    ```text
+    filter field_equals
+    filter limit
+    4 -> 3 -> 2
+    1 Fix login bug
+    3 Add dark mode
+    input intact: 4
+    ```
 
 ## API reference
 
@@ -236,58 +276,8 @@ def limit(n: int, name: str = "limit") -> Filter[JSONValue]
 Returns a `Filter` (an internal `_Limit` subclass) whose `apply` keeps at most the
 first `n` items — a list slice, not a per-item test.
 
----
+## See also
 
-## Example
-
-A small in-memory batch of PR-like dicts, narrowed by a `field_equals` filter and then
-a `limit` — pure helpers, no source and no network.
-
-```python
-from crawfish.nodes.filter import field_equals, limit
-from crawfish.output import Output
-from crawfish.core.types import Parameter
-
-# A small in-memory batch of PR-like dict items (no source, no network).
-items = [
-    {"number": 1, "title": "Fix login bug", "state": "open"},
-    {"number": 2, "title": "Bump deps", "state": "closed"},
-    {"number": 3, "title": "Add dark mode", "state": "open"},
-    {"number": 4, "title": "Refactor cache", "state": "open"},
-]
-batch = Output(
-    output_schema=[Parameter(name="number", type="int"), Parameter(name="title", type="str")],
-    value=items,
-    produced_by="src",
-)
-
-# Build two pure Filters: keep only open PRs, then cap at 2.
-open_only = field_equals("state", "open")
-first_two = limit(2)
-
-# Filters are first-class Nodes: each carries an id/name/kind.
-print(open_only.kind.value, open_only.name)
-print(first_two.kind.value, first_two.name)
-
-# Apply in sequence. Each derives a FRESH Output; the input is never mutated.
-step1 = open_only.apply(batch)
-step2 = first_two.apply(step1)
-
-print(len(batch.value), "->", len(step1.value), "->", len(step2.value))
-for pr in step2.value:
-    print(pr["number"], pr["title"])
-
-# The original batch is untouched (frozen Output, audit-safe).
-print("input intact:", len(batch.value))
-```
-
-??? success "▶ Output"
-
-    ```text
-    filter field_equals
-    filter limit
-    4 -> 3 -> 2
-    1 Fix login bug
-    3 Add dark mode
-    input intact: 4
-    ```
+- [Nodes — aggregator](nodes-aggregator.md) — fold the per-item runs back into one.
+- [Nodes — router & sink](nodes-router-sink.md) — branch the stream, then write the result out.
+- [Core types](core-types.md) — `NodeKind`, `Parameter`, and the `Flow.FLUID` boundary.

@@ -1,18 +1,14 @@
 # Emission, inspector & visualize
 
-The one typed event the whole system writes, and the two read-side tools that turn a
+The one typed event the whole system writes, plus the two read-side tools that turn a
 run's events back into something a human can see — a CLI report and a localhost
-dashboard. Producers (runtime, tools, sinks, the secret broker, the sandbox jail,
-observers, metrics) all write the same `Emission`; consumers read it back.
+dashboard. Every producer (runtime, tools, sinks, the secret broker, the sandbox jail,
+observers, metrics) writes the same `Emission`; consumers read it back.
 
-**Symbols on this page:** `Emission` · `EmissionKind` · `emit` · `read_emissions` ·
-`REQUIRED_ATTRS` · `EMISSION_SCHEMA_VERSION` · `inspect_run` · `tail_events` ·
-`format_report` · `RunReport` · `dashboard_state` · `serve_dashboard` ·
-`emission_dashboard_state` · `collect_emissions` · `serve_emission_dashboard`
-
----
-
-## Core
+`Emission` · `EmissionKind` · `emit` · `read_emissions` · `REQUIRED_ATTRS` ·
+`EMISSION_SCHEMA_VERSION` · `inspect_run` · `tail_events` · `format_report` · `RunReport` ·
+`dashboard_state` · `serve_dashboard` · `emission_dashboard_state` · `collect_emissions` ·
+`serve_emission_dashboard`
 
 Crawfish keeps an **append-only ledger** of everything a run does — a list of events you
 can add to but never edit or delete. Every event is one **`Emission`**: a single typed
@@ -26,12 +22,6 @@ free-form payload lives in **`attrs`**, a plain dictionary; each kind declares w
 *must* be present (`REQUIRED_ATTRS`), so a reader can rely on a `model` emission carrying
 a `cost_usd` and a `run_finish` carrying a `status`.
 
-One field on an emission is load-bearing for security: **`tainted`**. A value is
-*tainted* when it derives from **fluid** input — data that streamed in per item from
-outside your control (a ticket body, a tool result), which is untrusted. The taint marker
-rides across the emission boundary so the dashboard and any anomaly rules never treat
-untrusted content as if it were trusted.
-
 You write an emission with **`emit`** and read a run's emissions back with
 **`read_emissions`**. On top of that read primitive sit two tools:
 
@@ -42,19 +32,30 @@ You write an emission with **`emit`** and read a run's emissions back with
   your own machine (`127.0.0.1`, never reachable from the network) and re-renders the
   same data as a web page.
 
----
+## Taint rides on the emission
 
-## Ramps up
+One field on an emission is load-bearing for security: **`tainted`**. A value is
+*tainted* when it derives from **fluid** input — data that streamed in per item from
+outside your control (a ticket body, a tool result), which is untrusted. The taint marker
+rides across the emission boundary so the dashboard and any anomaly rules never treat
+untrusted content as if it were trusted.
 
-### One signal, a closed taxonomy, a version
+!!! warning "Fluid-derived data stays marked untrusted"
 
-Telemetry used to be loose untyped dictionaries. `Emission` freezes the **contract**: a
-single frozen model, a **closed** `EmissionKind` set (adding a kind is a deliberate
-contract change), and an `EMISSION_SCHEMA_VERSION` integer (currently `1`) stamped on
-every record so the ledger survives future kind/attr changes. The version is bumped
-whenever the envelope or any kind's required attrs change; readers key off it to stay
-forward- and backward-compatible. This taxonomy and the decision to carry the output
-value inline in `attrs` are recorded in
+    The `tainted` flag travels with the value, not the moment. Any kind, metric, or run
+    that a tainted emission touches is flagged downstream — readers see the taint, but it
+    never weakens a decision computed from trusted numbers. See the
+    [security spine](../architecture/SECURITY.md).
+
+## One signal, a closed taxonomy, a version
+
+Telemetry used to be loose, untyped dictionaries. `Emission` freezes the **contract**:
+one frozen model, a **closed** `EmissionKind` set (adding a kind is a deliberate contract
+change), and an `EMISSION_SCHEMA_VERSION` integer (currently `1`) stamped on every record
+so the ledger survives future kind/attr changes. The version bumps whenever the envelope
+or any kind's required attrs change, and readers key off it to stay forward- and
+backward-compatible. This taxonomy and the decision to carry the output value inline in
+`attrs` are recorded in
 [ADR 0013](../architecture/decisions/0013-emission-taxonomy-and-inline-output-value.md).
 
 `REQUIRED_ATTRS` is the canonical per-kind schema — a frozen mapping (a read-only
@@ -63,14 +64,22 @@ of `attrs` keys that kind must carry. `Emission.missing_attrs()` returns the req
 absent from a given emission's `attrs`; `Emission.is_valid()` is true when none are
 missing. These are pure contract checks — no I/O.
 
-### Emissions are frozen; `ts` is caller-stamped
+## Emissions are frozen; `ts` is caller-stamped
 
 `Emission` sets `model_config = {"frozen": True}` — once created it cannot be mutated, the
 same immutability discipline as frozen artifacts elsewhere in the framework. The timestamp
 `ts` is **not** read from a wall clock by the model: it defaults to `0.0`, emitters stamp
 it, and tests pass an explicit value for determinism. `emit` itself reads no clock.
 
-### Reading is back-compatible by design
+!!! note "Good to know"
+
+    A mixed ledger reads cleanly. `read_emissions` lifts every ledger row through
+    `Emission.from_event`, which round-trips new typed emissions exactly and lifts legacy
+    loose dictionaries written before the typed substrate existed. An unrecognized legacy
+    dict still becomes *some* emission (a `metric` carrying the raw payload under
+    `attrs["raw"]`) rather than raising — old runs stay inspectable.
+
+## Reading is back-compatible by design
 
 `read_emissions` lifts every ledger row through `Emission.from_event`, which handles both
 new typed emissions (they round-trip exactly) and legacy loose dictionaries written before
@@ -78,7 +87,7 @@ the typed substrate existed. An unrecognized legacy dict still lifts into *some*
 (a `metric` carrying the raw payload under `attrs["raw"]`) rather than raising — old runs
 must remain inspectable. So a mixed ledger reads cleanly.
 
-### `emit`'s flood cap
+## `emit`'s flood cap
 
 `emit` has an optional `max_per_run` volume cap guarding against an emission-flood
 denial-of-service. If set and the run already holds at least that many events, the new
@@ -87,7 +96,7 @@ emission (`attrs["kind"] == "emission.capped"`) is written in its place. The cap
 drops — it does not rotate or retain. If the store is wrapped in a redacting
 `ScrubbingStore`, `emit` never bypasses it, so secrets are scrubbed on the write.
 
-### inspector: derived, never live
+## inspector: derived, never live
 
 `inspect_run` reads the typed stream via `read_emissions` and folds it into a `RunReport`:
 status / total cost / latency from `run_finish`, accumulated cost from `model` emissions,
@@ -99,7 +108,7 @@ pass the sequence index of the last event you saw and get only what is newer (`a
 is a 0-based positional index; a negative value returns everything). `format_report`
 renders a `RunReport` to a concise human-readable string.
 
-### visualize: two dashboards, loopback only
+## visualize: two dashboards, loopback only
 
 There are two dashboards, each a single static HTML page plus one JSON endpoint, no build
 step, polling to auto-refresh:
@@ -126,11 +135,11 @@ Both `serve_*` functions bind `127.0.0.1` only — never `0.0.0.0` — and rejec
 `Host` headers (a DNS-rebinding defense). They read only the already-scrubbed ledger, so no
 secret value is ever rendered, and the emission dashboard has no write path or egress.
 
-> `serve_dashboard` and `serve_emission_dashboard` **start an HTTP server**; the caller
-> runs `serve_forever()`. Do not call them in a non-interactive script — the example below
-> uses the pure state builders instead.
+!!! note "Good to know"
 
----
+    `serve_dashboard` and `serve_emission_dashboard` **start an HTTP server** — the caller
+    runs `serve_forever()`. Don't call them in a non-interactive script. The example below
+    uses the pure state builders instead.
 
 ## API reference
 
@@ -329,8 +338,6 @@ def serve_emission_dashboard(
 Create a loopback-bound (`127.0.0.1`) emission dashboard server. **Starts a server** — the
 caller runs `serve_forever()`. No write path, no egress.
 
----
-
 ## Example
 
 Emit three typed emissions to an in-memory store, read them back, and project them through
@@ -387,3 +394,9 @@ print("kinds seen:", len(state["kinds"]))
     total_cost_usd: 0.25
     kinds seen: 3
     ```
+
+## See also
+
+- [Anomaly & auto-halt](anomaly.md) — the rule engine that reads this same stream and acts.
+- [Observer](observer.md) — the watchdog whose findings land back on the stream as `OBSERVER` emissions.
+- [Core types](core-types.md) — `Flow`, `Parameter`, and the fluid/taint boundary this page builds on.

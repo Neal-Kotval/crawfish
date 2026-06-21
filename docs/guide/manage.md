@@ -1,6 +1,6 @@
 # Manage deployed pipelines
 
-`craw manage` shows you every [deployed](deploy.md) pipeline in one view. It reads three
+`craw manage` shows every [deployed](deploy.md) pipeline in one view. It reads three
 things: the deploy registry (what is running), the execution ledger (run history), and the
 cost meter (what you've spent). From there you can stop, restart, or tail any pipeline by
 name.
@@ -14,10 +14,16 @@ craw manage restart <name>        # restart the supervisor (re-reads schedule)
 craw manage logs    <name>        # tail the supervisor + run logs
 ```
 
-Run `craw manage` with no arguments and each pipeline gets a row: name, status, uptime,
+Run `craw manage` with no arguments. Each pipeline gets a row: name, status, uptime,
 last run, next fire (for a cron deploy), and $ today.
 
+!!! note "Good to know"
+    `craw manage` only reads. It never re-runs a pipeline to answer a query — every
+    number comes from a Store-backed surface.
+
 ## Worked example
+
+See a live fleet, watch one pipeline, then control it — all by name.
 
 After deploying the triage bot (see [deploy](deploy.md)):
 
@@ -50,7 +56,7 @@ craw manage restart crawfish/triage-bot
 
 ## Where the numbers come from
 
-`craw manage` only reads. It pulls from three Store-backed surfaces and never re-runs a
+`craw manage` only reads. It pulls from three Store-backed sources and never re-runs a
 pipeline to answer a query:
 
 | Column           | Source                                                  |
@@ -67,5 +73,15 @@ foreground runs share one history.
 `craw manage` reads scrubbed surfaces only. The registry, ledger, and cost meter hold no
 secret values, because secrets are resolved by reference at run time and never stored.
 `logs` tails the supervisor and run logs, which are already scrubbed. Every row is scoped
-by `org_id`. See the [operations overview](operations.md) and
-[SECURITY.md](../architecture/SECURITY.md).
+by `org_id`.
+
+!!! note "Good to know"
+    There is no secret value to leak through `craw manage logs`. Logs are scrubbed before
+    they're written, so tailing them is always safe.
+
+## See also
+
+- [Deploy — always-on pipelines](deploy.md) — start the supervisors `craw manage` lists.
+- [Operations overview](operations.md) — how manage fits with deploy, observers, and the
+  dashboard.
+- [SECURITY.md](../architecture/SECURITY.md) — the full security spine.

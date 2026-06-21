@@ -3,7 +3,7 @@
 ## Reference docs — COMPLETE (2026-06-21)
 
 Built the explained, layered reference (`docs/reference/`) covering **every** symbol in
-`crawfish.__all__`. Each page is three-tiered (Core → Ramps up → API reference) with a
+`crawfish.__all__`. Each page is three-tiered (Core → How it works → API reference) with a
 deterministic runnable example, matching the gold-standard exemplar `core-types.md`.
 
 - **31 pages** authored (1 exemplar + 30 cluster pages + index), **332/332** public
