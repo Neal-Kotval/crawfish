@@ -128,6 +128,25 @@ def test_halt_on_unbounded_budget_still_trips() -> None:
         ctx.cost_budget.charge(0.0001)
 
 
+def test_halt_at_zero_spend_blocks_even_a_zero_charge() -> None:
+    # A non-cost HALT before any model spend (spent_usd == 0) must still make the
+    # budget lever trip — even a charge(0.0) — so the kill-switch is unconditional.
+    ctx = RunContext(store=SqliteStore(), run_id="r1", cost_budget=CostBudget())
+    assert ctx.cost_budget.spent_usd == 0.0
+    engine = AnomalyEngine([EmissionFloodRule(max_count=2, window="-1m")])
+    flood = [_model("r1", 0.0, ts=NOW - i * 0.001) for i in range(5)]
+    firings = engine.guard(ctx, flood, now=NOW)
+    assert firings and firings[0].response is Response.HALT
+    assert ctx.cancel_token.cancelled
+    with pytest.raises(BudgetExceeded):
+        ctx.cost_budget.charge(0.0)
+
+
+def test_budget_approaching_rejects_zero_budget() -> None:
+    with pytest.raises(ValueError, match="budget_usd must be > 0"):
+        BudgetApproachingRule(budget_usd=0.0)
+
+
 # -- runaway kill-switch: emission flood / loop ------------------------------
 
 

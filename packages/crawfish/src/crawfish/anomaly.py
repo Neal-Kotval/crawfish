@@ -299,6 +299,8 @@ class BudgetApproachingRule(AnomalyRule):
         self, *, budget_usd: float, fraction: float = 0.8, response: Response = Response.ALERT
     ) -> None:
         super().__init__(response=response)
+        if budget_usd <= 0:
+            raise ValueError("budget_usd must be > 0")
         self.budget_usd = budget_usd
         self.fraction = fraction
 
@@ -408,8 +410,11 @@ class AnomalyEngine:
         """
         ctx.cancel_token.cancel()
         budget = ctx.cost_budget
-        # Drop the ceiling to just under current spend so the NEXT charge trips it.
-        budget.limit_usd = max(0.0, budget.spent_usd - _HALT_BUDGET_EPSILON)
+        # Drop the ceiling strictly below current spend so the NEXT charge trips it —
+        # even a charge(0.0) after a zero-spend HALT (e.g. an EmissionFlood/StuckRun
+        # halt before any model spend). The ceiling intentionally goes negative when
+        # spend is ~0 so the non-cooperative lever is truly unconditional.
+        budget.limit_usd = budget.spent_usd - _HALT_BUDGET_EPSILON
 
     @staticmethod
     def enforce_budget(ctx: RunContext, amount_usd: float) -> None:
