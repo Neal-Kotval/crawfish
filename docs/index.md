@@ -1,12 +1,30 @@
 # Crawfish
 
-Crawfish runs agents over your data in bulk: fan a job out across many items, reduce
-the results, branch on them, and write them somewhere. You write each pipeline as a
-folder of files and run it on your own machine with `claude -p` — no API key for the
-dev loop. Runs are typed and versioned, so you can diff and replay them.
+Crawfish is a framework for building agents like software. You define an agent — or a
+whole team of them — as typed, versioned components in a directory, run it locally against
+`claude -p` or a local model, and treat the result as something you can test, diff, and
+improve, not a prompt you keep poking at.
 
-The shape of a pipeline: `Source → Batch → Aggregator → Router → Sink`. If you've used
-dbt or Airflow, the idea is familiar — this is that, for agents.
+It brings the things you expect from real engineering to agent work:
+
+- **Agents as code.** The agents, their tools, the data shapes they pass, and the policies
+  that govern them are plain files you check into git — infrastructure-as-code for local
+  model work, not settings buried in a notebook.
+- **Composable by design.** Small typed nodes snap together into larger pipelines. One
+  node's output wires to the next only when their shapes match, so a team is assembled from
+  parts the way a program is.
+- **Deterministic and testable.** Typed inputs and outputs, structural type-checking, frozen
+  versions, and record/replay make a run reproducible. Snapshot it, assert on it, and gate
+  changes in CI — no live model required.
+- **Built to improve.** Score a pipeline with rubrics and evals, then let the tuner search
+  for better prompts and settings and promote the winner. Pipelines get better on purpose.
+- **Local-first.** Everything runs on your machine by default. Cloud and scale are a driver
+  swap, not a rewrite.
+
+Running a job over your data in bulk is one thing you can build this way — fan it out
+across thousands of items, reduce, branch, and write the results somewhere
+(`Source → Batch → Aggregator → Router → Sink`). The same building blocks just as easily
+express a single sharp agent, a multi-agent team, or a scheduled automation.
 
 ## Install the CLI
 
@@ -25,8 +43,8 @@ Pick the install that fits what you're doing:
 | Just run the `craw` CLI, isolated | `uv tool install crawfish` · `pipx install crawfish` |
 | Try it with zero Python setup | `curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh \| sh` |
 
-The `curl` line is a thin wrapper that installs [`uv`](https://docs.astral.sh/uv/) if
-needed, then the CLI — the package always comes from PyPI. Working on Crawfish itself?
+The `curl` line is a thin wrapper: it installs [`uv`](https://docs.astral.sh/uv/) if you
+don't have it, then the CLI. The package always comes from PyPI. Working on Crawfish itself?
 See [Getting started → Develop from source](guide/getting-started.md#develop-from-source).
 
 ## Start here

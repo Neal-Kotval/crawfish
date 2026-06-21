@@ -1,9 +1,18 @@
 # Tutorial — build the triage bot
 
-This walkthrough builds the hero example end to end. You start with an agent team that
-triages support tickets. Then you fan it out across many tickets, write the results to a
-sink, and score the quality with a rubric. Everything runs on `MockRuntime`, so there's
+Build Crawfish's main example end to end, from an agent team to a measured bulk pipeline.
+You start with a team that triages support tickets. Then you fan it out across many tickets
+at once, write the results to a *sink* (the one place a pipeline writes to the outside
+world), and score the quality with a rubric. Everything runs on `MockRuntime`, so there's
 no key to set up and nothing to spend.
+
+!!! note "What you'll build"
+
+    - A Definition authored as a directory — lead agent, subagents, typed IO
+    - The static-vs-fluid IO boundary that gates untrusted input
+    - A compiled, runnable team on `MockRuntime`
+    - A `Source → Batch → Sink` pipeline that fans out over many tickets
+    - A Rubric and Benchmark that score quality so you can improve it
 
 The finished Definition ships at `demo/triage-bot/` — open it alongside this page. If you
 installed from PyPI instead of cloning, run `craw init my-app` to get the same example at
@@ -90,11 +99,16 @@ lead = "lead"
 ```
 
 - `project` is `Flow.STATIC` — trusted, set once, may be interpolated into instructions.
-- `ticket_body` is fluid by default. It's untrusted per-item data, so it goes only in a
-  fenced data block that the model is told to treat as data, never as instructions. This
-  is the prompt-injection boundary (see [concepts](concepts.md)).
+- `ticket_body` is fluid by default — **fluid (untrusted)** per-item data.
 - `lead = "lead"` is a module-level string that names the coordinator role. With more than
   one agent, the compiler picks the `LEAD` coordination topology.
+
+!!! warning "Fluid inputs are untrusted — the prompt-injection boundary"
+
+    A fluid input goes only in a fenced data block that the model is told to treat as data,
+    never as instructions. This is what stops per-item ticket content from injecting
+    commands into the agent. Default to fluid for anything that changes per item; reserve
+    `Flow.STATIC` for trusted config you set once. See [concepts](concepts.md).
 
 `pyproject.toml` supplies identity and version:
 
@@ -154,7 +168,7 @@ runs the lead to combine them. To run against the real model, swap `MockRuntime(
 ## 7. Wire a Source → Batch → Sink pipeline
 
 The triage bot becomes a bulk tool when you fan it out over many tickets. A multi `Source`
-emits a list, a `Batch` runs one `Run` per item, and a `Sink` writes the results.
+emits a list, a `Batch` runs one `Run` per item, and a `Sink` writes the results out.
 
 ```python
 import asyncio
@@ -199,11 +213,18 @@ rejected before any model call rather than at run time. The sink is dry-run by d
 this runs fully offline. To get a top-level, durable, checkpointed pipeline, compose the
 same steps into a `Workflow` (see [concepts](concepts.md)).
 
+!!! warning "Sink targets are static-only"
+
+    A sink writes to the outside world, so its target is bound from **static** parameters
+    only — note `target_params` above is `Flow.STATIC`. Fluid (untrusted) per-item data can
+    never choose where a pipeline writes. That keeps injected ticket content from
+    redirecting a write.
+
 ## 8. Measure quality with a Rubric
 
-Bulk runs exist so you can measure and improve. A `Metric` scores one `Output`. A `Rubric`
+You run in bulk so you can measure and improve. A `Metric` scores one `Output`. A `Rubric`
 bundles metrics into a score vector. A `Benchmark` runs a rubric over a fixed task set and
-aggregates the scores. All of this is deterministic under `MockRuntime`, so iterating on
+averages the scores. All of this is deterministic under `MockRuntime`, so iterating on
 metrics never costs anything.
 
 ```python

@@ -1,10 +1,10 @@
 # Contributing a connector
 
-Connectors are the easiest way to contribute to Crawfish, and one of the most useful.
-A connector teaches the framework to read from or write to one more place: Slack,
-Notion, Gmail, Jira, Postgres, a webhook. This page walks you through building one
-end to end. By the end you'll have a Slack sink, about 30 lines, that posts a
-message to a channel, holds its token securely, and ships with a real test.
+A connector teaches the framework to read from or write to one more place — Slack,
+Notion, Gmail, Jira, Postgres, a webhook. Connectors are the easiest and most useful
+way to contribute to Crawfish. This page builds one end to end: a Slack sink, about 30
+lines, that posts a message to a channel, holds its token securely, and ships with a
+real test.
 
 The complete, working code lives in
 [`packages/crawfish-slack/`](https://github.com/Neal-Kotval/crawfish/tree/main/packages/crawfish-slack).
@@ -12,9 +12,9 @@ Every snippet below is copied from it, so you can run it as you read.
 
 ## What you're building
 
-A **sink** is the only place a pipeline performs an external side effect, such as
-posting a message or opening a PR. Crawfish wraps every sink in three guarantees so
-you don't have to build them yourself:
+A **sink** is the only place a pipeline performs an external side effect — posting a
+message, opening a PR. Crawfish wraps every sink in three guarantees so you don't have
+to build them yourself:
 
 - **Static-only targets.** The destination, a Slack channel here, is chosen once and
   never derived from model output, so a prompt-injection can't redirect your write.
@@ -32,8 +32,9 @@ You write one method, `_write`. The base class handles the rest.
 
 ## 1. Subclass `Sink`
 
-Create `src/crawfish_slack/sink.py`. Import the framework's public types — never a
-concrete backend — and subclass `Sink[T]`, where `T` is the type of value you write:
+Subclass `Sink[T]`, where `T` is the type of value you write. Create
+`src/crawfish_slack/sink.py` and import the framework's public types — never a concrete
+backend:
 
 ```python
 from __future__ import annotations
@@ -50,7 +51,7 @@ class SlackSink(Sink[JSONValue]):
 
 ## 2. Declare a static target and hold creds by reference
 
-In `__init__`, declare the destination as a **static** `Parameter`. Passing a
+Declare the destination as a **static** `Parameter` in `__init__`. Passing a
 `Flow.FLUID` target raises `TargetMustBeStaticError` at construction, so the guarantee
 is enforced at wire time, not runtime. Adopt the `dry_run` pattern the in-tree
 `LinearSink` and `GitHubPRSink` use: default it `True` so tests stay offline.
@@ -71,14 +72,18 @@ is enforced at wire time, not runtime. Adopt the `dry_run` pattern the in-tree
         self.writes: list[dict[str, JSONValue]] = []
 ```
 
-Never pass the bot token in `config` as a value. Instead `config` carries
-`credential_ref`, the *name* of the env var that holds it. The secret is resolved
-only at the moment of egress, and never reaches stored config, the `Output`, logs,
-or telemetry.
+Pass `credential_ref` in `config` — the *name* of the env var that holds the token.
+The secret resolves only at egress, and never reaches stored config, the `Output`,
+logs, or telemetry.
+
+!!! warning "Never put a secret value in `config`"
+    `config` carries the env-var *name*, not the token itself. A token in `config`
+    lands in stored config, the `Output`, and logs. Hold the reference; resolve the
+    value only at egress.
 
 ## 3. Implement `_write`
 
-This is the only method you must write. In dry-run mode, append the would-be write
+`_write` is the only method you must write. In dry-run mode, append the would-be write
 to `self.writes` instead of hitting the network. That keeps your test deterministic
 and offline:
 
@@ -105,11 +110,15 @@ gate. The base class's public `write()` claims the idempotency key, runs the
 approval callback for `always_ask` sinks, calls your `_write`, then records a
 secret-free telemetry event.
 
+!!! note "Good to know"
+    You implement `_write`; users call `write()`. The public `write()` wraps your
+    method with the idempotency claim, the approval gate, and telemetry — so a second
+    identical write is a no-op, not a duplicate post.
+
 ## 4. Register the entry point
 
-A connector ships as its own pip-installable package, so users get it with
-`pip install crawfish-slack` and no wiring. That takes one stanza in your
-`pyproject.toml`. Module discovery
+Add one entry-point stanza so the connector ships as its own pip-installable package.
+Users get it with `pip install crawfish-slack` and no wiring. Module discovery
 ([`crawfish.discovery`](https://github.com/Neal-Kotval/crawfish/blob/main/packages/crawfish/src/crawfish/discovery.py))
 reads the `crawfish.sinks` entry-point group and registers your sink as
 `("sink", "slack")`:
@@ -131,9 +140,9 @@ with a warning**.
 
 ## 5. Add a fixture-based test
 
-Crawfish tests never call a live model or network. They use an in-memory store and
-the dry-run path. Mirror the in-tree sink fixtures: a `RunContext` over an in-memory
-`SqliteStore` with a fixed `batch_id`, and a plain `Output`:
+Test against the dry-run path and an in-memory store — Crawfish tests never call a
+live model or network. Mirror the in-tree sink fixtures: a `RunContext` over an
+in-memory `SqliteStore` with a fixed `batch_id`, and a plain `Output`:
 
 ```python
 from __future__ import annotations
@@ -180,7 +189,7 @@ def test_entry_point_is_discoverable() -> None:
 
 ## 6. Run and discover it
 
-Install your package editable, then run the suite and confirm the framework sees it:
+Install your package editable, then run the suite and confirm the framework sees it.
 
 ```bash
 uv sync
@@ -191,18 +200,20 @@ craw dev <project>         # exercise it inside a pipeline (dry-run, no network)
 
 ## Security invariants to uphold
 
-Your connector sits on Crawfish's [security spine](../architecture/SECURITY.md).
-Two invariants matter for any sink:
+Your connector sits on Crawfish's [security spine](../architecture/SECURITY.md). Two
+invariants matter for any sink. Keep both and your connector is safe by construction;
+the base class enforces the rest.
 
-- **[Consequential sink targets are static-only.](../architecture/SECURITY.md)**
-  Declare destinations as `Flow.STATIC` target params (invariant #2). Never read a
-  channel, repo, or recipient from fluid / model-derived data.
-- **[Secrets are matched to nodes by reference, never logged or in-prompt.](../architecture/SECURITY.md)**
-  Hold `credential_ref` (an env-var name); resolve the value only at egress
-  (invariant #4). Never put a token in `config`, the `Output`, or a log line.
+!!! warning "Sink targets are static-only"
+    Declare destinations as `Flow.STATIC` target params (invariant #2). Never read a
+    channel, repo, or recipient from fluid / model-derived data — a prompt-injection
+    could otherwise redirect your write. See the
+    [security spine](../architecture/SECURITY.md).
 
-Keep those two and your connector is safe by construction. The base class enforces
-the rest.
+!!! warning "Secrets resolve by reference, never in a log or prompt"
+    Hold `credential_ref` (an env-var name) and resolve the value only at egress
+    (invariant #4). Never put a token in `config`, the `Output`, or a log line. See the
+    [security spine](../architecture/SECURITY.md).
 
 ## Connector starter issues
 
@@ -231,3 +242,9 @@ Each names the base class and sketches its typed I/O.
 
 Pick one, copy the Slack example, swap the `_write` body, and open a PR. See
 [`docs/guide/connector-ideas.md`](connector-ideas.md) for the full scope of each.
+
+## See also
+
+- [Connector ideas](connector-ideas.md) — the full scope of each starter, ready to file.
+- [Security spine](../architecture/SECURITY.md) — the invariants every connector upholds.
+- [Operations overview](operations.md) — the rest of the operate/integrate layer.

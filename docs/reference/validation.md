@@ -1,22 +1,18 @@
 # Validation
 
-How a node's *actual* output and inputs are checked against the `Parameter`
-schema it declared — what failed, why, and what to do about it. These live in
-`crawfish.validation` and run at the boundary between free model text and the
-typed values a pipeline expects.
+Validation checks a node's *actual* output and inputs against the `Parameter` schema it
+declared — what failed, why, and what to do about it. It runs at the boundary between free
+model text and the typed values a pipeline expects, and lives in `crawfish.validation`.
 
-**Symbols on this page:** `ValidationFailure` · `ValidationAction` · `ValidationError` ·
-`StructuralDiff` · `validate_output` · `validate_inputs` · `structural_diff`
+`ValidationFailure` · `ValidationAction` · `ValidationError` · `StructuralDiff` ·
+`validate_output` · `validate_inputs` · `structural_diff`
 
----
+## What validation checks
 
-## Core
-
-A node declares its ports as [`Parameter`](core-types.md)s: each has a `name` and a
-`type` string like `"str"` or `"int"`. But declaring a schema is not the same as
-*meeting* it. The model returns free text; bound inputs may be the wrong shape.
-Validation closes that gap — it parses the real value and compares it field-by-field
-against the declared schema.
+A node declares its ports as [`Parameter`](core-types.md)s: each has a `name` and a `type`
+string like `"str"` or `"int"`. But declaring a schema is not the same as *meeting* it. The
+model returns free text, and bound inputs may be the wrong shape. Validation closes that
+gap — it parses the real value and compares it field-by-field against the declared schema.
 
 Two entry points do the comparing:
 
@@ -27,27 +23,29 @@ Two entry points do the comparing:
   schema, and returns the list of errors. (Unlike a presence-only check, it verifies
   each value's *type*, not just that it is present.)
 
-When something is wrong, each problem is recorded as a **`ValidationError`** — despite
-the name, this is a *data record*, not a Python exception you catch. It names the
-failure reason, the offending field, and a human-readable detail. The reason is drawn
-from a fixed list, **`ValidationFailure`** — for example "a required field was absent"
-or "a value's type didn't match."
+When something is wrong, each problem is recorded as a **`ValidationError`**. It names the
+failure reason, the offending field, and a human-readable detail. The reason comes from a
+fixed list, **`ValidationFailure`** — for example "a required field was absent" or "a
+value's type didn't match."
+
+!!! note "Good to know"
+
+    Despite the `…Error` name, `ValidationError` is a *data record*, not a Python exception
+    you catch. The validators *return* a list of them; they never raise. Don't wrap a
+    `validate_output` call in `try/except` expecting to catch validation problems — read the
+    returned error list instead.
 
 Knowing *what* failed is separate from deciding *what to do* about it. That decision is
-**`ValidationAction`**: retry the run, re-prompt the model to repair its output, or give
-up and set the item aside for later. The validators never pick an action; they only
-report failures. The action policy is applied elsewhere (by the run executor).
+**`ValidationAction`**: retry the run, re-prompt the model to repair its output, or give up
+and set the item aside for later. The validators never pick an action — they only report
+failures. The action policy is applied elsewhere, by the run executor.
 
 Finally, **`structural_diff`** answers a related question: how do two values differ?
 It returns a **`StructuralDiff`** listing which field paths were added, removed, or
 changed between a *before* and an *after* value — the basis for scoring an output
 against a known-good answer.
 
----
-
-## Ramps up
-
-### Why output is text, and what that forces
+## Why output is text, and what that forces
 
 A run's `Output.value` is a string by default — `claude -p` returns free text and has
 no JSON mode. `validate_output` therefore *extracts* JSON out of the text tolerantly:
@@ -61,7 +59,7 @@ The inline-value contract — a plain typed value vs. an
 operate on that inline value. An `ArtifactRef` is an explicit opt-in dereferenced at a
 single point, never something the validators chase.
 
-### The two pass-through cases
+## The two pass-through cases
 
 `validate_output` does **not** always parse JSON. It returns `(text, [])` untouched in
 two cases:
@@ -75,7 +73,7 @@ two cases:
 `EMPTY_SCHEMA` exists in the `ValidationFailure` set for callers that treat a missing
 schema as an error, but `validate_output`'s own no-schema path does not emit it.
 
-### One output vs. many
+## One output vs. many
 
 After JSON is extracted, the shape rule depends on how many outputs are declared:
 
@@ -91,7 +89,13 @@ equality. JSON's single number type means an `int` value satisfies a `float` fie
 `"json"`-typed field accepts anything; an unknown (nominal) primitive name accepts any
 non-container scalar.
 
-### Determinism via canonicalisation
+!!! note "Good to know"
+
+    The number rules trip people up. An `int` value satisfies a `float` field (JSON has one
+    number type), but a JSON `true`/`false` is *not* a number — `bool` is rejected where an
+    `int` or `float` is wanted. A `"json"`-typed field accepts anything.
+
+## Determinism via canonicalisation
 
 Records are unordered, so before comparing or diffing, values are *canonicalised* —
 every mapping's keys are recursively sorted; lists keep their order. This makes equality
@@ -99,7 +103,7 @@ and diffs reproducible under record/replay, so golden-set comparisons don't flap
 ordering. `validate_output` canonicalises the parsed value; `structural_diff`
 canonicalises both sides.
 
-### `structural_diff` paths and the unused parameters
+## `structural_diff` paths and the unused parameters
 
 Field paths are dotted for records (`a.b`) and indexed for lists (`a[0]`). A list that
 grew reports the new indices as `added`; one that shrank reports the dropped indices as
@@ -111,7 +115,56 @@ predicate eval scoring keys off — `True` exactly when all three tuples are emp
 the diff is purely structural and ignores them. They exist for signature symmetry with
 the other validators.
 
----
+## Example
+
+Validate a conforming output, then a non-conforming one; check bound inputs; and diff
+two records. Pure — no model call, no runtime.
+
+```python
+from crawfish.validation import (
+    validate_output, validate_inputs, structural_diff, ValidationAction,
+)
+from crawfish.core.types import Parameter
+
+# Two declared outputs → the value must be a JSON object keyed by name.
+out = [Parameter(name="priority", type="str"), Parameter(name="score", type="int")]
+
+# 1. Conforming model text (fenced JSON parses, both fields present and typed).
+good = '```json\n{"priority": "high", "score": 3}\n```'
+value, errors = validate_output(good, out)
+print("good value:", value)
+print("good errors:", errors)
+
+# 2. Non-conforming: "priority" missing, "score" is a string not an int.
+value2, errors2 = validate_output('{"score": "oops"}', out)
+for e in errors2:
+    print(f"  {e.failure.value} @ {e.field}: {e.detail}")
+
+# 3. Inputs: a required input unbound, another bound to the wrong type.
+schema = [Parameter(name="repo", type="str"), Parameter(name="limit", type="int")]
+for e in validate_inputs({"limit": "ten"}, schema):
+    print(f"  input {e.failure.value} @ {e.field}")
+
+# 4. A structural diff: c added, b changed, a unchanged.
+diff = structural_diff({"a": 1, "b": 2}, {"a": 1, "b": 9, "c": 3})
+print("added:", diff.added, "changed:", diff.changed, "equal:", diff.equal)
+
+# 5. The action policy is a separate enum.
+print("actions:", [a.value for a in ValidationAction])
+```
+
+??? success "▶ Output"
+
+    ```text
+    good value: {'priority': 'high', 'score': 3}
+    good errors: []
+      missing_field @ priority: required output 'priority' is absent
+      type_mismatch @ score: expected int, got str
+      input missing_field @ repo
+      input type_mismatch @ limit
+    added: ('c',) changed: ('b',) equal: False
+    actions: ['retry', 'repair', 'dead_letter']
+    ```
 
 ## API reference
 
@@ -212,55 +265,8 @@ Compute an order-canonical structural diff between two values. Both sides are
 canonicalised (keys sorted) before comparison. `schema` and `reg` are reserved for
 signature symmetry and ignored — the diff is purely structural.
 
----
+## See also
 
-## Example
-
-Validate a conforming output, then a non-conforming one; check bound inputs; and diff
-two records. Pure — no model call, no runtime.
-
-```python
-from crawfish.validation import (
-    validate_output, validate_inputs, structural_diff, ValidationAction,
-)
-from crawfish.core.types import Parameter
-
-# Two declared outputs → the value must be a JSON object keyed by name.
-out = [Parameter(name="priority", type="str"), Parameter(name="score", type="int")]
-
-# 1. Conforming model text (fenced JSON parses, both fields present and typed).
-good = '```json\n{"priority": "high", "score": 3}\n```'
-value, errors = validate_output(good, out)
-print("good value:", value)
-print("good errors:", errors)
-
-# 2. Non-conforming: "priority" missing, "score" is a string not an int.
-value2, errors2 = validate_output('{"score": "oops"}', out)
-for e in errors2:
-    print(f"  {e.failure.value} @ {e.field}: {e.detail}")
-
-# 3. Inputs: a required input unbound, another bound to the wrong type.
-schema = [Parameter(name="repo", type="str"), Parameter(name="limit", type="int")]
-for e in validate_inputs({"limit": "ten"}, schema):
-    print(f"  input {e.failure.value} @ {e.field}")
-
-# 4. A structural diff: c added, b changed, a unchanged.
-diff = structural_diff({"a": 1, "b": 2}, {"a": 1, "b": 9, "c": 3})
-print("added:", diff.added, "changed:", diff.changed, "equal:", diff.equal)
-
-# 5. The action policy is a separate enum.
-print("actions:", [a.value for a in ValidationAction])
-```
-
-??? success "▶ Output"
-
-    ```text
-    good value: {'priority': 'high', 'score': 3}
-    good errors: []
-      missing_field @ priority: required output 'priority' is absent
-      type_mismatch @ score: expected int, got str
-      input missing_field @ repo
-      input type_mismatch @ limit
-    added: ('c',) changed: ('b',) equal: False
-    actions: ['retry', 'repair', 'dead_letter']
-    ```
+- [Core types](core-types.md) — the `Parameter` schema validation checks against.
+- [Output & wiring](output-and-wiring.md) — build-time wiring checks, the static counterpart to runtime validation.
+- [Type system](type-system.md) — the structural compatibility rules type checks resolve through.

@@ -1,18 +1,15 @@
 # Batch & execution
 
-The fan-out engine: how one agent is run over many items, how multi-step work is
-ordered, and how per-item progress is retried and persisted so a crashed run can
-resume. These live in `crawfish.batch`, `crawfish.executor`, `crawfish.ledger`,
-`crawfish.retry`, and `crawfish.workflow`.
+The fan-out engine: how one agent runs over many items, how multi-step work is ordered,
+and how per-item progress is retried and saved so a crashed run can resume. These live
+in `crawfish.batch`, `crawfish.executor`, `crawfish.ledger`, `crawfish.retry`, and
+`crawfish.workflow`.
 
-**Symbols on this page:** `Batch` · `Task` · `Anomaly` · `DependencyGraph` ·
-`CycleError` · `Roadmap` · `ExecutionPlan` · `BatchExecutor` · `BatchRunResult` ·
-`ExecutionLedger` · `ExecState` · `RetryPolicy` · `ItemResult` · `ItemStatus` ·
-`Workflow`
+`Batch` · `Task` · `Anomaly` · `DependencyGraph` · `CycleError` · `Roadmap` ·
+`ExecutionPlan` · `BatchExecutor` · `BatchRunResult` · `ExecutionLedger` ·
+`ExecState` · `RetryPolicy` · `ItemResult` · `ItemStatus` · `Workflow`
 
----
-
-## Core
+## Fan-out: one definition, many items
 
 A **batch** runs one agent definition over a set of items. A source pulls in a list —
 say 500 pull requests — and the batch **fans out**: it makes one independent run per
@@ -24,14 +21,18 @@ description, and an optional list of other task ids it is **blocked by** (must w
 for). An **anomaly** (`Anomaly`) flags an item that went wrong — currently a run that
 failed — so a batch of 500 can surface the 3 that broke without you scanning all 500.
 
+## Ordering work into layers
+
 When work has order — fetch *before* parse, parse *before* write — that order is a
 **dependency graph** (`DependencyGraph`): nodes with edges saying "this blocks that".
-Turning the graph into runnable order produces **layers** where every task in a layer
-can run in parallel, and each layer waits for the one
-before. That ordered result is an **execution plan** (`ExecutionPlan`). If the
-dependencies loop back on themselves (A waits for B, B waits for A) there is no valid
-order, so the sort raises a **`CycleError`**. (`Roadmap` is a small placeholder for
-milestone metadata an executor may carry; it does no scheduling yet.)
+Turning the graph into runnable order produces **layers**: every task in a layer can run
+in parallel, and each layer waits for the one before. That ordered result is an
+**execution plan** (`ExecutionPlan`). If the dependencies loop back on themselves (A
+waits for B, B waits for A) there is no valid order, so the sort raises a **`CycleError`**.
+(`Roadmap` is a small placeholder for milestone metadata an executor may carry; it does
+no scheduling yet.)
+
+## Running the batch and handling failures
 
 A **batch executor** (`BatchExecutor`) takes a plan and actually runs the batch through
 a fixed pool of workers draining a queue, so a 10,000-item fan-out is rate-limited
@@ -44,24 +45,27 @@ Each item's outcome is an **`ItemResult`** with an **`ItemStatus`** of either `O
 attempts, and how long to wait between them using **exponential backoff** (each wait is
 longer than the last, up to a ceiling).
 
+## Durable progress, safe resume
+
 Progress is written down as it happens in the **execution ledger** (`ExecutionLedger`),
 an append-only log in the `Store` (Crawfish's persistence layer). It records each
 pipeline, run, and fan-out item with an **`ExecState`** — `running`, `done`, `failed`,
 or `needs_retry`. Because progress is durable, a run interrupted by a crash can
-**resume**: skip the items already marked `done` and redo only the rest. Re-running the
-same work produces the same result without duplicate side effects — that property is
-called **idempotency**, and it is what makes resume and replay safe.
+**resume**: skip the items already marked `done` and redo only the rest.
+
+!!! note "Good to know"
+
+    Re-running the same work produces the same result without duplicate side effects —
+    that property is **idempotency**, and it is what makes resume and replay safe. The
+    `only_items` argument is the shared mechanism: a resume uses it to skip completed
+    work, and `replay()` uses it to re-run just the dead letters.
 
 A **workflow** (`Workflow`) is the whole pipeline as one deployable unit: an ordered
 list of steps (source, filter, batch, aggregator, sink) with data threaded stage to
 stage. It checkpoints after each stage, so a crash mid-workflow resumes from the last
 completed stage.
 
----
-
-## Ramps up
-
-### Fan-out happens in `_gather_inputs`, one run per item
+## Fan-out happens in `_gather_inputs`, one run per item
 
 `Batch` separates inputs into **static** values (shared by every item — a target board,
 a repo link) and **fluid** value sets (one dict per item). A source marked `multi`
@@ -80,7 +84,14 @@ The batch's `cost_budget` (a token/$ ceiling) is carried onto every child run's
 `RunContext` and **shared across all runs** — the ceiling is for the whole fan-out, not
 per item. If no batch budget is set, the parent context's budget is used.
 
-### Scheduling: Kahn's algorithm, sorted for determinism
+!!! warning "Fluid value sets are untrusted per-item data"
+
+    The fluid value sets are per-item session data and untrusted — the prompt-injection
+    boundary. They reach the model as data to read, never as instructions. Keep
+    consequential sink targets and idempotency keys in the **static** base, never in the
+    per-item fluids. See the [security spine](../architecture/SECURITY.md).
+
+## Scheduling: Kahn's algorithm, sorted for determinism
 
 `DependencyGraph.topo_layers()` is [Kahn's algorithm](https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm):
 start from nodes with no blockers (in-degree 0), peel them off as one layer, decrement
@@ -98,7 +109,7 @@ unknown id is ignored, never an error. The result is an `ExecutionPlan` of id la
 > concurrently up to `max_concurrency`. The plan is the schedule view; the work queue is
 > the dispatch backbone.
 
-### Backpressure, hard-kill, and dead-lettering
+## Backpressure, hard-kill, and dead-lettering
 
 `BatchExecutor.run` loads all per-item value sets into an `asyncio.Queue`, then starts
 `max_concurrency` workers (default 8) that pull from it. A fixed pool draining a queue is
@@ -118,7 +129,13 @@ Two failure modes are handled differently:
 those records, and calls `run(only_items=...)` scoped to them. Sink idempotency makes
 re-running safe. `only_items` is the same mechanism a resume uses to skip completed work.
 
-### The ledger pins a version and survives restarts
+!!! note "Good to know"
+
+    `BudgetExceeded` is never retried — it propagates, the pipeline is marked `FAILED`,
+    and the exception re-raises. Every other failure retries then dead-letters, so one
+    broken item never halts the batch.
+
+## The ledger pins a version and survives restarts
 
 `ExecutionLedger` writes four record kinds to the `Store`: `ledger_pipeline` (status +
 **pinned version** + total items + completed step indices), `ledger_item` (per-fan-out
@@ -132,7 +149,7 @@ both of which die with the engine) are flipped to `NEEDS_RETRY` because their se
 gone and must never be silently lost; runs on a resumable backend are left for resume.
 It returns `{"retried": [...], "resumable": [...]}`.
 
-### Retry math
+## Retry math
 
 `RetryPolicy.delay_for(attempt)` is `min(base_delay * factor**attempt, max_delay)` —
 classic exponential backoff with a ceiling. With the default `base_delay=0.0` every delay
@@ -142,7 +159,7 @@ is `0.0` (no wait), which is why tests run fast; `BatchExecutor` defaults its po
 `BudgetExceeded` or `Cancelled` — those re-raise immediately. The `sleep` callable is
 injectable, so tests pass a no-op and stay deterministic.
 
-### Workflow checkpoints per stage
+## Workflow checkpoints per stage
 
 `Workflow.run` walks `steps` in order, threading the list of `Output`s from one stage
 into the next. After each stage it `checkpoint_step`s the index and saves the current
@@ -154,7 +171,89 @@ keeps items whose value passes `predicate` (preserving lineage + taint), `Batch`
 definition per item carrying the source item's lineage forward, `Aggregator` reduces all
 items to one, `Sink` writes each item and passes them through unchanged.
 
----
+## Example
+
+Build a dependency graph, derive a topologically-sorted `ExecutionPlan`, reject a cycle,
+and run a `RetryPolicy` over a flaky pure function to watch `ItemStatus` transitions — all
+deterministic, no runtime needed.
+
+```python
+import asyncio
+from crawfish.executor import DependencyGraph, ExecutionPlan, BatchExecutor, CycleError
+from crawfish.batch import Task
+from crawfish.retry import RetryPolicy, run_with_retry, ItemResult, ItemStatus
+from crawfish.ledger import ExecState
+
+# A dependency graph -> parallelizable layers -> an ExecutionPlan.
+g = DependencyGraph()
+g.add_edge("fetch", "parse")      # fetch blocks parse
+g.add_edge("fetch", "validate")   # fetch blocks validate
+g.add_edge("parse", "write")      # parse blocks write
+g.add_edge("validate", "write")   # validate blocks write
+plan = ExecutionPlan(layers=g.topo_layers())
+for i, layer in enumerate(plan.layers):
+    print(f"layer {i}: {layer}")
+
+# BatchExecutor.schedule turns Tasks (with blocked_by) into the same plan shape.
+a = Task(id="a", description="first")
+b = Task(id="b", description="second", blocked_by=["a"])
+c = Task(id="c", description="third", blocked_by=["a"])
+ex = BatchExecutor(definition=None)  # schedule() never touches the definition
+print("schedule:", ex.schedule([a, b, c]).layers)
+
+# A cycle has no valid order -> CycleError.
+cyc = DependencyGraph()
+cyc.add_edge("x", "y")
+cyc.add_edge("y", "x")
+try:
+    cyc.topo_layers()
+except CycleError as e:
+    print("CycleError:", e)
+
+# RetryPolicy over a flaky pure function: fails twice, then succeeds -> OK.
+attempts = {"n": 0}
+async def flaky():
+    attempts["n"] += 1
+    if attempts["n"] < 3:
+        raise RuntimeError(f"transient {attempts['n']}")
+    return "ok-value"
+
+async def noop_sleep(_):  # deterministic: no real waiting
+    return None
+
+policy = RetryPolicy(max_attempts=3, base_delay=0.0)
+print("delays:", [policy.delay_for(i) for i in range(3)])
+val = asyncio.run(run_with_retry(flaky, policy, sleep=noop_sleep))
+ok = ItemResult(item_id="0", status=ItemStatus.OK, value=val)
+print("item:", ok.item_id, ok.status.value, ok.value, "after", attempts["n"], "tries")
+
+# Exhausting retries surfaces a DEAD item instead of crashing the batch.
+attempts2 = {"n": 0}
+async def always_fail():
+    attempts2["n"] += 1
+    raise RuntimeError("boom")
+try:
+    asyncio.run(run_with_retry(always_fail, RetryPolicy(max_attempts=2, base_delay=0.0), sleep=noop_sleep))
+except RuntimeError as e:
+    dead = ItemResult(item_id="1", status=ItemStatus.DEAD, error=str(e))
+    print("item:", dead.item_id, dead.status.value, dead.error, "after", attempts2["n"], "tries")
+
+print("ExecState:", [s.value for s in ExecState])
+```
+
+??? success "▶ Output"
+
+    ```text
+    layer 0: ['fetch']
+    layer 1: ['parse', 'validate']
+    layer 2: ['write']
+    schedule: [['a'], ['b', 'c']]
+    CycleError: dependency graph has a cycle
+    delays: [0.0, 0.0, 0.0]
+    item: 0 ok ok-value after 3 tries
+    item: 1 dead boom after 2 tries
+    ExecState: ['running', 'done', 'failed', 'needs_retry']
+    ```
 
 ## API reference
 
@@ -340,88 +439,8 @@ Workflow(
   and reload saved outputs. A default `SqliteStore`-backed `RunContext` is created if none
   is passed.
 
----
+## See also
 
-## Example
-
-Build a dependency graph, derive a topologically-sorted `ExecutionPlan`, reject a cycle,
-and run a `RetryPolicy` over a flaky pure function to watch `ItemStatus` transitions — all
-deterministic, no runtime needed.
-
-```python
-import asyncio
-from crawfish.executor import DependencyGraph, ExecutionPlan, BatchExecutor, CycleError
-from crawfish.batch import Task
-from crawfish.retry import RetryPolicy, run_with_retry, ItemResult, ItemStatus
-from crawfish.ledger import ExecState
-
-# A dependency graph -> parallelizable layers -> an ExecutionPlan.
-g = DependencyGraph()
-g.add_edge("fetch", "parse")      # fetch blocks parse
-g.add_edge("fetch", "validate")   # fetch blocks validate
-g.add_edge("parse", "write")      # parse blocks write
-g.add_edge("validate", "write")   # validate blocks write
-plan = ExecutionPlan(layers=g.topo_layers())
-for i, layer in enumerate(plan.layers):
-    print(f"layer {i}: {layer}")
-
-# BatchExecutor.schedule turns Tasks (with blocked_by) into the same plan shape.
-a = Task(id="a", description="first")
-b = Task(id="b", description="second", blocked_by=["a"])
-c = Task(id="c", description="third", blocked_by=["a"])
-ex = BatchExecutor(definition=None)  # schedule() never touches the definition
-print("schedule:", ex.schedule([a, b, c]).layers)
-
-# A cycle has no valid order -> CycleError.
-cyc = DependencyGraph()
-cyc.add_edge("x", "y")
-cyc.add_edge("y", "x")
-try:
-    cyc.topo_layers()
-except CycleError as e:
-    print("CycleError:", e)
-
-# RetryPolicy over a flaky pure function: fails twice, then succeeds -> OK.
-attempts = {"n": 0}
-async def flaky():
-    attempts["n"] += 1
-    if attempts["n"] < 3:
-        raise RuntimeError(f"transient {attempts['n']}")
-    return "ok-value"
-
-async def noop_sleep(_):  # deterministic: no real waiting
-    return None
-
-policy = RetryPolicy(max_attempts=3, base_delay=0.0)
-print("delays:", [policy.delay_for(i) for i in range(3)])
-val = asyncio.run(run_with_retry(flaky, policy, sleep=noop_sleep))
-ok = ItemResult(item_id="0", status=ItemStatus.OK, value=val)
-print("item:", ok.item_id, ok.status.value, ok.value, "after", attempts["n"], "tries")
-
-# Exhausting retries surfaces a DEAD item instead of crashing the batch.
-attempts2 = {"n": 0}
-async def always_fail():
-    attempts2["n"] += 1
-    raise RuntimeError("boom")
-try:
-    asyncio.run(run_with_retry(always_fail, RetryPolicy(max_attempts=2, base_delay=0.0), sleep=noop_sleep))
-except RuntimeError as e:
-    dead = ItemResult(item_id="1", status=ItemStatus.DEAD, error=str(e))
-    print("item:", dead.item_id, dead.status.value, dead.error, "after", attempts2["n"], "tries")
-
-print("ExecState:", [s.value for s in ExecState])
-```
-
-??? success "▶ Output"
-
-    ```text
-    layer 0: ['fetch']
-    layer 1: ['parse', 'validate']
-    layer 2: ['write']
-    schedule: [['a'], ['b', 'c']]
-    CycleError: dependency graph has a cycle
-    delays: [0.0, 0.0, 0.0]
-    item: 0 ok ok-value after 3 tries
-    item: 1 dead boom after 2 tries
-    ExecState: ['running', 'done', 'failed', 'needs_retry']
-    ```
+- [Run & engine](run-and-engine.md) — the single `Run` each fan-out item becomes.
+- [Persistence](persistence.md) — the `Store` behind the `ExecutionLedger` and dead letters.
+- [Core types](core-types.md) — `Node`, `parameters_compatible`, and the static-vs-fluid boundary.

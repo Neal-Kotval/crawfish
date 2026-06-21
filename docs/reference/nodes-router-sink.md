@@ -1,18 +1,15 @@
 # Nodes — router & sink
 
-The two boundary nodes that decide *where data goes*: a **router** branches one
-stream into several by attaching a label to each item, and a **sink** is the one place
-a pipeline performs an outside-world write (open a PR, post a comment). Both live in
-`crawfish.nodes` and both are guarded — a router refuses to assemble if any branch is
-missing, and a sink refuses to construct if its destination could be steered by
-untrusted data.
+A **router** splits one stream into several by attaching a label to each item. A **sink**
+is the one place a pipeline writes to the outside world — open a PR, post a comment. They
+are the two boundary nodes that decide *where data goes*. Both live in `crawfish.nodes`,
+and both are guarded: a router refuses to assemble if any branch is missing, and a sink
+refuses to construct if its destination could be steered by untrusted data.
 
-**Symbols on this page:** `Router` · `Classifier` · `UnroutableLabelError` · `Sink` ·
-`LinearSink` · `GitHubPRSink` · `TargetMustBeStaticError` · `ApprovalRequired`
+`Router` · `Classifier` · `UnroutableLabelError` · `Sink` · `LinearSink` ·
+`GitHubPRSink` · `TargetMustBeStaticError` · `ApprovalRequired`
 
----
-
-## Core
+## Routers and classifiers
 
 A **router** takes the single stream of items flowing through a pipeline and splits it
 into several **branches** — for example, send bug reports to one downstream node and
@@ -32,25 +29,51 @@ flavours:
   label as free text, which is then matched to one of your allowed labels. Used when the
   decision needs a model.
 
+### Routing is proven total at assembly time
+
 If a classifier could ever emit a label that the router has no branch for, the pipeline
 is broken — there would be an item with nowhere to go. Crawfish catches this when you
-*construct* the `Router` (assembly time), not when it runs, by raising
-`UnroutableLabelError`. The routing graph is proven total before a single item flows.
+*construct* the `Router` (assembly time), not when it runs. `Router.__init__` compares
+the classifier's full `labels` set against the keys of `branches`. Any label without a
+branch — and, separately, a `default` that has no branch — raises `UnroutableLabelError`
+(a `ValueError`) immediately. A routing hole is a structural defect, so it surfaces when
+you wire the pipeline, never as a `KeyError` mid-run on the one item that hit the missing
+branch. Once constructed, `Router.route` (pure) and `Router.route_async` (agent-backed)
+can index `branches[label]` without guarding, because totality is already proven.
 
-A **sink** is the egress boundary — egress meaning data leaving the system to the
-outside world: the only node that performs an external side effect.
-Two concrete sinks ship — `LinearSink` (create a Linear issue/comment) and
-`GitHubPRSink` (open a GitHub pull request). Both default to **dry-run**: instead of
-touching the network they record what they *would* have written into a `writes` list, so
-tests stay deterministic and offline.
+### How a label is chosen
+
+`from_predicates` preserves the mapping's insertion order and appends `default` to the
+label set if it isn't already a key. `classify` walks the predicates in that order and
+returns the **first** label whose predicate returns `True` on the item's value, else the
+default. Order is significant — earlier labels win when more than one predicate would
+match. `classify` raises `TypeError` if called on a Definition-backed classifier (which
+has no predicates); use `classify_async` there.
+
+A Definition-backed classifier runs its agent team and gets back free text, which
+`classify_async` maps to an allowed label by case-insensitive token match: a label is
+chosen if it appears as a whitespace-delimited token in the text (so `"the label is
+bug."` → `"bug"`), trying labels in declared order, falling back to `default` on no
+match. The classification run deliberately skips input-type and output-schema validation
+— it over-binds the item into every required slot and reads the run's free text — so it
+needs no knowledge of the Definition's port names.
+
+## Sinks write to the outside world
+
+A **sink** is the egress boundary — *egress* meaning data leaving the system for the
+outside world. It is the only node that performs an external side effect. Two concrete
+sinks ship: `LinearSink` (create a Linear issue/comment) and `GitHubPRSink` (open a
+GitHub pull request). Both default to **dry-run** — instead of touching the network they
+record what they *would* have written into a `writes` list, so tests stay deterministic
+and offline.
 
 Because a sink writes to the outside world, two safety terms matter:
 
 - **Static-only target.** A sink's *target* is the destination address of a write — the
   Linear team, the GitHub repo. "Static" means the value is fixed once at the start of a
   batch and is identical for every item (the opposite is **fluid** — a per-item value
-  that can be influenced by model output or untrusted input). Sink targets must be
-  static so that a malicious prompt buried in fluid data can never redirect a write to a
+  that can be influenced by model output or untrusted input). Sink targets must be static
+  so that a malicious prompt buried in fluid data can never redirect a write to a
   destination you didn't choose. A fluid target is rejected the moment you construct the
   sink, with `TargetMustBeStaticError`.
 - **Idempotency key.** "Idempotent" means doing the same operation twice has the same
@@ -63,52 +86,16 @@ Sinks marked `always_ask` add an **approval gate**: they refuse to fire unless a
 approval callback says yes. Asking such a sink to write with no callback raises
 `ApprovalRequired`.
 
----
+!!! warning "Sink targets are static-only — the egress contract"
 
-## Ramps up
-
-This page is part of the [security spine](../architecture/SECURITY.md): the router keeps
-the branching graph total, and the sink keeps consequential writes static-targeted,
-idempotent, and (optionally) human-gated. No ADR governs these symbols directly; the
-load-bearing rule is the SECURITY.md egress contract.
-
-### Why unroutability is an assembly-time error
-
-`Router.__init__` compares the classifier's full `labels` set against the keys of
-`branches`. Any label without a branch — and, separately, a `default` that has no branch
-— raises `UnroutableLabelError` (a `ValueError`) immediately. This is deliberate: a
-routing hole is a structural defect, so it surfaces when you wire the pipeline, never as
-a `KeyError` mid-run on the one item that happened to hit the missing branch. Once
-constructed, `Router.route` (pure) and `Router.route_async` (agent-backed) can index
-`branches[label]` without guarding, because totality is already proven.
-
-### How a predicate classifier picks a label
-
-`from_predicates` preserves the mapping's insertion order and appends `default` to the
-label set if it isn't already a key. `classify` walks the predicates in that order and
-returns the **first** label whose predicate returns `True` on the item's value, else the
-default. Order is therefore significant — earlier labels win when more than one predicate
-would match. `classify` raises `TypeError` if called on a Definition-backed classifier
-(which has no predicates); use `classify_async` there.
-
-### How an agent label is normalised
-
-A Definition-backed classifier runs its agent team and gets back free text, which
-`classify_async` maps to an allowed label by case-insensitive token match: a label is
-chosen if it appears as a whitespace-delimited token in the text (so `"the label is
-bug."` → `"bug"`), trying labels in declared order, falling back to `default` on no
-match. The classification run deliberately skips input-type and output-schema validation
-— it over-binds the item into every required slot and reads the run's free text — so it
-needs no knowledge of the Definition's port names.
-
-### Why sink targets must be static
-
-A *fluid* value is per-item and can carry model output or untrusted session data. If a
-write's destination could be fluid, a prompt-injection payload in an item could redirect
-egress — open a PR against an attacker's repo, post to the wrong channel.
-`Sink.__init__` walks `target_params` and raises `TargetMustBeStaticError` for any param
-whose `flow` is not `Flow.STATIC`. The rejection happens at construction (wire/compile
-time), so the guarantee holds before the pipeline ever runs a model.
+    A *fluid* value is per-item and can carry model output or untrusted session data. If a
+    write's destination could be fluid, a prompt-injection payload in an item could redirect
+    egress — open a PR against an attacker's repo, post to the wrong channel. `Sink.__init__`
+    walks `target_params` and raises `TargetMustBeStaticError` for any param whose `flow` is
+    not `Flow.STATIC`. The rejection happens at construction (wire/compile time), so the
+    guarantee holds before the pipeline ever runs a model. These nodes are part of the
+    [security spine](../architecture/SECURITY.md); no ADR governs them directly — the
+    load-bearing rule is the SECURITY.md egress contract.
 
 ### Idempotency excludes fluid data by design
 
@@ -124,20 +111,103 @@ skipped.
 
 In `Sink.write`, the `always_ask` check runs *before* claiming the idempotency key. This
 ordering matters: a declined write must be retryable later, but an idempotency claim is
-permanent — so a decline never burns the claim. With no `approve` callback on an
-`always_ask` sink, `write` raises `ApprovalRequired`; a callback returning `False` skips
-the write (`write` returns `False`); `True` proceeds to the claim-then-write path.
+permanent — so a decline never burns the claim.
 
-### Credentials by reference, never by value
+!!! warning "Approval gating with `always_ask`"
 
-Concrete sinks read a credential by **reference** — `config["credential_ref"]` holds the
-*name* of an env var, never the secret itself. The recorded write carries that name, so
-no secret reaches stored config, the `Output`, logs, or telemetry. On a successful
-write, `Sink.write` emits a typed `SINK` telemetry event whose `target` is the static
-sink name and whose `tainted` flag propagates from the producing `Output` — never the
-credential value or the (possibly model-derived) output value.
+    With no `approve` callback on an `always_ask` sink, `write` raises `ApprovalRequired`;
+    a callback returning `False` skips the write (`write` returns `False`); `True` proceeds
+    to the claim-then-write path.
 
----
+!!! note "Good to know"
+
+    Credentials are read by **reference**, never by value — `config["credential_ref"]`
+    holds the *name* of an env var, never the secret itself. The recorded write carries that
+    name, so no secret reaches stored config, the `Output`, logs, or telemetry. On a
+    successful write, `Sink.write` emits a typed `SINK` telemetry event whose `target` is
+    the static sink name and whose `tainted` flag propagates from the producing `Output` —
+    never the credential value or the (possibly model-derived) output value.
+
+## Example
+
+A predicate router that branches numbers by sign — printing where each lands — followed
+by proof that a fluid sink target is rejected at construction. Pure and in-memory: no
+runtime, no network.
+
+```python
+from crawfish.core.types import Flow, Node, NodeKind, Parameter
+from crawfish.core.ids import new_id
+from crawfish.output import Output
+from crawfish.nodes.router import Classifier, Router, UnroutableLabelError
+from crawfish.nodes.sink import LinearSink, TargetMustBeStaticError
+
+
+# A trivial terminal node for each branch (just carries a name).
+class Land(Node):
+    def __init__(self, name: str) -> None:
+        self.id = new_id()
+        self.name = name
+        self.kind = NodeKind.SINK
+
+
+# Classify a number by sign. `default` (here "zero") is always in the label set.
+clf = Classifier.from_predicates(
+    {"positive": lambda v: v > 0, "negative": lambda v: v < 0},
+    default="zero",
+)
+print("labels:", clf.labels)
+
+# Every label (incl. the default dead-letter) must have a branch, or assembly fails.
+router = Router(
+    branches={
+        "positive": Land("pos-branch"),
+        "negative": Land("neg-branch"),
+        "zero": Land("zero-branch"),
+    },
+    classifier=clf,
+)
+
+# Route a few items (pure path — no model call).
+for v in (7, -3, 0):
+    out = Output(value=v, produced_by="src")
+    label, branch = router.route(out)
+    print(f"{v!r} -> label={label!r} branch={branch.name!r}")
+
+# Omitting a branch is caught at construction (assembly time), not run time.
+try:
+    Router(branches={"positive": Land("p"), "zero": Land("z")}, classifier=clf)
+except UnroutableLabelError as e:
+    print("UnroutableLabelError:", "negative" in str(e))
+
+# A STATIC target is accepted.
+ok = LinearSink(
+    "linear",
+    config={"team": "ENG"},
+    target_params=[Parameter(name="team", type="str", flow=Flow.STATIC)],
+)
+print("static target accepted:", ok.name)
+
+# A FLUID target is rejected at construction — a prompt can't redirect egress.
+try:
+    LinearSink(
+        "linear",
+        target_params=[Parameter(name="team", type="str", flow=Flow.FLUID)],
+    )
+except TargetMustBeStaticError as e:
+    print("TargetMustBeStaticError:", "must be" in str(e))
+```
+
+??? success "▶ Output"
+
+    ```text
+    labels: ['positive', 'negative', 'zero']
+    7 -> label='positive' branch='pos-branch'
+    -3 -> label='negative' branch='neg-branch'
+    0 -> label='zero' branch='zero-branch'
+    UnroutableLabelError: True
+    static target accepted: linear
+    TargetMustBeStaticError: True
+    ```
 
 ## API reference
 
@@ -277,85 +347,8 @@ to `self.writes`; live mode raises `NotImplementedError`. Reads `config["repo"]`
 `config["base"]`, and `config["credential_ref"]`. Extra attributes: `dry_run: bool`,
 `writes: list[dict[str, JSONValue]]`.
 
----
+## See also
 
-## Example
-
-A predicate router that branches numbers by sign — printing where each lands — followed
-by proof that a fluid sink target is rejected at construction. Pure and in-memory: no
-runtime, no network.
-
-```python
-from crawfish.core.types import Flow, Node, NodeKind, Parameter
-from crawfish.core.ids import new_id
-from crawfish.output import Output
-from crawfish.nodes.router import Classifier, Router, UnroutableLabelError
-from crawfish.nodes.sink import LinearSink, TargetMustBeStaticError
-
-
-# A trivial terminal node for each branch (just carries a name).
-class Land(Node):
-    def __init__(self, name: str) -> None:
-        self.id = new_id()
-        self.name = name
-        self.kind = NodeKind.SINK
-
-
-# Classify a number by sign. `default` (here "zero") is always in the label set.
-clf = Classifier.from_predicates(
-    {"positive": lambda v: v > 0, "negative": lambda v: v < 0},
-    default="zero",
-)
-print("labels:", clf.labels)
-
-# Every label (incl. the default dead-letter) must have a branch, or assembly fails.
-router = Router(
-    branches={
-        "positive": Land("pos-branch"),
-        "negative": Land("neg-branch"),
-        "zero": Land("zero-branch"),
-    },
-    classifier=clf,
-)
-
-# Route a few items (pure path — no model call).
-for v in (7, -3, 0):
-    out = Output(value=v, produced_by="src")
-    label, branch = router.route(out)
-    print(f"{v!r} -> label={label!r} branch={branch.name!r}")
-
-# Omitting a branch is caught at construction (assembly time), not run time.
-try:
-    Router(branches={"positive": Land("p"), "zero": Land("z")}, classifier=clf)
-except UnroutableLabelError as e:
-    print("UnroutableLabelError:", "negative" in str(e))
-
-# A STATIC target is accepted.
-ok = LinearSink(
-    "linear",
-    config={"team": "ENG"},
-    target_params=[Parameter(name="team", type="str", flow=Flow.STATIC)],
-)
-print("static target accepted:", ok.name)
-
-# A FLUID target is rejected at construction — a prompt can't redirect egress.
-try:
-    LinearSink(
-        "linear",
-        target_params=[Parameter(name="team", type="str", flow=Flow.FLUID)],
-    )
-except TargetMustBeStaticError as e:
-    print("TargetMustBeStaticError:", "must be" in str(e))
-```
-
-??? success "▶ Output"
-
-    ```text
-    labels: ['positive', 'negative', 'zero']
-    7 -> label='positive' branch='pos-branch'
-    -3 -> label='negative' branch='neg-branch'
-    0 -> label='zero' branch='zero-branch'
-    UnroutableLabelError: True
-    static target accepted: linear
-    TargetMustBeStaticError: True
-    ```
+- [Nodes — aggregator](nodes-aggregator.md) — fold the per-item runs before they branch out.
+- [Nodes — source & filter](nodes-source-filter.md) — the ingress side of the pipeline spine.
+- [Core types](core-types.md) — `NodeKind`, `Parameter`, and the static-vs-`Flow.FLUID` boundary.

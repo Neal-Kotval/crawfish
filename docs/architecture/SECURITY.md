@@ -1,8 +1,17 @@
 # Crawfish Security Spine
 
+The six invariants that hold an agent's untrusted data away from its consequential
+actions.
+
 Security is a **spine, not a phase** — enforced on every feature from day one.
 
 ## The invariants
+
+!!! warning "The prompt-injection boundary"
+    `Flow.FLUID` values are **untrusted session data**. They reach the model as data,
+    never as instructions. Consequential Sink targets and idempotency keys are
+    **static-only**. A compromised item can never redirect a write or forge an
+    idempotency key.
 
 1. **Fluid inputs are untrusted session data (the prompt-injection boundary).**
    `Flow.FLUID` values (a ticket body, a diff an agent produced) reach the model as
@@ -24,11 +33,16 @@ Security is a **spine, not a phase** — enforced on every feature from day one.
    Transcripts are scrubbed.
 
 5. **Host-side node code runs out-of-process; taint propagates from fluid inputs.**
-   Any value derived from a fluid input stays tainted and cannot silently become a
-   static Sink target or an idempotency key.
+   Any value derived from a fluid input stays tainted. A tainted value cannot silently
+   become a static Sink target or an idempotency key.
 
 6. **Supply chain.** `crawfish.lock` carries integrity hashes; install-time
    capability consent gates what a plugin may touch.
+
+!!! warning "Secrets resolve by reference"
+    A node receives only the secrets it declares, resolved **by reference** — never in
+    `config`, never logged, never in a prompt. Transcripts and telemetry are scrubbed
+    before the Store write.
 
 ## Implementation status (Phase 1)
 
@@ -51,10 +65,10 @@ full microVM/seccomp hardening beyond out-of-process isolation.
 
 ## The operate/observe layer
 
-The always-on layer — [deploy](../guide/deploy.md), [observers](../guide/observers.md),
-[visualize](../guide/visualize.md), [manage](../guide/manage.md),
-[export](../guide/claude-code-export.md) — inherits the spine above and adds four
-operate-specific guarantees:
+The always-on layer inherits the spine above and adds four operate-specific guarantees.
+It covers [deploy](../guide/deploy.md), [observers](../guide/observers.md),
+[visualize](../guide/visualize.md), [manage](../guide/manage.md), and
+[export](../guide/claude-code-export.md).
 
 1. **Scrubbed observer events & run-info.** `ObserverEvent` and `RunInfo` are written
    through `ScrubbingStore` (reused, not reinvented) before the Store write, so no secret
@@ -71,7 +85,7 @@ operate-specific guarantees:
 
 4. **Cost-capped LLM observers.** A Definition-backed observer judge runs under the same
    `CostBudget`/`CostMeter` and the same static-vs-fluid prompt-injection boundary as any
-   Definition: run data is **data**, never instructions, and spend is capped and
+   other Definition. Run data is **data**, never instructions; spend is capped and
    telemetered.
 
 The [`craw export --claude-code`](../guide/claude-code-export.md) output carries **no
@@ -80,6 +94,14 @@ reference or a credential value, so the generated file is safe to commit.
 
 ## Review gate
 
-Every feature is audited against these invariants by the security reviewer before
-its Linear issue can move to `Done`. High/Critical findings **block** completion.
-The final pass includes a prompt-injection red-team against the demo's fluid inputs.
+Every feature is audited against these invariants before it ships. The security reviewer
+signs off before a Linear issue can move to `Done`; High/Critical findings **block**
+completion. The final pass includes a prompt-injection red-team against the demo's fluid
+inputs.
+
+## See also
+
+- [Architecture](ARCHITECTURE.md) — the three seams the spine rides on
+- [Emission taxonomy](emission-taxonomy.md) — how `tainted` and `secret_lease` cross the ledger
+- [Concepts → security boundary](../guide/concepts.md) — the boundary in the directory model
+- [ADRs](decisions) — the decisions behind these invariants

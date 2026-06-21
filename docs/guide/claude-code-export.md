@@ -16,9 +16,9 @@ craw export --claude-code definitions/triage_fix --skill --dir .
 
 ## What maps to what
 
-A Crawfish Definition is an agent *team* authored as a directory. A Claude Code
-subagent is a single Markdown file: YAML front-matter plus a system prompt. The export
-folds the team down into that one file:
+The export folds an agent *team* into a single file. A Crawfish Definition is a
+directory; a Claude Code subagent is one Markdown file — YAML front-matter plus a
+system prompt:
 
 | Definition                                    | Claude Code subagent                        |
 | --------------------------------------------- | ------------------------------------------- |
@@ -35,21 +35,26 @@ The lead (or `main`) agent's prompt leads the body. Subagent prompts follow unde
 
 ## No secrets in the output
 
-The security rule for this feature is simple: **the generated file carries no secrets.**
+The generated file carries no secrets. A Definition never stores credentials inline. An
+`MCPConnection` references a secret by *name* — `auth="GITHUB_TOKEN"` is an env-var
+reference resolved at run time. The export maps references only. The `tools` allowlist
+names the exposed tools, such as `mcp__github__create_issue`, but never the `auth`
+reference and never a credential value.
 
-A Definition never stores credentials inline. An `MCPConnection` references a secret by
-*name* — `auth="GITHUB_TOKEN"` is an env-var reference resolved at run time. The export
-maps references only. The `tools` allowlist names the exposed tools, such as
-`mcp__github__create_issue`. It never writes the `auth` reference, and never a
-credential value. So the output is safe to commit and share.
+!!! warning "The export never emits a secret"
+    The exported file holds tool names and env-var *references*, never a credential
+    value. So the output is safe to commit and share. The secret resolves at run time,
+    from the environment.
 
 ## Round-trip note
 
 The mapping runs both ways. Drop a Claude Code subagent's `<name>.md` (front-matter
 plus prompt) into a Crawfish Definition directory as `instructions.md`, or as an entry
 under `agents/`, and the compiler picks up its `model`, `tools`, and `role`
-front-matter. Both tools author agents the same way: front-matter over a Markdown
-prompt. A team moves between them without a rewrite.
+front-matter. Both tools author agents the same way — front-matter over a Markdown
+prompt — so a team moves between them without a rewrite.
 
-See the [operations overview](operations.md) for the rest of the operate/integrate layer
-and [SECURITY.md](../architecture/SECURITY.md) for the full spine.
+## See also
+
+- [Operations overview](operations.md) — the rest of the operate/integrate layer.
+- [Security spine](../architecture/SECURITY.md) — the full set of invariants.

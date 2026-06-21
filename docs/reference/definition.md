@@ -1,29 +1,26 @@
 # Definition
 
-The authored, on-disk spec of an agent or team — the directory you write and the
-typed object it compiles into. A Definition fixes the team topology, the typed
-inputs/outputs, the prompts, and the bundled assets (tools, skills, MCP servers,
-policies) for one reproducible package. These live in `crawfish.definition`.
+The authored, on-disk spec of an agent or team — the directory you write and the typed
+object it compiles into. A Definition fixes the team layout, the typed inputs and outputs,
+the prompts, and the bundled assets (tools, skills, MCP servers, policies) as one
+reproducible package. These live in `crawfish.definition`.
 
-**Symbols on this page:** `Definition` · `AgentSpec` · `TeamSpec` · `Coordination` ·
-`Prompt` · `DefinitionRef` · `DefinitionAssets` · `MarketplacePackage` ·
-`MCPConnection` · `load_definition` · `DefinitionLoadError`
+`Definition` · `AgentSpec` · `TeamSpec` · `Coordination` · `Prompt` · `DefinitionRef` ·
+`DefinitionAssets` · `MarketplacePackage` · `MCPConnection` · `load_definition` ·
+`DefinitionLoadError`
 
----
+A **Definition** is one agent or team, written as a directory of files and compiled into a
+single typed object. The directory holds an `instructions.md` (the main agent's prompt),
+optional `agents/*.md` (more agents), `tools/*.py`, `skills/*.md`, `mcp/*.py`,
+`policies/*.py`, and a `definition.py` that declares typed inputs and outputs. The compiler
+reads those files and produces a `Definition` — the unit you install, version, and run.
 
-## Core
+## Agents and teams
 
-A **Definition** is one agent or team, written as a directory of files and compiled
-into a single typed object. The directory holds an `instructions.md` (the main
-agent's prompt), optional `agents/*.md` (more agents), `tools/*.py`, `skills/*.md`,
-`mcp/*.py`, `policies/*.py`, and a `definition.py` that declares typed inputs and
-outputs. The compiler reads those files and produces a `Definition` — the unit you
-install, version, and run.
-
-A team is a list of **agents**. Each agent is an `AgentSpec`: a `role` name, a
-`prompt` (its instructions), the `tools` and `policies` it may use, and the roles it
-may hand work to (`delegates_to`). The whole team is a `TeamSpec`: the agent list
-plus how they work together.
+A team is a list of **agents**. Each agent is an `AgentSpec`: a `role` name, a `prompt`
+(its instructions), the `tools` and `policies` it may use, and the roles it may hand work
+to (`delegates_to`). The whole team is a `TeamSpec`: the agent list plus how they work
+together.
 
 That "how" is the **`Coordination`** setting — one of three shapes:
 
@@ -32,29 +29,31 @@ That "how" is the **`Coordination`** setting — one of three shapes:
   typed results.
 - **sequential** — agents run in declared order, each one's output feeding the next.
 
-A Definition also carries **typed inputs and outputs** — `Parameter`s, the same
-typed slots used everywhere in Crawfish, each marked *static* (set once) or *fluid*
-(varies per item, and treated as untrusted data). It carries **injected prompts**
-(`Prompt` — extra text aimed at a named target), **dependencies** on other
-definitions (`DefinitionRef` — an `id` plus a `version`), and an **assets** bundle
-(`DefinitionAssets`) listing the code modules, skills, MCP connections, and policies
-the directory contributed.
+## Inputs, prompts, dependencies, assets
 
-An **`MCPConnection`** describes one external tool server (an MCP server) the
-definition connects to. Its `auth` is always a *secret reference* — the name of an
-environment variable — never an inline password, so credentials are resolved at run
-time and never written into a prompt.
+A Definition also carries **typed inputs and outputs** — `Parameter`s, the same typed slots
+used everywhere in Crawfish, each marked *static* (set once) or *fluid* (varies per item,
+treated as untrusted data). It carries **injected prompts** (`Prompt` — extra text aimed at
+a named target), **dependencies** on other definitions (`DefinitionRef` — an `id` plus a
+`version`), and an **assets** bundle (`DefinitionAssets`) listing the code modules, skills,
+MCP connections, and policies the directory contributed.
 
-You compile a directory with **`load_definition`** (the one canonical loader). On any
-problem — a missing directory, an agent binding a tool that doesn't exist, a broken
-import — it raises **`DefinitionLoadError`**. A finished Definition can be exported to
-a **`MarketplacePackage`**, a flat, checksummed shape for publishing to a hub.
+An **`MCPConnection`** describes one external tool server (an MCP server) the definition
+connects to.
 
----
+!!! warning "MCP auth is by reference only"
 
-## Ramps up
+    An `MCPConnection.auth` is always a *secret reference* — the name of an environment
+    variable — never an inline password. Credentials resolve at run time, are injected into
+    the server env, and never get written into a prompt. See the
+    [security spine](../architecture/SECURITY.md).
 
-### One canonical loader, deterministic identity
+You compile a directory with **`load_definition`**, the one canonical loader. On any
+problem — a missing directory, an agent binding a tool that doesn't exist, a broken import —
+it raises **`DefinitionLoadError`**. A finished Definition can be exported to a
+**`MarketplacePackage`**, a flat, checksummed shape for publishing to a hub.
+
+## One canonical loader, deterministic identity
 
 `load_definition` is the *single* loader: `Definition.from_package(path)` calls it,
 and the installed-package route resolves through it too. A directory and its installed
@@ -67,7 +66,13 @@ package name (`pyproject.toml` `project.name`, else the directory name), not the
 random default. See
 [ADR 0006](../architecture/decisions/0006-canonical-loader-deterministic-identity.md).
 
-### Bindings are validated at load time
+!!! note "Good to know"
+
+    Identity is content-derived, so a directory and its installed copy compile to
+    byte-identical Definitions. Editing files changes the `sha`; touching the clock or
+    moving the directory does not.
+
+## Bindings are validated at load time
 
 The compiler fails fast. After discovering tools (each `tools/*.py` must define a
 callable whose name matches the filename stem), policies (module-level `Policy`
@@ -85,7 +90,13 @@ explicit wiring needed. Compiling imports `definition.py`, `policies/*.py`, and
 out-of-process at run time with taint propagation (untrusted fluid data is tracked as
 it flows), not here.
 
-### Team coordination is hierarchical
+!!! note "Good to know"
+
+    An agent that declares no `tools` is granted **all** available tools — local plus any
+    exposed by a connected MCP server. Declare a `tools` list only when you want to narrow
+    that.
+
+## Team coordination is hierarchical
 
 The coordination model is delegation-in / typed-result-out, leaning on Claude's
 hierarchical subagent model — there is no bespoke message bus. If `definition.py`
@@ -95,7 +106,7 @@ infers it: a `lead` set with more than one agent ⇒ `Coordination.LEAD`, otherw
 workspace) or `"isolated"`. See
 [ADR 0007](../architecture/decisions/0007-team-coordination-hierarchical.md).
 
-### Definitions are versioned and freezable
+## Definitions are versioned and freezable
 
 `Definition` subclasses `Freezable`: a frozen Definition is an immutable, reproducible
 artifact that rejects mutation. Its `version` is a `Version` (major/minor + content
@@ -105,13 +116,65 @@ loader always stamps the freshly computed `sha`. `export()` produces a
 JSON-dumped payload — stable for the same content. See
 [ADR 0012](../architecture/decisions/0012-definitions-are-versioned.md).
 
-### Model pinning stays universal
+## Model pinning stays universal
 
-`AgentSpec.model` defaults to `None`, meaning model-universal — the platform picks.
-Pin a string or list to restrict that one agent. The runtime ships Claude-first, but
-the type stays universal by design.
+`AgentSpec.model` defaults to `None`, meaning model-universal — the platform picks. Pin a
+string or list to restrict that one agent. The runtime ships Claude-first, but the type
+stays universal by design.
 
----
+## Example
+
+Build a two-agent `lead`-coordinated Definition in memory, read its key fields, export
+it, and trigger a `DefinitionLoadError` on a bad load — all deterministic, no runtime.
+
+```python
+from crawfish.definition.types import (
+    AgentSpec, TeamSpec, Coordination, Definition, DefinitionRef,
+)
+from crawfish.core.types import Parameter, Flow
+from crawfish.definition.compiler import load_definition, DefinitionLoadError
+
+# A lead that delegates to a researcher.
+lead = AgentSpec(role="lead", prompt="Triage the inbox.", delegates_to=["researcher"])
+researcher = AgentSpec(role="researcher", tools=["search"])
+team = TeamSpec(agents=[lead, researcher], coordination=Coordination.LEAD, lead="lead")
+
+defn = Definition(
+    id="triage-bot",
+    team=team,
+    inputs=[Parameter(name="ticket", type="str", flow=Flow.FLUID)],
+    outputs=[Parameter(name="label", type="str")],
+    dependencies=[DefinitionRef(id="shared-tools", version="0.2")],
+)
+
+print(defn.id, defn.team.coordination.value, defn.team.lead)
+print(defn.team.workspace, "agents:", len(defn.team.agents))
+print("lead delegates_to:", defn.agent("lead").delegates_to)
+print("researcher tools:", defn.agent("researcher").tools)
+print("input flow:", defn.inputs[0].flow.value, "| dep:",
+      defn.dependencies[0].id, defn.dependencies[0].version)
+
+# Export to the marketplace shape (16-char checksum over the dumped payload).
+print("export checksum len:", len(defn.export().checksum))
+
+# A bad load raises DefinitionLoadError.
+try:
+    load_definition("/tmp/does-not-exist-crawfish")
+except DefinitionLoadError as exc:
+    print("DefinitionLoadError:", exc)
+```
+
+??? success "▶ Output"
+
+    ```text
+    triage-bot lead lead
+    shared agents: 2
+    lead delegates_to: ['researcher']
+    researcher tools: ['search']
+    input flow: fluid | dep: shared-tools 0.2
+    export checksum len: 16
+    DefinitionLoadError: not a directory: /tmp/does-not-exist-crawfish
+    ```
 
 ## API reference
 
@@ -250,58 +313,9 @@ inferring coordination, discovering assets, validating every binding, and writin
 valid Definition (not a directory, missing entry files, an unknown tool/policy/role
 binding, a bad front-matter mapping, or an import error in authored code).
 
----
+## See also
 
-## Example
-
-Build a two-agent `lead`-coordinated Definition in memory, read its key fields, export
-it, and trigger a `DefinitionLoadError` on a bad load — all deterministic, no runtime.
-
-```python
-from crawfish.definition.types import (
-    AgentSpec, TeamSpec, Coordination, Definition, DefinitionRef,
-)
-from crawfish.core.types import Parameter, Flow
-from crawfish.definition.compiler import load_definition, DefinitionLoadError
-
-# A lead that delegates to a researcher.
-lead = AgentSpec(role="lead", prompt="Triage the inbox.", delegates_to=["researcher"])
-researcher = AgentSpec(role="researcher", tools=["search"])
-team = TeamSpec(agents=[lead, researcher], coordination=Coordination.LEAD, lead="lead")
-
-defn = Definition(
-    id="triage-bot",
-    team=team,
-    inputs=[Parameter(name="ticket", type="str", flow=Flow.FLUID)],
-    outputs=[Parameter(name="label", type="str")],
-    dependencies=[DefinitionRef(id="shared-tools", version="0.2")],
-)
-
-print(defn.id, defn.team.coordination.value, defn.team.lead)
-print(defn.team.workspace, "agents:", len(defn.team.agents))
-print("lead delegates_to:", defn.agent("lead").delegates_to)
-print("researcher tools:", defn.agent("researcher").tools)
-print("input flow:", defn.inputs[0].flow.value, "| dep:",
-      defn.dependencies[0].id, defn.dependencies[0].version)
-
-# Export to the marketplace shape (16-char checksum over the dumped payload).
-print("export checksum len:", len(defn.export().checksum))
-
-# A bad load raises DefinitionLoadError.
-try:
-    load_definition("/tmp/does-not-exist-crawfish")
-except DefinitionLoadError as exc:
-    print("DefinitionLoadError:", exc)
-```
-
-??? success "▶ Output"
-
-    ```text
-    triage-bot lead lead
-    shared agents: 2
-    lead delegates_to: ['researcher']
-    researcher tools: ['search']
-    input flow: fluid | dep: shared-tools 0.2
-    export checksum len: 16
-    DefinitionLoadError: not a directory: /tmp/does-not-exist-crawfish
-    ```
+- [Core types](core-types.md) — the `Parameter`, `Flow`, and `Policy` atoms a Definition
+  is built from.
+- [Runtimes](runtimes.md) — how a compiled Definition is run, and who calls `resolve_model`.
+- [Providers](providers.md) — the model backends a Definition's agents resolve to.

@@ -1,68 +1,58 @@
 # Authoring — config, discovery, scaffold & doctor
 
-How a Crawfish *project on disk* becomes something the engine can run: the
-`crawfish.toml` manifest that describes it, the scan that finds the units you
-authored, the scaffolder that lays out a fresh one, and the doctor that checks
-its structure. These live in `crawfish.config`, `crawfish.discovery`,
-`crawfish.scaffold`, and `crawfish.doctor`.
+How a Crawfish *project on disk* becomes something the engine can run. This covers the
+`crawfish.toml` manifest that describes it, the scan that finds the units you authored, the
+scaffolder that lays out a fresh one, and the doctor that checks its structure. These live
+in `crawfish.config`, `crawfish.discovery`, `crawfish.scaffold`, and `crawfish.doctor`.
 
-**Symbols on this page:** `ProfileConfig` · `ProjectManifest` · `ProjectPaths` ·
-`load_manifest` · `load_models_config` · `ModelsConfigError` · `Registry` ·
-`UnitRef` · `scaffold_project` · `DoctorFinding` · `DoctorReport` · `diagnose`
+`ProfileConfig` · `ProjectManifest` · `ProjectPaths` · `load_manifest` ·
+`load_models_config` · `ModelsConfigError` · `Registry` · `UnitRef` · `scaffold_project` ·
+`DoctorFinding` · `DoctorReport` · `diagnose`
 
----
+## A project is a directory
 
-## Core
+A **Crawfish project** is a directory you author by hand. Its root holds the folders that
+make up your agents — `definitions/`, `sources/`, `sinks/`, and a few more — alongside one
+manifest file, `crawfish.toml`. A hidden `.crawfish/` folder holds **generated state**
+(anything the engine writes for itself); everything else is **authored** (what you wrote
+and check into git).
 
-A **Crawfish project** is a directory you author by hand. Its root holds the
-folders that make up your agents — `definitions/`, `sources/`, `sinks/`, and a
-few more — alongside one manifest file, `crawfish.toml`. A hidden `.crawfish/`
-folder holds **generated state** (anything the engine writes for itself);
-everything else is **authored** (what you wrote and check into git).
+The **manifest** (`crawfish.toml`) names the project and picks its defaults. `load_manifest`
+reads it into a `ProjectManifest` — and if the file is absent, hands back a manifest of pure
+defaults, so a bare directory still works.
 
-The **manifest** (`crawfish.toml`) names the project and picks its defaults.
-`load_manifest` reads it into a `ProjectManifest` — and if the file is absent,
-hands back a manifest of pure defaults, so a bare directory still works.
+A **profile** is a named runtime choice. `dev` runs the agent loop by shelling out to
+`claude -p` with no API key; `prod` runs it on the managed backend. A `ProfileConfig`
+records which runtime a profile uses plus any free-form settings. The manifest's
+`default_profile` says which one to use when you don't name one.
 
-A **profile** is a named runtime choice. `dev` runs the agent loop by shelling
-out to `claude -p` with no API key; `prod` runs it on the managed backend. A
-`ProfileConfig` records which runtime a profile uses plus any free-form settings.
-The manifest's `default_profile` says which one to use when you don't name one.
+`ProjectPaths` records **where each kind of unit lives** — `sources/` for sources,
+`definitions/` for agent teams, and so on. The defaults are the canonical layout; a project
+can relocate any folder, and every other tool here follows the override rather than
+assuming the default name.
 
-`ProjectPaths` records **where each kind of unit lives** — `sources/` for
-sources, `definitions/` for agent teams, and so on. The defaults are the
-canonical layout; a project can relocate any folder, and every other tool here
-follows the override rather than assuming the default name.
+A project's model choices live in a `[models]` block: a `default` model for agents that
+don't pin one, and **aliases** — friendly names like `fast` that map to a concrete model
+id. `load_models_config` reads just that block. If the block is malformed — a non-string
+default, an alias pointing at another alias — it raises `ModelsConfigError` at load time,
+so the project fails fast with a clear message instead of a confusing failure later.
 
-A project's model choices live in a `[models]` block: a `default` model for
-agents that don't pin one, and **aliases** — friendly names like `fast` that map
-to a concrete model id. `load_models_config` reads just that block. If the block
-is malformed — a non-string default, an alias pointing at another alias — it
-raises `ModelsConfigError` at load time, so the project fails fast with a clear
-message instead of a confusing failure later.
+**Discovery** is the scan that finds your units. A `Registry` collects `UnitRef`s — one per
+discovered unit, recording its `kind` (source, sink, definition…), its `name`, and where it
+came from. It gathers from two feeds: installed `crawfish-*` packages (via Python *entry
+points* — the standard way a package advertises plug-ins) and a scan of the local project
+folders. When two units claim the same kind and name, the **first one registered wins** and
+a warning is emitted.
 
-**Discovery** is the scan that finds your units. A `Registry` collects
-`UnitRef`s — one per discovered unit, recording its `kind` (source, sink,
-definition…), its `name`, and where it came from. It gathers from two feeds:
-installed `crawfish-*` packages (via Python *entry points* — the standard way a
-package advertises plug-ins) and a scan of the local project folders. When two
-units claim the same kind and name, the **first one registered wins** and a
-warning is emitted.
+`scaffold_project` writes a fresh project to disk — manifest, a working example agent (the
+triage-bot), a `.gitignore`, fixtures — so one command produces a runnable project with no
+API key.
 
-`scaffold_project` writes a fresh project to disk — manifest, a working example
-agent (the triage-bot), a `.gitignore`, fixtures — so one command produces a
-runnable project with no API key.
+`diagnose` is the health check behind `craw doctor`. It walks the project and returns a
+`DoctorReport`: a list of `DoctorFinding`s, each tagged with a `level` (`ok`, `info`,
+`warn`, or `error`). The report is healthy when nothing rose above `info`.
 
-`diagnose` is the health check behind `craw doctor`. It walks the project and
-returns a `DoctorReport`: a list of `DoctorFinding`s, each tagged with a `level`
-(`ok`, `info`, `warn`, or `error`). The report is healthy when nothing rose above
-`info`.
-
----
-
-## Ramps up
-
-### The manifest is all-optional, defaults all the way down
+## The manifest is all-optional
 
 Every field on `ProjectManifest` has a default, and `load_manifest` returns a
 fully-defaulted manifest when `crawfish.toml` is missing. This is deliberate: a
@@ -77,7 +67,13 @@ can reason about. The TOML is read with the stdlib `tomllib`; the `[project]`,
 `KeyError`. So you get working `dev`/`prod` profiles for free without declaring
 them, but can override either in the manifest.
 
-### Why an alias may not point at another alias
+!!! note "Good to know"
+
+    A directory with nothing but a few `.py` files is still a valid project. `load_manifest`
+    returns a fully-defaulted manifest when `crawfish.toml` is missing, and you get working
+    `dev`/`prod` profiles for free without declaring them.
+
+## Why an alias may not point at another alias
 
 `resolve_model` (see [providers](providers.md)) expands an alias by a **single
 hop** — it looks the name up once and returns the target. An alias chain
@@ -93,7 +89,7 @@ identical whether you load the whole manifest or just the models block. Both
 return an empty/default config when the file or section is absent — the
 back-compat path where the runtime's built-in model fallback applies.
 
-### Two feeds, first-wins, namespaced by kind
+## Two feeds, first-wins, namespaced by kind
 
 `Registry.discover` runs the two feeds in order: **entry points first**, then the
 **local directory scan**. Because first registration wins, an installed package's
@@ -109,7 +105,7 @@ explicit `paths` map, `discover` loads the manifest and honours any
 `[project.paths]` relocation automatically. See [definition](definition.md) for
 the units the registry discovers.
 
-### What `diagnose` actually checks
+## What the doctor checks
 
 `diagnose` produces findings in a fixed order, applying any `[project.paths]`
 override so the report matches the real project:
@@ -131,7 +127,57 @@ override so the report matches the real project:
 `DoctorReport.ok` is `True` when no finding is `warn` or `error`. `DoctorReport.text()`
 renders the findings with per-level glyphs and a one-line verdict.
 
----
+!!! note "Good to know"
+
+    A missing folder is only a problem when an override points at it. A default folder
+    that's simply absent is `info` (optional), but a `[project.paths]` override pointing at
+    a folder that doesn't exist is `warn` — a real misconfiguration.
+
+## Example
+
+Scaffold a fresh project into a temp directory, read its manifest back, discover
+its units, and run the doctor — pure local filesystem, no network.
+
+```python
+import tempfile, os
+from crawfish.scaffold import scaffold_project
+from crawfish.config import load_manifest
+from crawfish.discovery import Registry
+from crawfish.doctor import diagnose
+
+with tempfile.TemporaryDirectory() as tmp:
+    os.chdir(tmp)
+    root = scaffold_project("crawfish-app")          # written under tmp
+
+    m = load_manifest(root)
+    print("name:", m.name)
+    print("default_profile:", m.default_profile)
+    print("runtime(dev):", m.resolve_profile("dev").runtime)
+    print("models.default:", m.models.default)
+    print("alias fast:", m.models.aliases["fast"])
+
+    reg = Registry.discover(root)
+    print("definitions found:", [r.name for r in reg.of_kind("definition")])
+
+    report = diagnose(root)
+    print("findings:", len(report.findings))
+    print("ok:", report.ok)
+    print("levels:", sorted({f.level for f in report.findings}))
+```
+
+??? success "▶ Output"
+
+    ```text
+    name: crawfish-app
+    default_profile: dev
+    runtime(dev): command
+    models.default: claude-opus-4-8
+    alias fast: claude-haiku-4-5
+    definitions found: ['triage-bot']
+    findings: 8
+    ok: True
+    levels: ['info', 'ok']
+    ```
 
 ## API reference
 
@@ -287,50 +333,8 @@ authored-vs-generated split under `.crawfish/`. Honours `[project.paths]`
 overrides. `GENERATED_DIR` is `".crawfish"`; `CANONICAL_LAYOUT` maps each folder
 to a one-line description.
 
----
+## See also
 
-## Example
-
-Scaffold a fresh project into a temp directory, read its manifest back, discover
-its units, and run the doctor — pure local filesystem, no network.
-
-```python
-import tempfile, os
-from crawfish.scaffold import scaffold_project
-from crawfish.config import load_manifest
-from crawfish.discovery import Registry
-from crawfish.doctor import diagnose
-
-with tempfile.TemporaryDirectory() as tmp:
-    os.chdir(tmp)
-    root = scaffold_project("crawfish-app")          # written under tmp
-
-    m = load_manifest(root)
-    print("name:", m.name)
-    print("default_profile:", m.default_profile)
-    print("runtime(dev):", m.resolve_profile("dev").runtime)
-    print("models.default:", m.models.default)
-    print("alias fast:", m.models.aliases["fast"])
-
-    reg = Registry.discover(root)
-    print("definitions found:", [r.name for r in reg.of_kind("definition")])
-
-    report = diagnose(root)
-    print("findings:", len(report.findings))
-    print("ok:", report.ok)
-    print("levels:", sorted({f.level for f in report.findings}))
-```
-
-??? success "▶ Output"
-
-    ```text
-    name: crawfish-app
-    default_profile: dev
-    runtime(dev): command
-    models.default: claude-opus-4-8
-    alias fast: claude-haiku-4-5
-    definitions found: ['triage-bot']
-    findings: 8
-    ok: True
-    levels: ['info', 'ok']
-    ```
+- [Definition](definition.md) — the units discovery finds and the doctor checks.
+- [Providers](providers.md) — how the `[models]` default and aliases resolve.
+- [Operate](operate.md) — running and deploying the project you authored.

@@ -1,13 +1,21 @@
 # Concepts
 
-The model behind Crawfish. Each section maps to real public API; see the
-[API reference](api-reference.md) for exact signatures.
+Crawfish runs bulk agent work as a typed pipeline you author as directories. This page is the mental model behind the framework; each section maps to real public API and hands off to a reference page for exact signatures.
+
+On this page:
+
+- [The directory model](#the-directory-model) — an agent is a directory
+- [The pipeline](#the-pipeline) — `Source → Batch → Aggregator → Router → Sink`
+- [Runtimes](#runtimes-the-swappable-agent-loop) — the swappable agent loop
+- [The static-vs-fluid boundary](#the-static-vs-fluid-prompt-injection-boundary) — prompt-injection defence
+- [Secrets by reference](#secrets-by-reference) and [safe egress](#safe-egress-the-sink-invariants)
+- [Team coordination](#team-coordination), [Store seams](#the-store-and-artifactstore-seams), and [cost & inspection](#cost-budgets-and-inspection)
 
 ## The directory model
 
-**An agent is a directory.** You write markdown for the instructions and skills, and
-Python for the typed IO, tools, and policies. The compiler reads the directory and turns
-it into a typed `Definition`. Here's what it looks for:
+An agent is a directory: markdown for instructions and skills, Python for typed I/O, tools, and policies. You write markdown for the instructions and skills, and
+Python for the typed inputs and outputs, tools, and policies. The compiler reads the
+directory and turns it into a typed `Definition`. Here's what it looks for:
 
 | Path | Becomes |
 | --- | --- |
@@ -20,18 +28,21 @@ it into a typed `Definition`. Here's what it looks for:
 | `skills/*.md` | skill assets |
 | `pyproject.toml` | identity (`name`) + version |
 
-Compile with `Definition.from_package(path)` (or `load_definition(path)`). Identity is
-**content-derived**: a sha over the directory contents, never the path or a timestamp. So
-a directory and its installed package compile byte-identically. The compiler writes a
-`definition.lock` for reproducibility. If an agent references a tool, policy, or delegate
-that doesn't exist, the broken binding fails at **load time**, not partway through a run.
+Compile with `Definition.from_package(path)` (or `load_definition(path)`). A Definition's
+identity is **content-derived**: a sha over the directory's contents, never its path or a
+timestamp. So a directory and its installed package compile to the same thing, byte for
+byte. The compiler writes a `definition.lock` for reproducibility. If an agent references
+a tool, policy, or delegate that doesn't exist, that broken binding fails at **load
+time** — you find out up front, not partway through a run.
 
 A compiled `Definition` is `Freezable`. Call `.freeze()` to seal it into an immutable
 artifact; mutating a frozen one raises `FrozenError`.
 
+See the [authoring reference](../reference/authoring.md) and [definition reference](../reference/definition.md) for the full directory contract and `from_package` signature.
+
 ## The pipeline
 
-Bulk work is a pipeline of `Node`s:
+Bulk work is a pipeline of `Node`s. Data fans out into per-item runs, fans back in, branches, then exits through one sink.
 
 ```
 Source → Filter → Batch(Definition) → Aggregator → Router → Sink
@@ -40,17 +51,17 @@ Source → Filter → Batch(Definition) → Aggregator → Router → Sink
               └─ Router:      branch by label    (branch)
 ```
 
-Data flows as `Output`: a frozen, self-describing envelope that carries the value, its
-schema, and the id of the node that produced it. Nodes never mutate an Output. A transform
-calls `derive` to make a fresh one, leaving the upstream value intact for audit. Adjacent
-stages are **type-checked at assembly** (structural `parameters_compatible`), so a mistyped
-wire is rejected before any model call.
+Data flows between stages as an `Output`: a frozen envelope that carries the value, its
+schema, and the id of the node that produced it. Nodes never change an Output in place. To
+transform one, a node calls `derive` to make a fresh copy, leaving the original intact for
+audit. Adjacent stages are **type-checked when you assemble the pipeline** (structural
+`parameters_compatible`), so a mistyped wire is caught before any model call.
 
-- **`Source`** is the pipeline's ingress. `fetch()` returns a typed `Output`. A *multi*
-  source (`multi = True`) returns a list, and `fan_out` explodes it into one `Output` per
-  item, each seeding its own `Run`. The built-ins are `RepoSource` (single) and
-  `PullRequestSource` (multi). Both are deterministic and run without network access
-  (they're fixture-driven).
+- **`Source`** is where data enters the pipeline. `fetch()` returns a typed `Output`. A
+  *multi* source (`multi = True`) returns a list, and `fan_out` splits that list into one
+  `Output` per item — each one seeding its own `Run`. The built-ins are `RepoSource`
+  (single) and `PullRequestSource` (multi). Both are deterministic and need no network
+  (they read from fixtures).
 - **`Filter`** is a pure, synchronous node that narrows a list `Output` by a predicate
   and preserves order. Factories: `title_contains`, `field_equals`, `field_matches`,
   `limit`.
@@ -58,11 +69,11 @@ wire is rejected before any model call.
   with `.add_input(...)`. A multi source fans out to one `Run` per item, and
   `check_wiring()` type-checks at assembly. The batch's cost ceiling carries onto every
   child `Run`.
-- **`Aggregator`** is the fan-in counterpart: it consumes N item `Output`s and emits one.
-  The built-in reducers (`collect`, `concat`, `count`, `dedupe`) are pure; a
-  `definition_reducer` runs an agent team to reduce, for example to summarize. `fan_in`
-  is the barrier that handles partial success: it drops failed or `None` items and
-  supports a `quorum`.
+- **`Aggregator`** is the fan-in counterpart — it does the reverse of fan-out, taking N
+  item `Output`s and emitting one. The built-in reducers (`collect`, `concat`, `count`,
+  `dedupe`) are pure; a `definition_reducer` runs an agent team to reduce, for example to
+  summarize. `fan_in` is the barrier that handles partial success: it drops failed or
+  `None` items and supports a `quorum`.
 - **`Router`** sends an `Output` down one labelled branch, chosen by a `Classifier`.
   Classifiers come in two flavours: `from_predicates` (pure) and `from_definition`
   (agent-backed). The label set is closed and always includes a `default` (dead-letter)
@@ -76,9 +87,15 @@ wire is rejected before any model call.
   checkpointed to the `Store` after each stage, so a crash mid-workflow resumes from the
   last completed step.
 
+!!! warning
+
+    `Sink` targets and idempotency keys are **static-only**. A fluid (model-influenced) value can never redirect where a write lands. See [Safe egress](#safe-egress-the-sink-invariants).
+
+For exact node signatures, see the reference pages for [Source & Filter](../reference/nodes-source-filter.md), [Aggregator](../reference/nodes-aggregator.md), [Router & Sink](../reference/nodes-router-sink.md), and [Output & wiring](../reference/output-and-wiring.md).
+
 ## Runtimes — the swappable agent loop
 
-`AgentRuntime` is the **only** place the model SDK or CLI is touched. Every run goes
+Going from dev to prod is a runtime swap, not a code change. `AgentRuntime` is the **only** place the model SDK or CLI is touched. Every run goes
 through this one interface, which is what makes the backend swappable:
 
 | Runtime | Backend | Key | Cost | Use |
@@ -89,8 +106,7 @@ through this one interface, which is what makes the backend swappable:
 | `ClientRuntime` | API client | yes | metered | (stub today) |
 | `ManagedRuntime` | hosted CMA | yes | metered | (stub today) |
 
-Going from dev to prod is a **runtime swap, not a code change**. `get_runtime(name)`
-resolves a runtime by name from `RUNTIME_FACTORIES`.
+`get_runtime(name)` resolves a runtime by name from `RUNTIME_FACTORIES`.
 
 - **Dev loop.** `MockRuntime` returns deterministic canned text with no model call.
   Iterating on a Definition or a metric never burns budget, and scores never drift.
@@ -99,34 +115,49 @@ resolves a runtime by name from `RUNTIME_FACTORIES`.
   recording is off, it raises `CassetteMiss`. This is what makes `craw dev` and
   `craw test` fast and deterministic.
 
+See the [runtimes reference](../reference/runtimes.md) for the `AgentRuntime` interface and each backend's exact behaviour.
+
 ## The static-vs-fluid prompt-injection boundary
 
-Every `Parameter` carries a `Flow`:
+Untrusted data reaches the model as data, never as instructions — this is the rule that stops it from hijacking your agents. Every `Parameter`
+carries a `Flow` that marks it trusted or not:
 
-- `Flow.STATIC` is **trusted config**, set once per batch — a repo, a project. It can be
-  interpolated directly into the agent's instructions.
+- `Flow.STATIC` is **trusted config**, set once per batch — a repo, a project. It can go
+  straight into the agent's instructions.
 - `Flow.FLUID` (the default) is **untrusted per-item data**, like a ticket body. It goes
-  *only* inside a clearly delimited, labelled data block, and the instructions tell the
-  model to treat that block as data, never as instructions. Static config never mixes
-  with fluid data.
+  *only* inside a clearly marked, labelled data block, and the instructions tell the model
+  to treat that block as data, never as instructions. Trusted config and untrusted data
+  never mix.
 
-The prompt compiler enforces this. `split_inputs` partitions inputs by their declared
-flow, and anything unknown defaults to fluid — the safe, untrusted side. This is the
-load-bearing prompt-injection defence. A ticket body can't smuggle instructions into the
-agent, and because sink targets must be static, a model-influenced value can't redirect
-where a write lands.
+The prompt compiler enforces this. `split_inputs` sorts inputs by their declared flow,
+and anything unknown defaults to fluid — the safe, untrusted side. This is the
+load-bearing defence against prompt injection. A ticket body can't smuggle instructions
+into the agent. And because sink targets must be static, a value the model influenced
+can't redirect where a write lands.
+
+!!! warning
+
+    `Flow.FLUID` is the default, and any input you don't classify is treated as **untrusted**. Mark a parameter `Flow.STATIC` only when it is trusted config set once per batch — never to admit per-item data into the instructions.
+
+See the [type-system reference](../reference/type-system.md) for `Flow`, `Parameter`, and `split_inputs`.
 
 ## Secrets by reference
 
-Credentials are held **by reference only**. Config stores the *name* of an environment
+Credentials never reach a prompt — Crawfish holds them by reference only. Config stores the *name* of an environment
 variable, like `"GITHUB_TOKEN"`, never the value itself. The value is resolved at the
 egress boundary by `resolve_secret` and injected into a tool's or MCP server's
 environment. It never reaches a prompt, the stored config, an `Output`, logs, or
 telemetry. An `MCPConnection`'s `auth` field is a secret reference by construction.
 
+!!! warning
+
+    A secret value never enters a prompt, an `Output`, the stored config, logs, or telemetry. Pass the **name** of the env var (`"GITHUB_TOKEN"`), and let `resolve_secret` inject the value at the egress boundary.
+
+See the [secret-broker reference](../reference/secret-broker.md) and [secrets & consent reference](../reference/secrets-and-consent.md) for `resolve_secret` and the consent model.
+
 ## Safe egress — the Sink invariants
 
-A `Sink` is the one place side effects happen. Three invariants keep that safe:
+A `Sink` is the one place a pipeline performs an external side effect. Three invariants keep that safe:
 
 1. **Static-only targets.** Destination slots — repo, project, channel — must be
    `Flow.STATIC`. A fluid target is rejected at construction with `TargetMustBeStaticError`,
@@ -138,11 +169,12 @@ A `Sink` is the one place side effects happen. Three invariants keep that safe:
    callback, raising `ApprovalRequired`. A run can also suspend durably on approval before
    spending any compute (`requires_approval` → `RunSuspended`).
 
+See the [Router & Sink reference](../reference/nodes-router-sink.md) for the sink built-ins and these invariants in full.
+
 ## Team coordination
 
-A `TeamSpec` carries the multi-agent topology. Coordination leans on Claude's
-**hierarchical subagent model** rather than a bespoke message bus. Agents communicate by
-delegating in and returning a typed result out:
+A `TeamSpec` carries the multi-agent topology — agents delegate in and return a typed result out, rather than sharing a message bus. Coordination leans on Claude's
+**hierarchical subagent model** rather than a bespoke message bus:
 
 - **`SINGLE`** is one agent, or several independent agents, with no coordinator.
 - **`LEAD`** is a lead that dispatches the roles in its `delegates_to`, then combines
@@ -155,14 +187,20 @@ delegating in and returning a typed result out:
 `run_team` executes the topology and returns one `RunResult`. The coordinator is
 runtime-agnostic — it works with the mock, so tests stay deterministic.
 
+!!! note "Good to know"
+
+    Each subagent result re-enters the lead as **fluid data** (`{role}_result`), never as instructions. The injection boundary holds inside a team, not just at its edge.
+
 ## The Store and ArtifactStore seams
 
-All persistence goes through the `Store` protocol. The product model imports the
-*protocol*, never a concrete backend, so SQLite to Postgres is a driver swap and no raw
-SQL appears at any call site. Every row carries an `org_id` tenancy key (defaulted to
-`"local"`), so cloud multi-tenancy is also a driver swap, not a schema migration. The
-local default is `SqliteStore`. The `Store` backs typed records, KV and working memory,
-idempotency claims, and the append-only event ledger that powers the inspector.
+All persistence goes through the `Store` protocol — swap the backend without touching the code that uses it. A `Store` is a *seam*, meaning a clean interface
+you can swap the backend behind without touching the code that uses it. The product model
+imports the *protocol*, never a concrete backend, so moving from SQLite to Postgres is a
+driver swap, and no raw SQL appears at any call site. Every row carries an `org_id`
+tenancy key (defaulted to `"local"`), so cloud multi-tenancy is also a driver swap, not a
+schema migration. The local default is `SqliteStore`. The `Store` backs typed records, KV
+and working memory, idempotency claims, and the append-only event ledger that powers the
+inspector.
 
 - **`Memory`** is a thin `Store`-backed KV and dedup handle, scoped to a
   `(namespace, org_id)` pair. It covers working memory (`get`/`set`), cross-run dedup
@@ -172,7 +210,11 @@ idempotency claims, and the append-only event ledger that powers the inspector.
   the local filesystem now, S3 later. Large payloads are offloaded by reference instead of
   carried inline.
 
+See the [persistence reference](../reference/persistence.md) for the `Store`, `Memory`, and `ArtifactStore` contracts.
+
 ## Cost, budgets, and inspection
+
+You see the bill before a single model call, and you reconstruct any run from the event ledger.
 
 - **`estimate_cost(definition, items=N)`** is a deterministic dry-run preview. It assumes
   one run per agent per item, prices it from a coarse per-model table, and returns a
@@ -188,6 +230,8 @@ idempotency claims, and the append-only event ledger that powers the inspector.
   renders a report for the CLI. This is the trust and devtools layer that backs
   `craw inspect` and `craw logs`.
 
+See the [context & budgets reference](../reference/context-and-budgets.md) and the [inspector reference](../reference/emission-inspector-visualize.md) for the exact budget and report types.
+
 ## The measurement loop
 
 `Metric` → `Rubric` → `Benchmark` make quality measurable and comparable across Definition
@@ -195,4 +239,13 @@ versions. The eval data lifecycle (`EvalCase`, `GoldenSet`, `LLMJudge`, `capture
 `grade_output`, and `save_baseline`/`load_baseline`/`gate_against_baseline`) lets you
 capture real runs as reusable cases, curate versioned golden sets, grade with an
 LLM-as-judge, and gate a candidate against a stored regression baseline. All of it is
-deterministic under mock and replay. See the [cookbook](cookbook.md) for eval-as-test.
+deterministic under mock and replay.
+
+See the [evals reference](../reference/evals.md) and [metrics reference](../reference/metrics.md) for the full lifecycle.
+
+## Next steps
+
+- [Cookbook](cookbook.md) — copy-paste recipes, including eval-as-test.
+- [Getting started](getting-started.md) — build and run your first agent.
+- [API reference](api-reference.md) — every public symbol.
+- [Reference index](../reference/index.md) — the deep per-topic pages.

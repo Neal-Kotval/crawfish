@@ -1,60 +1,47 @@
 # Core types
 
-The connective tissue every other primitive imports: how data is typed, what counts
-as a node, and how rule bundles travel. These live in `crawfish.core` and are
-deliberately thin and stable — nothing here knows about a specific node, runtime, or
-backend.
+The handful of types every other piece of Crawfish is built on — how data is typed, what
+counts as a node, and how rule bundles travel. They live in `crawfish.core` and stay
+deliberately thin: nothing here knows about a specific node, runtime, or backend.
 
-**Symbols on this page:** `Flow` · `Parameter` · `NodeKind` · `Node` · `PolicyKind` ·
-`Policy` · `parameters_compatible` · `new_id` · `JSONValue`
+`Flow` · `Parameter` · `NodeKind` · `Node` · `PolicyKind` · `Policy` ·
+`parameters_compatible` · `new_id` · `JSONValue`
 
----
+## Pipelines, nodes, and parameters
 
-## Core
+A pipeline is a chain of steps: a source pulls in data, a batch fans it out to an agent,
+an aggregator reduces the results, and so on. Each step is a **node**. Nodes wire together
+by matching what one node emits to what the next one accepts.
 
-A **pipeline** in Crawfish is a chain of steps — a source pulls in data, a batch fans
-it out to an agent, an aggregator reduces the results, and so on. Each step is a
-**node**, and nodes are wired together by matching what one *emits* to what the next
-one *accepts*.
+A **parameter** describes one slot of data crossing that boundary — its `name`, its `type`
+(a string like `"str"` or `"list[PR]"`), and whether it's required. Two parameters connect
+when the producer's type fits the consumer's. That check is `parameters_compatible`.
 
-A **parameter** describes one slot of data crossing that boundary: its `name`, its
-`type` (a string like `"str"` or `"list[PR]"`), and whether it is required. Two
-parameters wire together when the producer's type can flow into the consumer's type —
-that check is `parameters_compatible`.
+## Static vs. fluid
 
-The single most important field on a parameter is its **flow**:
+Every parameter has a **flow** that says where its value comes from:
 
-- **Static** — set once at the start of a batch and the same for every item (a repo
-  link, a target board).
+- **Static** — set once at the start of a batch, the same for every item (a repo link, a
+  target board).
 - **Fluid** — changes per item as data streams through (a ticket body, a PR diff).
 
-Fluid is more than a label. It is the **prompt-injection boundary**: fluid values are
-*untrusted session data*. They reach the model as data to read, never as instructions
-to obey. (The [security spine](../architecture/SECURITY.md) enforces this; consequential
-sink targets and idempotency keys are static-only for the same reason.) When in doubt,
-data that came from outside your control is fluid.
+Flow isn't just a label. It's the line between trusted configuration and untrusted input.
 
-A **policy** is a named, importable bundle of rules — spend caps and content limits
-(*guardrails*), which model runs when (*routing*), or what an agent may touch
-(*permissions*). Policies are data you attach to a pipeline, not code.
+!!! warning "Fluid data is untrusted"
 
-`new_id` hands out a fresh opaque identifier for any object, and `JSONValue` is the
-type name for "any JSON-serialisable value" — both small shared helpers used throughout.
+    Fluid values are the prompt-injection boundary. They reach the model as data to *read*,
+    never as instructions to *obey* — the [security spine](../architecture/SECURITY.md)
+    enforces this. For the same reason, consequential sink targets and idempotency keys must
+    be static. Rule of thumb: if a value came from outside your control, it's fluid. A new
+    `Parameter` is fluid unless you say otherwise.
 
----
+## Policies
 
-## Ramps up
+A **policy** is a named, importable bundle of rules. There are three kinds: spend caps and
+content limits (*guardrails*), which model runs when (*routing*), and what an agent may
+touch (*permissions*). A policy is data you attach to a pipeline, not code.
 
-### Why parameters carry a string `type`
-
-`Parameter.type` is a **string name**, not a Python type object. That is intentional:
-the desktop console and the unit registry need to read a node's port shapes *without
-importing Python*. The string is resolved against the structural
-[type system](type-system.md) — never by string equality — so `"list[PR]"` and a
-record with the right fields compare structurally. See
-[ADR 0002](../architecture/decisions/0002-structural-type-registry.md) for the rationale.
-
-### How `parameters_compatible` decides
+## How `parameters_compatible` decides
 
 A value flows producer → consumer, so the check is directional:
 
@@ -62,30 +49,67 @@ A value flows producer → consumer, so the check is directional:
 parameters_compatible(out, in_)  ==  registry.is_compatible(out.type, in_.type)
 ```
 
-It resolves both type strings through the registry (the process-wide
-[`default_registry`](type-system.md#default_registry) unless you pass your own) and
-asks whether a value of the output type can satisfy the input type. A required input
-*must* receive a compatible value; an optional or defaulted input may go unfilled. The
-function answers only the type question — requiredness is enforced where bindings are
-applied, not here.
+It resolves both type strings through the [type registry](type-system.md) — the
+process-wide [`default_registry`](type-system.md#default_registry) unless you pass your own
+— and asks whether a value of the output type can satisfy the input type. It answers only
+the type question; whether a *required* input actually got filled is checked later, where
+bindings are applied.
 
-### `Node` is an ABC, not a model
+!!! note "Good to know"
 
-`Node` is an abstract base class because nodes carry **behaviour**, not just data —
-contrast `Parameter`/`Policy`, which are Pydantic `BaseModel`s holding pure data. This
-is the project-wide convention: *Pydantic for data shapes, ABCs for behavioural nodes*
-([ADR 0004](../architecture/decisions/0004-pydantic-data-abc-behavior.md)). Concrete nodes (a `Source`, an `Aggregator`)
-set `id`, `name`, and `kind` in their `__init__`; the kinds themselves are fixed by
-`NodeKind`.
+    `Parameter.type` is a **string**, not a Python type object — so the desktop console and
+    the unit registry can read a node's ports without importing Python. The string resolves
+    against the structural [type system](type-system.md), never by plain string equality, so
+    `"list[PR]"` and a record with the right fields compare by shape, not by name. See
+    [ADR 0002](../architecture/decisions/0002-structural-type-registry.md).
 
-### Enums are `(str, Enum)`
+## Why `Node` is an ABC
 
-`Flow`, `NodeKind`, and `PolicyKind` all subclass `(str, Enum)`. The member's value
-*is* the string (`Flow.FLUID == "fluid"`), which lets Pydantic coerce raw strings into
-enum members at the boundary and serialise them back without ceremony. The Ruff rule
-`UP042` that would flag this is intentionally disabled project-wide.
+`Node` is an abstract base class because nodes carry **behaviour**, not just data.
+`Parameter` and `Policy`, by contrast, are Pydantic models holding pure data. That split is
+a project-wide convention — Pydantic for data shapes, ABCs for behavioural nodes
+([ADR 0004](../architecture/decisions/0004-pydantic-data-abc-behavior.md)). Concrete nodes
+set their `id`, `name`, and `kind` in `__init__`; the allowed kinds are fixed by `NodeKind`.
 
----
+The three enums here (`Flow`, `NodeKind`, `PolicyKind`) all subclass `(str, Enum)`, so the
+member's value *is* the string (`Flow.FLUID == "fluid"`). Pydantic can coerce raw strings
+into members at the boundary and serialise them back without ceremony.
+
+## Example
+
+Wire two ports, build a guardrail policy, and read a fluid default — all pure, no runtime
+needed.
+
+```python
+from crawfish import Parameter, Flow, parameters_compatible, Policy, PolicyKind, new_id
+
+# An output that emits a list of PRs, and an input that wants them.
+pr_list   = Parameter(name="prs",   type="list[PR]", flow=Flow.FLUID)
+wants_prs = Parameter(name="items", type="list[PR]", required=True)
+print(parameters_compatible(pr_list, wants_prs))   # structurally compatible
+
+# A bare string cannot satisfy an input that wants a list.
+text = Parameter(name="body", type="str")
+print(parameters_compatible(text, wants_prs))
+
+# A policy is just named, typed data you attach to a pipeline.
+cap = Policy(name="spend-cap", kind=PolicyKind.GUARDRAIL, rules={"max_usd": 5})
+print(cap.kind.value, cap.rules["max_usd"])
+
+# Parameters default to fluid (untrusted); ids are opaque UUID4 strings.
+print(Parameter(name="x", type="str").flow.value)
+print(len(new_id()))
+```
+
+??? success "▶ Output"
+
+    ```text
+    True
+    False
+    guardrail 5
+    fluid
+    36
+    ```
 
 ## API reference
 
@@ -166,40 +190,8 @@ framework object.
 Pydantic validates concrete shapes at the boundaries (`Parameter.type` carries the real
 type information).
 
----
+## See also
 
-## Example
-
-Wiring two ports, building a guardrail policy, and reading a fluid default — all pure,
-no runtime needed.
-
-```python
-from crawfish import Parameter, Flow, parameters_compatible, Policy, PolicyKind, new_id
-
-# An output that emits a list of PRs, and an input that wants them.
-pr_list   = Parameter(name="prs",   type="list[PR]", flow=Flow.FLUID)
-wants_prs = Parameter(name="items", type="list[PR]", required=True)
-print(parameters_compatible(pr_list, wants_prs))   # structurally compatible
-
-# A bare string cannot satisfy an input that wants a list.
-text = Parameter(name="body", type="str")
-print(parameters_compatible(text, wants_prs))
-
-# A policy is just named, typed data you attach to a pipeline.
-cap = Policy(name="spend-cap", kind=PolicyKind.GUARDRAIL, rules={"max_usd": 5})
-print(cap.kind.value, cap.rules["max_usd"])
-
-# Parameters default to fluid (untrusted); ids are opaque UUID4 strings.
-print(Parameter(name="x", type="str").flow.value)
-print(len(new_id()))
-```
-
-??? success "▶ Output"
-
-    ```text
-    True
-    False
-    guardrail 5
-    fluid
-    36
-    ```
+- [Type system](type-system.md) — how those `type` strings resolve and compare by shape.
+- [Output & wiring](output-and-wiring.md) — connecting one node's output to the next.
+- [Definition](definition.md) — authoring the agents and teams that fill these nodes.

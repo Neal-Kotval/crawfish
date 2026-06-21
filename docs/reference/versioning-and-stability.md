@@ -1,29 +1,25 @@
 # Versioning & stability
 
-Two related contracts for change over time: how a single artifact is *pinned and
-sealed* so a run is reproducible, and how a *public API surface* declares whether you
-can depend on it. The first lives in `crawfish.versioning`, the second in
-`crawfish.stability`.
+Two contracts for change over time. One *pins and seals* a single artifact so a run stays
+reproducible; the other lets a *public API surface* declare how much you can depend on it.
+The first lives in `crawfish.versioning`, the second in `crawfish.stability`.
 
-**Symbols on this page:** `Version` · `FrozenError` · `Freezable` · `Stability` ·
-`stable` · `experimental` · `deprecated` · `stability_of` · `is_breaking`
+`Version` · `FrozenError` · `Freezable` · `Stability` · `stable` · `experimental` ·
+`deprecated` · `stability_of` · `is_breaking`
 
----
+## Two questions, answered separately
 
-## Core
-
-Crawfish lets you author **artifacts** — definitions, sources, sinks — that you reuse
-and share. Two questions follow: *which exact copy of an artifact did a run use*, and
-*how much can I rely on a given piece of the framework's API not to change underneath
-me*. The two clusters here answer those separately.
+You author **artifacts** — definitions, sources, sinks — that you reuse and share. That
+raises two questions: *which exact copy of an artifact did a run use*, and *how much can I
+rely on a piece of the framework's API not to change under me*. The two clusters here answer
+those separately.
 
 A **version** stamps an artifact with a `major.minor` number and, optionally, a content
-`sha` (a short fingerprint of its contents). Stringified it reads `0.2` or `0.1-ab12cd`
-— the form a lockfile pins to. A version also carries a **frozen** flag. *Frozen* means
-sealed: the artifact is now an immutable, reproducible unit, and any attempt to change a
-field on it is rejected by raising `FrozenError`. You make an artifact freezable by
-giving it a `version` field — that is what the `Freezable` mixin does — and you seal it
-by calling `freeze()`.
+`sha` (a short fingerprint of its contents). As a string it reads `0.2` or `0.1-ab12cd` —
+the form a lockfile pins to. A version also carries a **frozen** flag. *Frozen* means
+sealed: the artifact becomes an immutable, reproducible unit. You make an artifact freezable
+by giving it a `version` field (that is all the `Freezable` mixin does), and you seal it by
+calling `freeze()`.
 
 Separately, every public function or class in Crawfish can declare a **stability tier**
 — a promise about how much it may change:
@@ -35,23 +31,19 @@ Separately, every public function or class in Crawfish can declare a **stability
   replacement.
 
 You attach a tier with a decorator (`@stable`, `@experimental`, `@deprecated`) and read
-it back off any object with `stability_of`. `is_breaking(old, new)` is the rule that
-decides whether moving between two version strings counts as a breaking change — it does
-when the major number goes up.
+it back off any object with `stability_of`. `is_breaking(old, new)` decides whether moving
+between two version strings counts as a breaking change — it does when the major number goes
+up.
 
----
+## Why artifacts are versioned and freezable
 
-## Ramps up
+Reproducibility is the goal: a recorded run must re-run against the *exact* artifacts it
+used, not whatever they later became. Pinning a `Version` (number plus content `sha`) gives
+a lockfile something stable to reference; freezing guarantees the referenced copy cannot
+drift. Definitions are versioned first, then Source/Sink. See
+[ADR 0012](../architecture/decisions/0012-definitions-are-versioned.md) (definitions are versioned).
 
-### Why every artifact is versioned and freezable
-
-Reproducibility is the goal: a recorded run must be re-runnable against the *exact*
-artifacts it used, not whatever those artifacts later became. Pinning a `Version`
-(number plus content `sha`) gives a lockfile something stable to reference; freezing
-guarantees the referenced copy cannot drift. Definitions are versioned first, then
-Source/Sink. See [ADR 0012](../architecture/decisions/0012-definitions-are-versioned.md) (definitions are versioned).
-
-### How freezing actually blocks mutation
+## How freezing blocks mutation
 
 Both `Version` and `Freezable` override `__setattr__` to enforce the seal, but they
 guard different things:
@@ -62,13 +54,18 @@ guard different things:
   `Version` is fully immutable, including its own `frozen` field.
 - **`Freezable.__setattr__`** rejects writes to every field *except* `version` once
   `self.version.frozen` is set. Reassigning `version` stays open; mutating *through* it
-  (e.g. `artifact.version.sha = ...`) is blocked by `Version`'s own guard. Both raise
-  `FrozenError`, a subclass of `RuntimeError`.
+  (e.g. `artifact.version.sha = ...`) is blocked by `Version`'s own guard.
 
 `Freezable.freeze()` delegates to `self.version.freeze()`, and the `frozen` property
-just reads `self.version.frozen`. There is no unfreeze — sealing is one-way.
+just reads `self.version.frozen`.
 
-### Stability decorators are behaviour-preserving
+!!! warning "Freezing is one-way"
+
+    There is no unfreeze. Once an artifact is sealed, every write to a frozen `Version` or to
+    a frozen `Freezable`'s non-`version` fields raises `FrozenError` (a subclass of
+    `RuntimeError`). Seal only when you mean it.
+
+## Stability decorators are behaviour-preserving
 
 A stability decorator never changes what the wrapped object *does*. `@stable` and
 `@experimental` set a `__crawfish_stability__` attribute on the object and return it
@@ -79,13 +76,13 @@ signature and metadata via `functools.wraps`. This module is the machine-readabl
 of the policy in [API-STABILITY.md](../architecture/API-STABILITY.md); the decorators
 let tooling read a tier off any symbol uniformly.
 
-### Default tier is experimental, not stable
+!!! note "Good to know"
 
-`stability_of` returns `Stability.EXPERIMENTAL` for any object that was never tagged.
-Nothing is considered stable until it is *explicitly* promoted with `@stable` — the safe
-default is "this may change."
+    `stability_of` returns `Stability.EXPERIMENTAL` for any object that was never tagged.
+    Nothing is considered stable until it is *explicitly* promoted with `@stable` — the safe
+    default is "this may change."
 
-### What `is_breaking` compares
+## What `is_breaking` compares
 
 `is_breaking(old, new)` parses only the **major** component of each version string and
 returns `True` when `new`'s major exceeds `old`'s. Parsing is lenient: it strips a
@@ -94,7 +91,56 @@ leading `v`, splits on the first `.`, and reads the head as an int — so `"v1.2
 by this signal. It is the coarse check tooling uses to decide a migration note is
 required.
 
----
+## Example
+
+Freeze an artifact and watch mutation get rejected, tag a function and read its tier
+back, and check two versions for a breaking bump — all pure, no runtime needed.
+
+```python
+import warnings
+from crawfish.versioning.version import Version, Freezable, FrozenError
+from crawfish.stability import experimental, stability_of, is_breaking
+
+# A freezable artifact: mutable until sealed, then locked.
+class Definition(Freezable):
+    name: str = "triage"
+
+d = Definition()
+print(d.frozen)
+d.name = "triage-v2"        # allowed while unfrozen
+print(d.name)
+d.freeze()
+print(d.frozen, str(d.version))
+try:
+    d.name = "nope"         # rejected once frozen
+except FrozenError as e:
+    print(type(e).__name__)
+
+# Tag a function and read the tier back; untagged defaults to experimental.
+@experimental
+def fanout(): ...
+
+print(stability_of(fanout).value)
+print(stability_of(object()).value)
+
+# Breaking only when the major component increases.
+v1, v2, v3 = Version(major=0, minor=4), Version(major=1, minor=0), Version(major=0, minor=9)
+print(is_breaking(str(v1), str(v2)))   # 0.4 -> 1.0
+print(is_breaking(str(v1), str(v3)))   # 0.4 -> 0.9
+```
+
+??? success "▶ Output"
+
+    ```text
+    False
+    triage-v2
+    True 0.1
+    FrozenError
+    experimental
+    experimental
+    True
+    False
+    ```
 
 ## API reference
 
@@ -199,55 +245,8 @@ def is_breaking(old: str, new: str) -> bool
 breaking change). Parsing strips a leading `v` and reads the head before the first `.`,
 so `"v1.2.3"`, `"1.2"`, and `"1"` all yield major `1`. Minor/patch bumps return `False`.
 
----
+## See also
 
-## Example
-
-Freeze an artifact and watch mutation get rejected, tag a function and read its tier
-back, and check two versions for a breaking bump — all pure, no runtime needed.
-
-```python
-import warnings
-from crawfish.versioning.version import Version, Freezable, FrozenError
-from crawfish.stability import experimental, stability_of, is_breaking
-
-# A freezable artifact: mutable until sealed, then locked.
-class Definition(Freezable):
-    name: str = "triage"
-
-d = Definition()
-print(d.frozen)
-d.name = "triage-v2"        # allowed while unfrozen
-print(d.name)
-d.freeze()
-print(d.frozen, str(d.version))
-try:
-    d.name = "nope"         # rejected once frozen
-except FrozenError as e:
-    print(type(e).__name__)
-
-# Tag a function and read the tier back; untagged defaults to experimental.
-@experimental
-def fanout(): ...
-
-print(stability_of(fanout).value)
-print(stability_of(object()).value)
-
-# Breaking only when the major component increases.
-v1, v2, v3 = Version(major=0, minor=4), Version(major=1, minor=0), Version(major=0, minor=9)
-print(is_breaking(str(v1), str(v2)))   # 0.4 -> 1.0
-print(is_breaking(str(v1), str(v3)))   # 0.4 -> 0.9
-```
-
-??? success "▶ Output"
-
-    ```text
-    False
-    triage-v2
-    True 0.1
-    FrozenError
-    experimental
-    experimental
-    True
-    False
-    ```
+- [Core types](core-types.md) — the `Parameter` and `Policy` data shapes artifacts build on.
+- [Definition](definition.md) — authoring the artifacts you version and freeze.
+- [Persistence](persistence.md) — how runs reference the exact artifacts they used.

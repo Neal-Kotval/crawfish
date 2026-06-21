@@ -1,16 +1,18 @@
 # API Stability, Semver & Migration Policy
 
+What's stable, what isn't, and how Crawfish breaks an API without breaking you.
+
 **Status:** Accepted · **Date:** 2026-06-19
 
-This is the contract that lets people adopt the Crawfish OSS core for serious work.
-React's deprecation discipline plus codemods are *why* large codebases trust upgrades;
-this document and `crawfish/stability.py` are the Crawfish equivalent.
+This is the contract that lets you adopt the Crawfish OSS core for serious work. React's
+deprecation discipline plus codemods are *why* large codebases trust upgrades. This
+document and `crawfish/stability.py` are the Crawfish equivalent.
 
 ## Public API surface
 
-The public API is exactly what `crawfish/__init__.py` re-exports. If a name is not
-re-exported from the package root, it is private — internal modules, `_`-prefixed names,
-and anything not listed in `__all__` may change at any time without notice.
+The public API is exactly what `crawfish/__init__.py` re-exports. A name not re-exported
+from the package root is private — internal modules, `_`-prefixed names, and anything not
+listed in `__all__` may change at any time without notice.
 
 Every public name carries a stability tier, declared in code with the decorators in
 `crawfish.stability` and readable by tooling via `stability_of(obj)`:
@@ -29,6 +31,10 @@ def run(...): ...
 
 stability_of(run) is Stability.STABLE  # True
 ```
+
+!!! note "Good to know"
+    Untagged names are **experimental** by default. Nothing is stable until you promote it
+    with `@stable`. Pin to names you can see are `STABLE` via `stability_of(obj)`.
 
 ## Semver policy
 
@@ -85,4 +91,8 @@ release, and hand users a codemod so the upgrade is a command, not a chore. The 
 harness and migration-guide template land alongside the first breaking change that needs
 them.
 
-See [`decisions/`](decisions) for the ADRs that define the primitives this policy stabilizes.
+## See also
+
+- [Architecture](ARCHITECTURE.md) — the primitives this policy stabilizes
+- [API reference](../guide/api-reference.md) — the public surface, by symbol
+- [ADRs](decisions) — the decisions behind the stabilized primitives

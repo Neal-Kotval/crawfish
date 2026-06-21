@@ -1,11 +1,11 @@
 # Observers — watch a running pipeline
 
-An **Observer** polls a running pipeline's event stream on a cron interval and emits an
-`ObserverEvent` when something looks wrong. It catches a failure-rate spike, a cost
-spike, or a stuck or slow run. Add an LLM judge and it also flags low-quality results,
-described in plain language. Observers write to the same scrubbed run-info surface that
-the [dashboard](visualize.md) and [`craw manage`](manage.md) read from, so an alert
-shows up in every view at once.
+An **Observer** watches a running pipeline and raises an alert when something looks wrong.
+It polls the pipeline's event stream on a cron interval and emits an `ObserverEvent` on a
+failure-rate spike, a cost spike, or a stuck or slow run. Add an LLM judge and it also
+flags low-quality results, described in plain language. Observers write to the same
+scrubbed run-info surface that the [dashboard](visualize.md) and
+[`craw manage`](manage.md) read from, so an alert shows up in every view at once.
 
 Observers live in `crawfish.observe`, alongside the run-info surface below.
 
@@ -51,6 +51,11 @@ runs   = surface.run_info("triage-bot", since="-1d")
 | `RunInfo`       | `pipeline, run_id, status, backend, version, cost_usd, items, started_at, finished_at` |
 | `Severity`      | `info` · `warn` · `critical` |
 
+!!! note "Good to know"
+    Every event and run-info row carries `org_id` (defaulted `"local"`) and is scrubbed
+    before the Store write. The surface wraps `ScrubbingStore`, so no secret value reaches
+    an event, the dashboard, or a log.
+
 `since=` takes a relative window (`"-1h"`, `"-30m"`, `"-15s"`, `"-2d"`) or an epoch
 timestamp. Inside a node or observer, you emit through the run context:
 
@@ -61,7 +66,8 @@ ctx.emit(ObserverEvent(pipeline="triage-bot", kind="item.dropped",
 
 ## Defining an observer
 
-An `Observer` polls a pipeline's event stream on a cron interval and applies rules:
+Author an observer in two parts: rules and an optional judge. An `Observer` polls a
+pipeline's event stream on a cron interval and applies rules. Two kinds:
 
 - **Rule-based** (pure and free): failure rate over a window, cost spike against the
   median, and latency or stuck-run detection.
@@ -85,7 +91,7 @@ watch = Observer(
 ```
 
 When a rule trips, the observer emits an `ObserverEvent` onto the same surface. From
-there `craw manage logs`, the dashboard, and any downstream alert sink pick it up.
+there, `craw manage logs`, the dashboard, and any downstream alert sink pick it up.
 
 ## Worked example — guard the deployed triage bot
 
@@ -130,11 +136,13 @@ events = surface.events("triage-bot", since="-1h", kind="quality.flag")
 
 ## Security
 
-An LLM/Definition-backed observer runs under the **same boundary as any Definition**:
+An LLM/Definition-backed observer runs under the **same boundary as any Definition**.
 
-- **Prompt-injection boundary.** Run data the judge reads is **fluid** data. It reaches
-  the model inside a labelled data block, never as instructions. A malicious ticket body
-  that surfaces in a run cannot turn the observer into an attacker's agent.
+!!! warning "The judge reads untrusted data"
+    Run data the judge reads is **fluid** (untrusted) data. It reaches the model inside a
+    labelled data block, never as instructions. A malicious ticket body that surfaces in a
+    run cannot turn the observer into an attacker's agent.
+
 - **Cost-capped and metered.** The judge spends under the same `CostBudget` and
   `CostMeter` as a normal run. Its spend is metered and shows up in `$ today`. There is
   no unbounded background LLM cost.
@@ -142,4 +150,9 @@ An LLM/Definition-backed observer runs under the **same boundary as any Definiti
   The surface wraps `ScrubbingStore` (reused, not reinvented), and every row carries
   `org_id`. No secret value reaches an event, the dashboard, or a log.
 
-See the [operations overview](operations.md) and [SECURITY.md](../architecture/SECURITY.md).
+## Next steps
+
+- [Visualize](visualize.md) — see observer events in the localhost dashboard.
+- [`craw manage`](manage.md) — query the same events from the CLI.
+- [Operations overview](operations.md) — how observe fits the deploy loop.
+- [SECURITY.md](../architecture/SECURITY.md) — the fluid-data boundary in full.

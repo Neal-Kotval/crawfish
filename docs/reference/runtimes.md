@@ -1,29 +1,36 @@
 # Runtimes
 
-The swappable backend that actually runs an agent's turn. Everything above this layer
-describes *what* an agent should do; a runtime decides *how* it executes — via the local
-`claude -p` CLI, a hosted API, a recorded cassette, or a deterministic mock. These live
-in `crawfish.runtime` and are the one place the model SDK/CLI is touched.
+The swappable backend that actually runs an agent's turn. Everything above this layer says
+*what* an agent should do; a runtime decides *how* it executes — via the local `claude -p`
+CLI, a hosted API, a recorded cassette, or a deterministic mock. These live in
+`crawfish.runtime` and are the one place the model SDK or CLI is touched.
 
-**Symbols on this page:** `AgentRuntime` · `RunRequest` · `RunResult` · `RuntimeEvent` ·
-`CommandRuntime` · `MockRuntime` · `ClientRuntime` · `ManagedRuntime` ·
-`RecordReplayRuntime` · `RoutingRuntime` · `ProviderRuntime` · `ProviderFailover` ·
-`expand_candidates` · `get_runtime`
+`AgentRuntime` · `RunRequest` · `RunResult` · `RuntimeEvent` · `CommandRuntime` ·
+`MockRuntime` · `ClientRuntime` · `ManagedRuntime` · `RecordReplayRuntime` ·
+`RoutingRuntime` · `ProviderRuntime` · `ProviderFailover` · `expand_candidates` ·
+`get_runtime`
 
----
+A **runtime** executes one agent's turn. You hand it a request — which agent to run and the
+data to feed it — and it runs the agent loop to completion and hands back a typed result.
+`AgentRuntime` is the abstract contract; concrete runtimes are interchangeable
+implementations of it.
 
-## Core
+On this page:
 
-A **runtime** executes one agent's turn. You hand it a request describing which agent to
-run and the data to feed it; it runs the agent loop to completion and hands back a typed
-result. `AgentRuntime` is the abstract contract for that; concrete runtimes are
-interchangeable implementations of it.
+- [The seam, and the two data shapes that cross it](#the-seam)
+- [The concrete runtimes](#the-concrete-runtimes)
+- [The contract: `AgentRuntime`](#the-contract)
+- [Determinism — how tests and docs avoid live calls](#determinism)
+- [Failover and routing](#failover-and-routing)
+- [Profile selection with `get_runtime`](#profile-selection)
 
-This is the key seam in Crawfish. The product model — the nodes, the pipeline, the
-team — never imports a specific model backend. It only ever talks to the `AgentRuntime`
-interface. Swapping the local CLI for a hosted API, or for a fake used in tests, is a
-matter of constructing a different runtime; no node code changes. That is one of the
-**three swappable seams** the architecture is built on ([ADR 0001](../architecture/decisions/0001-three-swappable-seams.md)).
+## The seam, and the two data shapes that cross it {#the-seam}
+
+This is the key seam in Crawfish. The product model — the nodes, the pipeline, the team —
+never imports a specific model backend. It only ever talks to the `AgentRuntime` interface.
+Swapping the local CLI for a hosted API, or for a fake used in tests, just means constructing
+a different runtime; no node code changes. That is one of the **three swappable seams** the
+architecture is built on ([ADR 0001](../architecture/decisions/0001-three-swappable-seams.md)).
 
 Two small data shapes cross the interface:
 
@@ -38,7 +45,9 @@ A **`RuntimeEvent`** is one step inside the turn — a chunk of model text, a to
 tool result, the final result, or an error. A runtime can stream these as they happen;
 by default it just replays them after the turn finishes.
 
-The concrete runtimes you pick from:
+## The concrete runtimes
+
+The runtimes you pick from:
 
 - **`MockRuntime`** — a pure function of the request. No model call, zero cost, fully
   deterministic. This is what `craw dev` and every doc example here use.
@@ -56,11 +65,9 @@ The concrete runtimes you pick from:
 `get_runtime` is the selector: given a resolved profile (`dev`, `prod`, …) it constructs
 the runtime that profile names. Switching profile is a runtime swap, not a code change.
 
----
+## The contract: `AgentRuntime` {#the-contract}
 
-## Ramps up
-
-### `AgentRuntime` is an ABC with one required method
+### One required method
 
 `AgentRuntime` is an abstract base class — it carries behaviour, so it is an ABC, not a
 Pydantic model (the project-wide convention; see [core types](core-types.md)). The only
@@ -76,8 +83,12 @@ observability is written once, the same way, regardless of which backend answere
 
 ### Why the model SDK lives only here
 
-`crawfish.runtime` is the **only** place the model CLI or SDK is touched. Nodes import the
-`AgentRuntime` protocol, never a concrete backend ([ADR 0001](../architecture/decisions/0001-three-swappable-seams.md)).
+!!! warning "Nodes never import a backend"
+
+    `crawfish.runtime` is the only place the model CLI or SDK is touched. Nodes import the
+    `AgentRuntime` protocol, never a concrete backend. That seam is what keeps dev→prod a
+    runtime swap rather than a rewrite ([ADR 0001](../architecture/decisions/0001-three-swappable-seams.md)).
+
 That is what makes dev→prod a runtime swap: `CommandRuntime` (`claude -p`, zero key) →
 `ClientRuntime` (API key) → `ManagedRuntime` (managed cloud) are interchangeable behind the
 one interface.
@@ -93,7 +104,7 @@ config change, not a code change ([ADR 0005](../architecture/decisions/0005-clau
 layer hardcodes *no* vendor default — `ClientRuntime`'s placeholder is the literal
 `"unset"` until a `ModelsConfig` or agent model supplies one.
 
-### Determinism: how examples and tests avoid live calls
+## Determinism — how tests and docs avoid live calls {#determinism}
 
 Three runtimes give you live-call-free runs:
 
@@ -109,7 +120,15 @@ Three runtimes give you live-call-free runs:
   hash of the request. A replay charges **zero cost** and makes no model call; a cache
   miss either records (if `record=True`) or raises `CassetteMiss`.
 
-### Failover: candidates, policy, and `ProviderFailover`
+!!! note "Good to know"
+
+    `MockRuntime` is the default for `craw dev` and every doc example here. Its reply is a
+    pure function of the request, so the same call yields the same bytes every run — which
+    is what makes the `▶ Output` blocks reproducible.
+
+## Failover and routing {#failover-and-routing}
+
+### Candidates, policy, and `ProviderFailover`
 
 `ProviderRuntime` wraps one or more `Provider` backends and fails over across a list of
 candidate models. For a request it builds an ordered candidate list with
@@ -135,7 +154,7 @@ resolution is a no-op pass-through. An explicit per-run `request.model` override
 routing untouched. The decision is made once, through the same shared resolver the cost
 estimator uses, so a run can't drift from its preview.
 
-### `get_runtime` and profile selection
+## Profile selection with `get_runtime` {#profile-selection}
 
 `get_runtime` looks up a profile's `runtime` name in `RUNTIME_FACTORIES`
 (`"command"`, `"mock"`, `"client"`, `"managed"`) and constructs it. An unknown name
@@ -143,7 +162,54 @@ raises `KeyError`. If a `ModelsConfig` is passed *and* the factory is `CommandRu
 config is forwarded so unpinned agents resolve to `config.default` instead of the built-in
 `DEFAULT_MODEL`; other runtimes are constructed unchanged.
 
----
+## Example
+
+A deterministic run with `MockRuntime` — no model call, no network, no cost. Note the
+result text includes only the **fluid** input (`ticket`), not the **static** one (`repo`):
+the mock responder mirrors the prompt-injection boundary.
+
+```python
+import asyncio
+from crawfish.definition.types import Definition, TeamSpec, AgentSpec
+from crawfish.core.types import Parameter, Flow
+from crawfish.core.context import RunContext
+from crawfish.store import SqliteStore
+from crawfish.runtime import MockRuntime
+from crawfish.runtime.base import RunRequest
+
+# A one-agent Definition with a static config input and a fluid per-item input.
+definition = Definition(
+    team=TeamSpec(agents=[AgentSpec(role="triager", prompt="Classify the ticket.")]),
+    inputs=[
+        Parameter(name="repo", type="str", flow=Flow.STATIC),
+        Parameter(name="ticket", type="str", flow=Flow.FLUID),
+    ],
+)
+
+request = RunRequest(
+    definition=definition,
+    inputs={"repo": "acme/api", "ticket": "login button is broken"},
+)
+
+ctx = RunContext(store=SqliteStore())
+result = asyncio.run(MockRuntime().run(request, ctx))
+
+print(result.text)                       # only the fluid input appears
+print(result.model)
+print(result.cost_usd)
+print(len(result.events), result.events[0].kind.value)
+print(result.session_id == f"mock-{ctx.run_id}")
+```
+
+??? success "▶ Output"
+
+    ```text
+    [triager] processed: {"ticket": "login button is broken"}
+    mock
+    0.0
+    1 result
+    True
+    ```
 
 ## API reference
 
@@ -396,53 +462,9 @@ Instantiate the runtime named by `profile.runtime` from `RUNTIME_FACTORIES`
 and the factory is `CommandRuntime`, the config is forwarded so unpinned agents resolve to
 `config.default`; other factories are constructed with no arguments.
 
----
+## See also
 
-## Example
-
-A deterministic run with `MockRuntime` — no model call, no network, no cost. Note the
-result text includes only the **fluid** input (`ticket`), not the **static** one (`repo`):
-the mock responder mirrors the prompt-injection boundary.
-
-```python
-import asyncio
-from crawfish.definition.types import Definition, TeamSpec, AgentSpec
-from crawfish.core.types import Parameter, Flow
-from crawfish.core.context import RunContext
-from crawfish.store import SqliteStore
-from crawfish.runtime import MockRuntime
-from crawfish.runtime.base import RunRequest
-
-# A one-agent Definition with a static config input and a fluid per-item input.
-definition = Definition(
-    team=TeamSpec(agents=[AgentSpec(role="triager", prompt="Classify the ticket.")]),
-    inputs=[
-        Parameter(name="repo", type="str", flow=Flow.STATIC),
-        Parameter(name="ticket", type="str", flow=Flow.FLUID),
-    ],
-)
-
-request = RunRequest(
-    definition=definition,
-    inputs={"repo": "acme/api", "ticket": "login button is broken"},
-)
-
-ctx = RunContext(store=SqliteStore())
-result = asyncio.run(MockRuntime().run(request, ctx))
-
-print(result.text)                       # only the fluid input appears
-print(result.model)
-print(result.cost_usd)
-print(len(result.events), result.events[0].kind.value)
-print(result.session_id == f"mock-{ctx.run_id}")
-```
-
-??? success "▶ Output"
-
-    ```text
-    [triager] processed: {"ticket": "login button is broken"}
-    mock
-    0.0
-    1 result
-    True
-    ```
+- [Providers](providers.md) — the model backends `ProviderRuntime` fails over across, and
+  `resolve_model`.
+- [Definition](definition.md) — the compiled package a `RunRequest` carries.
+- [Core types](core-types.md) — `Parameter`, `Flow`, and the ABC-vs-model convention.

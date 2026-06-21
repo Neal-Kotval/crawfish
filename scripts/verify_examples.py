@@ -33,8 +33,17 @@ TEXT_BLOCK = re.compile(r"^ {4}```text\n(.*?)^ {4}```", re.DOTALL | re.MULTILINE
 
 
 def example_section(md: str) -> str | None:
+    """The content under the `## Example` heading, up to the next `##` heading.
+
+    Bounding to the section matters: a page may place its `## API reference`
+    (with non-runnable ```python signature blocks) after the example.
+    """
     idx = md.find("## Example")
-    return md[idx:] if idx != -1 else None
+    if idx == -1:
+        return None
+    rest = md[idx + len("## Example") :]
+    nxt = rest.find("\n## ")
+    return rest if nxt == -1 else rest[:nxt]
 
 
 def run(code: str) -> tuple[int, str]:

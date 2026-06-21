@@ -1,14 +1,12 @@
 # Output & wiring
 
-What a node emits and the rules for connecting it to the next node. An `Output`
-is the typed envelope of data crossing a node boundary; the wiring checks decide
-whether one node's `Output` can feed another node's required inputs.
+An `Output` is the typed envelope of data crossing a node boundary — the value a node
+produced, its schema, and which node emitted it. The wiring checks decide whether one
+node's `Output` can feed the next node's required inputs.
 
-**Symbols on this page:** `Output` · `output_satisfies_inputs` · `check_wire` · `WireError`
+`Output` · `output_satisfies_inputs` · `check_wire` · `WireError`
 
----
-
-## Core
+## Outputs and the wiring question
 
 A **node** is one step in a pipeline (a source, a batch, an aggregator). When a node
 finishes, it hands the next node an **`Output`**: a small envelope holding the *value*
@@ -17,30 +15,23 @@ and typing each slot), and the *id of the node that produced it*. The downstream
 reads only the `Output` — never the producer's internals.
 
 Two nodes wire together only when the upstream `Output` can supply every input the
-downstream node *requires*. That is a **structural check**, not a name-only one: every
-required input must be matched by name to a field in the output's schema *and* the two
-types must be compatible (see [structural compatibility](type-system.md) and
+downstream node *requires*. That is a **structural check**, not a name-only one: each
+required input must match a field in the output's schema by name, *and* the two types must
+be compatible (see [structural compatibility](type-system.md) and
 [`parameters_compatible`](core-types.md#parameters_compatible)).
 
-Two functions answer the wiring question, and they differ only in *how they report*:
+Two functions answer the wiring question. They differ only in *how they report*:
 
 - **`output_satisfies_inputs`** returns a plain `bool` — `True` if the wire is valid,
   `False` if not. Use it when you want to test a wire and branch on the result.
 - **`check_wire`** returns nothing on success and **raises `WireError`** on failure.
   Use it to *enforce* a wire — to fail loudly at build time rather than silently.
 
-`WireError` is the exception both paths revolve around: it is what `check_wire` throws
-when an `Output` cannot satisfy the inputs.
-
 An `Output` is **frozen** — immutable once produced. A node that transforms a value
 (a filter, say) does not mutate the upstream `Output`; it calls `derive` to mint a
 *fresh* one, leaving the original intact for audit.
 
----
-
-## Ramps up
-
-### What rides along inside an `Output`
+## What rides along inside an `Output`
 
 Beyond the value and its schema, an `Output` threads two pieces of provenance:
 
@@ -50,14 +41,19 @@ Beyond the value and its schema, an `Output` threads two pieces of provenance:
   `Output` instance.
 - **`tainted`** — `True` when the value derives from **fluid** input. *Fluid* means
   untrusted session data that streams in per item (a ticket body, a PR diff) — the
-  prompt-injection boundary defined in [core types](core-types.md#flow). A tainted value
-  must never become a sink target or an idempotency key, per the
-  [security spine](../architecture/SECURITY.md).
+  prompt-injection boundary from [core types](core-types.md#flow).
 
 Both propagate through `derive`: a value derived from a tainted `Output` stays tainted
 and keeps the upstream lineage unless you explicitly override them.
 
-### Why `Output` is frozen, and how `derive` works
+!!! warning "Taint propagates — and gates consequential targets"
+
+    A value derived from fluid input stays `tainted` all the way down. A tainted value must
+    never become a sink target or an idempotency key, per the
+    [security spine](../architecture/SECURITY.md). `derive` carries taint forward by default,
+    so you can't quietly launder untrusted data into a trusted slot.
+
+## Why `Output` is frozen, and how `derive` works
 
 `Output` sets `model_config = {"frozen": True}`, so any attempt to mutate a field after
 construction raises. Transforms therefore use `derive(...)` — a keyword-only method that
@@ -66,7 +62,7 @@ copies the current `Output` into a new one with a new `value` and `produced_by`,
 intermediate `Output` immutable means the upstream value survives for audit and re-runs
 are reproducible.
 
-### How `output_satisfies_inputs` decides
+## How `output_satisfies_inputs` decides
 
 The check is name-matched and required-aware. It indexes the output's schema by parameter
 name, then walks each downstream input:
@@ -83,14 +79,58 @@ checked for every name that *does* match. Both checks resolve type strings throu
 structural [type registry](type-system.md) ([ADR 0002](../architecture/decisions/0002-structural-type-registry.md)),
 never by string equality.
 
-### `WireError` is a `TypeError`
+!!! note "Good to know"
 
-`WireError` subclasses `TypeError`, not bare `Exception` — wiring failures *are* type
-errors, so callers that already catch `TypeError` catch these too. `check_wire` is a
-thin wrapper: it calls `output_satisfies_inputs` and, on `False`, raises a `WireError`
-whose message lists the output's schema field names and the inputs that wanted filling.
+    `WireError` subclasses `TypeError`, not bare `Exception` — wiring failures *are* type
+    errors, so callers that already catch `TypeError` catch these too. `check_wire` is a thin
+    wrapper: it calls `output_satisfies_inputs` and, on `False`, raises a `WireError` whose
+    message lists the output's schema field names and the inputs that wanted filling.
 
----
+## Example
+
+A compatible wire passes both checks; an incompatible one raises `WireError`. Pure,
+no runtime needed — `derive` shows taint propagating while the upstream stays frozen.
+
+```python
+from crawfish.output import Output, output_satisfies_inputs, check_wire, WireError
+from crawfish import Parameter, Flow
+
+# A node that emits a list of PRs (fluid/untrusted), tagged with its producer id.
+emitted = Output(
+    output_schema=[Parameter(name="prs", type="list[PR]", flow=Flow.FLUID)],
+    value=[{"number": 1}],
+    produced_by="source-1",
+    tainted=True,
+)
+
+# A downstream node that requires a `prs` input.
+wants = [Parameter(name="prs", type="list[PR]", required=True)]
+print(output_satisfies_inputs(emitted, wants))   # compatible
+check_wire(emitted, wants)                        # does not raise
+print("wire ok")
+
+# A downstream node that requires a port the output never emits.
+needs_author = [Parameter(name="author", type="str", required=True)]
+print(output_satisfies_inputs(emitted, needs_author))   # not satisfiable
+try:
+    check_wire(emitted, needs_author)
+except WireError as e:
+    print(f"WireError: {e}")
+
+# Taint propagates through derive; the upstream stays frozen.
+child = emitted.derive(value=[{"number": 1, "ok": True}], produced_by="filter-1")
+print("tainted propagated:", child.tainted)
+```
+
+??? success "▶ Output"
+
+    ```text
+    True
+    wire ok
+    False
+    WireError: output (schema fields ['prs']) cannot satisfy inputs {'author': 'str'}
+    tainted propagated: True
+    ```
 
 ## API reference
 
@@ -169,50 +209,8 @@ Enforcing form of the check: returns `None` when the wire is valid, otherwise ra
 downstream node's inputs. The message reports the output's schema field names and the
 inputs that went unsatisfied.
 
----
+## See also
 
-## Example
-
-A compatible wire passes both checks; an incompatible one raises `WireError`. Pure,
-no runtime needed — `derive` shows taint propagating while the upstream stays frozen.
-
-```python
-from crawfish.output import Output, output_satisfies_inputs, check_wire, WireError
-from crawfish import Parameter, Flow
-
-# A node that emits a list of PRs (fluid/untrusted), tagged with its producer id.
-emitted = Output(
-    output_schema=[Parameter(name="prs", type="list[PR]", flow=Flow.FLUID)],
-    value=[{"number": 1}],
-    produced_by="source-1",
-    tainted=True,
-)
-
-# A downstream node that requires a `prs` input.
-wants = [Parameter(name="prs", type="list[PR]", required=True)]
-print(output_satisfies_inputs(emitted, wants))   # compatible
-check_wire(emitted, wants)                        # does not raise
-print("wire ok")
-
-# A downstream node that requires a port the output never emits.
-needs_author = [Parameter(name="author", type="str", required=True)]
-print(output_satisfies_inputs(emitted, needs_author))   # not satisfiable
-try:
-    check_wire(emitted, needs_author)
-except WireError as e:
-    print(f"WireError: {e}")
-
-# Taint propagates through derive; the upstream stays frozen.
-child = emitted.derive(value=[{"number": 1, "ok": True}], produced_by="filter-1")
-print("tainted propagated:", child.tainted)
-```
-
-??? success "▶ Output"
-
-    ```text
-    True
-    wire ok
-    False
-    WireError: output (schema fields ['prs']) cannot satisfy inputs {'author': 'str'}
-    tainted propagated: True
-    ```
+- [Core types](core-types.md) — `Parameter`, `Flow`, and `parameters_compatible`, the atoms a schema is built from.
+- [Type system](type-system.md) — how the `type` strings resolve and compare by shape.
+- [Validation](validation.md) — checking a node's actual output against the schema it declared.

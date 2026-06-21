@@ -18,7 +18,7 @@ exemplar **exactly** in structure, depth, length, and tone.
 - `---`
 - `## Core` — plain English, every term defined before use. ZERO unexplained jargon: no
   "taint", "fan-out", "fluid", "ADR", "idempotent" without a gloss in plain words.
-- `## Ramps up` — mechanics, invariants, edge cases, design rationale. Cite the relevant
+- `## How it works` — mechanics, invariants, edge cases, design rationale. Cite the relevant
   ADR by number with a link to `../architecture/decisions/` when one applies. Use `###` subheads.
 - `## API reference` — exact signature/fields/members for EVERY assigned symbol, verified
   against source. Use tables for model fields (Field | Type | Default | Notes) and enum

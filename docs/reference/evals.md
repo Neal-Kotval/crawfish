@@ -1,18 +1,17 @@
 # Evals
 
-The eval *data* lifecycle: capture real runs as reusable examples, curate them
-into versioned collections, grade outputs, and gate a new version against a stored
-baseline so quality can't silently regress. The scoring *types* (`Metric`, `Rubric`)
-live in [metrics](metrics.md); this page is everything that turns runs into a
-durable, gradable corpus. These live in `crawfish.eval`.
+An **eval** turns real agent runs into a durable, gradable corpus: capture runs as reusable
+examples, gather them into versioned collections, grade their outputs, and gate each new
+version against a saved baseline so quality can't silently regress. You reach for evals when
+you want a change to *prove* it didn't make the agent worse before it ships.
 
-**Symbols on this page:** `EvalCase` · `GoldenSet` · `LLMJudge` · `capture_case` ·
-`grade_output` · `save_baseline` · `load_baseline` · `gate_against_baseline` ·
-`upconvert_case` · `migrate_golden_set`
+`EvalCase` · `GoldenSet` · `LLMJudge` · `capture_case` · `grade_output` · `save_baseline` ·
+`load_baseline` · `gate_against_baseline` · `upconvert_case` · `migrate_golden_set`
 
----
+The scoring *types* (`Metric`, `Rubric`) live in [metrics](metrics.md); this page covers
+everything that turns runs into a durable corpus. It all lives in `crawfish.eval`.
 
-## Core
+## Cases, golden sets, grading, and the gate
 
 An **eval case** is one worked example: the **inputs** that went into a run, the
 **output** it produced, and an optional **label** — a human's judgment of what the
@@ -42,13 +41,9 @@ baseline, and returns `True` only if no metric got worse. Wire that into CI and 
 change that degrades quality fails the build.
 
 `upconvert_case` and `migrate_golden_set` handle an older storage format —
-explained under [Ramps up](#schema-migration-the-string-era).
+explained under [Schema migration](#schema-migration-the-string-era).
 
----
-
-## Ramps up
-
-### Grading: coded metrics vs. the LLM judge
+## Grading: coded metrics vs. the LLM judge
 
 The two graders are complementary, not redundant. Coded metrics (a `Rubric`) are
 cheap, deterministic, and catch structural failures — a missing field, a wrong enum,
@@ -60,14 +55,19 @@ articulate: faithfulness, tone, whether an answer actually addresses the questio
 by each metric's or judge's `name`. A judge's score keys under `LLMJudge.name`
 (default `"llm_judge"`), so two judges must carry distinct names to avoid clobbering.
 
-The judge feeds the candidate output to the grading agent as **fluid** input —
-untrusted session data that reaches the model as data to read, never as instructions
-to obey (the [security spine](../architecture/SECURITY.md)). The agent's free-text
-verdict is parsed for the first number and clamped to `[0, 1]`; a verdict with no
-number scores `0.0`. Under a `MockRuntime` (or record/replay) the judge is fully
-deterministic, which is what keeps eval suites reproducible.
+The agent's free-text verdict is parsed for the first number and clamped to `[0, 1]`; a
+verdict with no number scores `0.0`. Under a `MockRuntime` (or record/replay) the judge is
+fully deterministic, which is what keeps eval suites reproducible.
 
-### The eval gate
+!!! warning "The judged output is fluid"
+
+    The judge feeds the candidate output to the grading agent as **FLUID (untrusted)**
+    input — session data that reaches the model as data to *read*, never as instructions
+    to *obey* (the [security spine](../architecture/SECURITY.md)). An output that tries to
+    talk the judge into a perfect score is just text the judge reads, not a command it
+    follows.
+
+## The eval gate
 
 `gate_against_baseline` is the regression check. It loads the stored baseline,
 compares it to the candidate score-by-score, and returns `True` (pass) unless some
@@ -86,7 +86,14 @@ Two edge cases matter:
 Metrics present on only one side are treated as `0.0` on the other, so the baseline
 and candidate vectors need not have identical keys.
 
-### Schema migration: the string era
+!!! note "Good to know"
+
+    The gate only ever blocks on a *regression* — a metric that dropped. A candidate that
+    holds steady or improves on every metric always passes, even at `tolerance=0.0`. The
+    very first run, with no stored baseline, also passes: there is nothing to regress
+    against, so the first run establishes the bar rather than failing the build.
+
+## Schema migration: the string era
 
 Golden sets captured before the typed-output change stored `output` and `label` as
 JSON-encoded **strings**; metrics now read the **typed** value. `upconvert_case`
@@ -105,7 +112,65 @@ one-time bulk lift — call `GoldenSet.migrate`, or the module-level
 `migrate_golden_set` convenience wrapper; both return the count of cases that
 actually changed.
 
----
+## Example
+
+Build a small golden set, grade outputs with a coded (non-model) rubric, save a
+baseline, then gate a matching candidate (pass) and a regressed one (fail). Fully
+deterministic — no runtime, no model.
+
+```python
+from crawfish.store.sqlite import SqliteStore
+from crawfish.output import Output
+from crawfish.metrics import Rubric, FieldPresent, FieldExactMatch
+from crawfish.eval import (
+    EvalCase, GoldenSet, capture_case,
+    save_baseline, load_baseline, gate_against_baseline,
+)
+
+store = SqliteStore(":memory:")
+
+# A golden set is a named, versioned collection of cases.
+golden = GoldenSet(store, "triage", version="0.1")
+golden.add(EvalCase(inputs={"ticket": "disk full"},
+                    output={"team": "infra", "priority": "high"}))
+golden.add(EvalCase(inputs={"ticket": "typo in docs"},
+                    output={"team": "docs", "priority": "low"}))
+print("cases:", len(golden.cases()))
+
+# Capture a fresh run as a case (no model — a plain Output).
+out = Output(value={"team": "infra", "priority": "high"}, produced_by="router-1")
+case = capture_case(inputs={"ticket": "disk full"}, output=out, label={"team": "infra"})
+print("produced_by:", case.produced_by, "| label:", case.label)
+
+# Grade an output with a NON-model rubric (deterministic, no runtime).
+rubric = Rubric([FieldPresent("team"),
+                 FieldExactMatch("infra", field="team")])
+good = Output(value={"team": "infra", "priority": "high"}, produced_by="v2")
+scores = rubric.score(good)
+print("scores:", scores)
+
+# Save a baseline, then gate candidates against it.
+save_baseline(store, "triage", scores)
+print("baseline:", load_baseline(store, "triage"))
+
+# Same scores -> passes the gate.
+print("pass:", gate_against_baseline(store, "triage", scores))
+
+# A regression (team field now wrong) -> fails the gate.
+bad = Output(value={"team": "WRONG", "priority": "high"}, produced_by="v3")
+print("fail:", gate_against_baseline(store, "triage", rubric.score(bad)))
+```
+
+??? success "▶ Output"
+
+    ```text
+    cases: 2
+    produced_by: router-1 | label: {'team': 'infra'}
+    scores: {'field_present[team]': 1.0, 'field_exact_match[team]': 1.0}
+    baseline: {'field_present[team]': 1.0, 'field_exact_match[team]': 1.0}
+    pass: True
+    fail: False
+    ```
 
 ## API reference
 
@@ -250,69 +315,8 @@ def migrate_golden_set(
 Bulk-migrate a named/versioned golden set's cases to typed values in place. A
 convenience wrapper over `GoldenSet.migrate`; returns the number of cases rewritten.
 
----
+## See also
 
-## Example
-
-Build a small golden set, grade outputs with a coded (non-model) rubric, save a
-baseline, then gate a matching candidate (pass) and a regressed one (fail). Fully
-deterministic — no runtime, no model.
-
-```python
-from crawfish.store.sqlite import SqliteStore
-from crawfish.output import Output
-from crawfish.metrics import Rubric, FieldPresent, FieldExactMatch
-from crawfish.eval import (
-    EvalCase, GoldenSet, capture_case,
-    save_baseline, load_baseline, gate_against_baseline,
-)
-
-store = SqliteStore(":memory:")
-
-# A golden set is a named, versioned collection of cases.
-golden = GoldenSet(store, "triage", version="0.1")
-golden.add(EvalCase(inputs={"ticket": "disk full"},
-                    output={"team": "infra", "priority": "high"}))
-golden.add(EvalCase(inputs={"ticket": "typo in docs"},
-                    output={"team": "docs", "priority": "low"}))
-print("cases:", len(golden.cases()))
-
-# Capture a fresh run as a case (no model — a plain Output).
-out = Output(value={"team": "infra", "priority": "high"}, produced_by="router-1")
-case = capture_case(inputs={"ticket": "disk full"}, output=out, label={"team": "infra"})
-print("produced_by:", case.produced_by, "| label:", case.label)
-
-# Grade an output with a NON-model rubric (deterministic, no runtime).
-rubric = Rubric([FieldPresent("team"),
-                 FieldExactMatch("infra", field="team")])
-good = Output(value={"team": "infra", "priority": "high"}, produced_by="v2")
-scores = rubric.score(good)
-print("scores:", scores)
-
-# Save a baseline, then gate candidates against it.
-save_baseline(store, "triage", scores)
-print("baseline:", load_baseline(store, "triage"))
-
-# Same scores -> passes the gate.
-print("pass:", gate_against_baseline(store, "triage", scores))
-
-# A regression (team field now wrong) -> fails the gate.
-bad = Output(value={"team": "WRONG", "priority": "high"}, produced_by="v3")
-print("fail:", gate_against_baseline(store, "triage", rubric.score(bad)))
-```
-
-??? success "▶ Output"
-
-    ```text
-    cases: 2
-    produced_by: router-1 | label: {'team': 'infra'}
-    scores: {'field_present[team]': 1.0, 'field_exact_match[team]': 1.0}
-    baseline: {'field_present[team]': 1.0, 'field_exact_match[team]': 1.0}
-    pass: True
-    fail: False
-    ```
-
-Grading and gating are the close of the quality loop: capture runs into a golden set,
-score them, and let `gate_against_baseline` block any version that drops below the
-bar. To improve a Definition *toward* that bar rather than merely guard it, see
-[the tuner and learning loop](tuner-and-learning.md).
+- [Metrics](metrics.md) — the `Metric` and `Rubric` graders the rubric path scores with.
+- [Tuner & learning](tuner-and-learning.md) — improve a Definition *toward* the bar, not just guard it.
+- [Persistence](persistence.md) — the `Store` seam a `GoldenSet` and baseline persist through.

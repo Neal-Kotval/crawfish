@@ -1,17 +1,12 @@
 # Anomaly & auto-halt
 
-The safety backstop that *acts* on a run's typed event stream: a small rule engine
-watches the emissions a run produces and, when something looks runaway — cost spiking,
-runs failing, a loop flooding events — escalates from a flagged finding all the way up
-to killing the run. These live in `crawfish.anomaly`.
+The safety backstop that *acts* on a run's typed event stream. A small rule engine
+watches the emissions a run produces, and when something looks runaway — cost spiking,
+runs failing, a loop flooding events — it escalates from a flagged warning all the way
+up to killing the run. These live in `crawfish.anomaly`.
 
-**Symbols on this page:** `Response` · `AnomalyRule` · `CostSpikeRule` ·
-`FailureRateRule` · `StuckRunRule` · `EmissionFloodRule` · `BudgetApproachingRule` ·
-`Firing` · `AnomalyEngine` · `read_and_guard`
-
----
-
-## Core
+`Response` · `AnomalyRule` · `CostSpikeRule` · `FailureRateRule` · `StuckRunRule` ·
+`EmissionFloodRule` · `BudgetApproachingRule` · `Firing` · `AnomalyEngine` · `read_and_guard`
 
 Every running pipeline produces an **emission stream** — a sequence of typed events
 (`crawfish.emission.Emission`): a run started, a model call cost this much, a run
@@ -43,21 +38,18 @@ That kill-switch is two levers on the run's context (`crawfish.core.context.RunC
   spent makes the next charge raise `BudgetExceeded`, blocking even a loop that ignores
   the cancel token.
 
-**Why this is safe to trust.** A halt must never be triggerable by the very input the
-agent is processing. So rules read *only* typed, numeric signals — a cost figure, a
-failure count, an event count, a run's age — never free text that came from outside.
-A value that derived from **fluid** (untrusted, per-item) data is marked *tainted* (carries
-a flag warning it may be compromised); the firing records that taint for the dashboard, but
-it never changes the decision, because
-the decision was computed from numbers a compromised agent can't reach. And the rules
-run in the **orchestrator** (the trusted parent process), never inside the sandboxed
-child that runs the agent, so a hijacked agent can't switch them off.
+!!! warning "A halt can't be triggered by the input being processed"
 
----
+    A halt must never be triggerable by the very input the agent is processing. So rules
+    read *only* typed, numeric signals — a cost figure, a failure count, an event count, a
+    run's age — never free text from outside. A value derived from **fluid** (untrusted,
+    per-item) data is marked *tainted*. The firing records that taint for the dashboard,
+    but it never changes the decision: the decision was computed from numbers a compromised
+    agent can't reach. And the rules run in the **orchestrator** — the trusted parent
+    process — never inside the sandboxed child that runs the agent, so a hijacked agent
+    can't switch them off.
 
-## Ramps up
-
-### The tiered response, and what "halt" actually does
+## The tiered response, and what "halt" actually does
 
 `Response` is ordered `FLAG < ALERT < HALT`. The first two only differ in the severity
 of the finding they emit (`WARN` vs `CRITICAL`); neither stops anything. `HALT` is the
@@ -74,7 +66,7 @@ slightly negative on purpose, so the non-cooperative lever fires unconditionally
 next `charge(...)`, including `charge(0.0)`. `_halt` is idempotent — calling it twice is
 harmless.
 
-### Determinism: rules never read a wall clock
+## Determinism: rules never read a wall clock
 
 Every rule is evaluated against a single `now` value. `AnomalyEngine.evaluate` resolves
 it: if you don't pass `now`, it uses the **latest emission `ts`** in the stream (or `0.0`
@@ -84,7 +76,7 @@ No rule consults the real clock in a way that affects its outcome, so a fixed sy
 stream flags, alerts, and halts **identically every run** — which is what lets the
 example below assert exact output.
 
-### What each rule trips on
+## What each rule trips on
 
 | Rule | Reads (from `Emission.attrs` / kind) | Breaches when |
 | --- | --- | --- |
@@ -99,14 +91,14 @@ inclusive (`≥`), failure rate and stuck-run are strict (`>`). `EmissionFloodRu
 `BudgetApproachingRule` ignore taint and look across the whole stream (flood is windowed
 by count, budget is cumulative); the others window by `ts`.
 
-### Default responses differ per rule
+!!! note "Good to know"
 
-Most rules default to `Response.FLAG`, but two don't: `EmissionFloodRule` defaults to
-`HALT` (an event flood is a loop runaway — stop it), and `BudgetApproachingRule`
-defaults to `ALERT` (an early warning *before* the hard `CostBudget` ceiling, while
-there's still budget left to act on). Pass `response=` to override any of them.
+    Most rules default to `Response.FLAG`, but two don't: `EmissionFloodRule` defaults to
+    `HALT` (an event flood is a loop runaway — stop it), and `BudgetApproachingRule`
+    defaults to `ALERT` (an early warning *before* the hard `CostBudget` ceiling, while
+    there's still budget left to act on). Pass `response=` to override any of them.
 
-### `guard` vs `evaluate`, and `read_and_guard`
+## `guard` vs `evaluate`, and `read_and_guard`
 
 `AnomalyEngine.evaluate` is **pure**: run the rules, return the firings, touch nothing.
 `AnomalyEngine.guard` is the orchestrator entry point — it evaluates, emits each finding
@@ -119,8 +111,6 @@ iterations: it reads the run's emissions from the store and `guard`s them.
 `AnomalyEngine.enforce_budget(ctx, amount_usd)` is a separate convenience for spend
 paths: it charges the budget and, on `BudgetExceeded`, also trips the cancel token so a
 cooperative loop stops too.
-
----
 
 ## API reference
 
@@ -319,8 +309,6 @@ Reads a run's emissions from the store (`run_id` defaults to `ctx.run_id`, `stor
 `ctx.store`) via `crawfish.emission.read_emissions`, then `engine.guard`s them. The
 live-tail point the executor calls between iterations. Deterministic given a fixed `now`.
 
----
-
 ## Example
 
 A seeded synthetic stream: two of three runs failed, and $2.75 of model spend lands in
@@ -370,3 +358,9 @@ print("any halts ->", any(f.halts for f in firings))
       [cost.spike] halt halts=True :: $2.75 model spend in 5m (≥ $2.00)
     any halts -> True
     ```
+
+## See also
+
+- [Observer](observer.md) — the watchdog tier that *reports* on the same runs without acting.
+- [Emission, inspector & visualize](emission-inspector-visualize.md) — the typed stream rules read.
+- [Context & budgets](context-and-budgets.md) — the `CancelToken` and `CostBudget` a halt trips.

@@ -1,19 +1,20 @@
 # Metrics
 
-How agent quality becomes a number you can compare across versions. A metric scores
-one output to a float; rubrics bundle metrics into a score vector; benchmarks run a
-rubric over a task set and aggregate. These live in `crawfish.metrics` and feed the
-[evaluation harness](evals.md) — metrics are the graders evals run.
+A **metric** scores one agent output to a `float` — the unit of agent quality you can
+compare across versions. A **rubric** bundles metrics into a score vector; a **benchmark**
+runs a rubric over a set of tasks and averages the results. You reach for these when you
+want to know whether a change made an agent better or worse, not just different.
 
-**Symbols on this page:** `Metric` · `Rubric` · `Benchmark` · `output_number` ·
-`field_present` · `is_nonempty` · `confidence_threshold` · `FieldExactMatch` ·
-`SetOverlap` · `NumericTolerance` · `SchemaConformance` · `StructuralMatch` ·
-`field_exact_match` · `set_overlap` · `numeric_tolerance` · `schema_conformance` ·
-`structural_match` · `compare` · `is_regression`
+`Metric` · `Rubric` · `Benchmark` · `output_number` · `field_present` · `is_nonempty` ·
+`confidence_threshold` · `FieldExactMatch` · `SetOverlap` · `NumericTolerance` ·
+`SchemaConformance` · `StructuralMatch` · `field_exact_match` · `set_overlap` ·
+`numeric_tolerance` · `schema_conformance` · `structural_match` · `compare` ·
+`is_regression`
 
----
+All three live in `crawfish.metrics` and feed the [evaluation harness](evals.md) —
+metrics are the graders evals run.
 
-## Core
+## Outputs, metrics, and scores
 
 An **output** is what an agent produced for one task — a number, a string, or a typed
 record (a `dict`). A **metric** looks at one output and returns a single `float`: a
@@ -41,12 +42,7 @@ same tasks, then `compare` the two vectors to get per-metric deltas, and `is_reg
 tells you whether the new version got worse on anything. This is the **improvement
 loop**: change the agent, re-score, ship only if nothing regressed.
 
-Every example here stays deterministic by scoring outputs directly — no model call, so
-scores never drift.
-
----
-
-## Ramps up
+## Picking a metric
 
 ### Class and factory come in pairs
 
@@ -62,6 +58,13 @@ common arguments and nothing more. The classes accept one extra keyword the fact
 don't: `name`, to override the auto-generated metric name (which is what keys the rubric
 vector). Reach for the class when you need a custom name or a metric mode the factory
 doesn't surface; otherwise use the factory.
+
+!!! note "Good to know"
+
+    The class and factory are paired for a reason: the factory covers the common path,
+    the class adds `name`. Set `name` when two metrics of the same kind would otherwise
+    collide on the same auto-generated key in a rubric vector — distinct names keep both
+    scores from clobbering each other.
 
 ### Reading the typed value
 
@@ -98,7 +101,7 @@ Every comparator returns a float in `[0, 1]`. The scoring rule differs:
   otherwise `1 - changes/total_paths`, so a value differing in one of ten fields scores
   `0.9`.
 
-### Comparing two score vectors
+## Comparing two score vectors
 
 `compare(a, b)` returns per-metric deltas `b - a` (read as *candidate minus baseline*):
 positive means the candidate improved, negative means it dropped. Metrics present on
@@ -110,14 +113,70 @@ same keys.
 absorbs scoring noise. Higher-is-better is assumed for every metric — a metric where
 lower is better must be inverted before it reaches these functions.
 
-### Determinism by construction
+!!! note "Good to know"
 
-A `Benchmark` drives each task through a real `Run`, so it needs an `AgentRuntime`.
-Pair it with `MockRuntime` (see the [evals reference](evals.md)) and the whole loop is
-deterministic — no live model call, so iterating on metrics never burns budget and
-scores never shift between runs.
+    A `Benchmark` drives each task through a real `Run`, so it needs an `AgentRuntime`.
+    Pair it with `MockRuntime` (see the [evals reference](evals.md)) and the whole loop is
+    deterministic — no live model call, so iterating on metrics never burns budget and
+    scores never shift between runs. Every example here scores outputs directly, so scores
+    never drift.
 
----
+## Example
+
+Score one output with three comparators, then run `compare` + `is_regression` on a
+baseline and a candidate score vector. Pure and in-memory — no runtime needed.
+
+```python
+from crawfish.metrics import (
+    field_exact_match,
+    set_overlap,
+    numeric_tolerance,
+    Rubric,
+    compare,
+    is_regression,
+)
+from crawfish.output import Output
+
+# A typed output: an agent's structured verdict on a ticket.
+out = Output(
+    produced_by="triage-agent",
+    value={
+        "label": "bug",
+        "tags": ["crash", "ui"],   # expected also wants "ux" -> partial overlap
+        "confidence": 0.82,
+    },
+)
+
+rubric = Rubric([
+    field_exact_match("bug", field="label"),
+    set_overlap(["crash", "ui", "ux"], field="tags"),         # F1 over 2-of-3
+    numeric_tolerance(0.80, field="confidence", tol=0.05),    # 0.82 within 0.05
+])
+scores = rubric.score(out)
+for name, value in scores.items():
+    print(f"{name}: {round(value, 3)}")
+
+# Improvement loop: baseline vs candidate score vectors over the same metrics.
+baseline  = {"accuracy": 0.90, "coverage": 0.70}
+candidate = {"accuracy": 0.92, "coverage": 0.55}   # coverage dropped
+delta = compare(baseline, candidate)
+for name in sorted(delta):                          # sort: dict order is hash-seeded
+    print(f"delta {name}: {round(delta[name], 3)}")
+print("regressed (tol=0.0):", is_regression(baseline, candidate))
+print("regressed (tol=0.2):", is_regression(baseline, candidate, tolerance=0.2))
+```
+
+??? success "▶ Output"
+
+    ```text
+    field_exact_match[label]: 1.0
+    set_overlap.f1[tags]: 0.8
+    numeric_tolerance[confidence]: 1.0
+    delta accuracy: 0.02
+    delta coverage: -0.15
+    regressed (tol=0.0): True
+    regressed (tol=0.2): False
+    ```
 
 ## API reference
 
@@ -295,61 +354,8 @@ def is_regression(
 `True` if `candidate` is worse than `baseline` on any metric — i.e. some delta drops
 below `-tolerance`. Higher-is-better is assumed for every metric.
 
----
+## See also
 
-## Example
-
-Score one output with three comparators, then run `compare` + `is_regression` on a
-baseline and a candidate score vector. Pure and in-memory — no runtime needed.
-
-```python
-from crawfish.metrics import (
-    field_exact_match,
-    set_overlap,
-    numeric_tolerance,
-    Rubric,
-    compare,
-    is_regression,
-)
-from crawfish.output import Output
-
-# A typed output: an agent's structured verdict on a ticket.
-out = Output(
-    produced_by="triage-agent",
-    value={
-        "label": "bug",
-        "tags": ["crash", "ui"],   # expected also wants "ux" -> partial overlap
-        "confidence": 0.82,
-    },
-)
-
-rubric = Rubric([
-    field_exact_match("bug", field="label"),
-    set_overlap(["crash", "ui", "ux"], field="tags"),         # F1 over 2-of-3
-    numeric_tolerance(0.80, field="confidence", tol=0.05),    # 0.82 within 0.05
-])
-scores = rubric.score(out)
-for name, value in scores.items():
-    print(f"{name}: {round(value, 3)}")
-
-# Improvement loop: baseline vs candidate score vectors over the same metrics.
-baseline  = {"accuracy": 0.90, "coverage": 0.70}
-candidate = {"accuracy": 0.92, "coverage": 0.55}   # coverage dropped
-delta = compare(baseline, candidate)
-for name in sorted(delta):                          # sort: dict order is hash-seeded
-    print(f"delta {name}: {round(delta[name], 3)}")
-print("regressed (tol=0.0):", is_regression(baseline, candidate))
-print("regressed (tol=0.2):", is_regression(baseline, candidate, tolerance=0.2))
-```
-
-??? success "▶ Output"
-
-    ```text
-    field_exact_match[label]: 1.0
-    set_overlap.f1[tags]: 0.8
-    numeric_tolerance[confidence]: 1.0
-    delta accuracy: 0.02
-    delta coverage: -0.15
-    regressed (tol=0.0): True
-    regressed (tol=0.2): False
-    ```
+- [Evals](evals.md) — capture runs into golden sets and gate each version on these scores.
+- [Tuner & learning](tuner-and-learning.md) — search for a better Definition against a benchmark.
+- [Core types](core-types.md) — the `Parameter` and `Output` shapes these metrics read.
