@@ -125,6 +125,15 @@ All four built concurrently off `main`, each through its review gauntlet, merged
 - **CRA-173** unified provider layer — `ProviderRuntime` (failover + `ProviderPolicy` gating + alias-expand-all-entries + uniform telemetry/cost), `MockProvider`/`ClientProvider`. **Security sequencing upheld: zero egress / zero `.env` key onboarding; credential acquisition deferred to CRA-178.** Review APPROVE.
 - **CRA-175** evals + metrics expansion — typed-value metrics (FieldExactMatch/SetOverlap/NumericTolerance/SchemaConformance/StructuralMatch), golden-set string→typed migration, deterministic LLM-judge, multi-JSON guard. Review APPROVE + MINOR (test registry collision) hardened post-merge.
 
+### ✅ CRA-187 / CRA-190 / CRA-192 — phase-2a — DONE (merged)
+- **CRA-187** (spike): ADR 0015 — **in-house deterministic search, NOT DSPy** (DSPy makes live LM calls, bypasses the AgentRuntime seam, can't be replay-deterministic). Gates CRA-176 with concrete guidance.
+- **CRA-190** anomaly/auto-halt: `anomaly.py` rule engine over the Emission stream; tiered FLAG/ALERT/HALT; kill-switch trips CancelToken + forces CostBudget over ceiling. Non-spoofable (acts on typed signals only). Review APPROVE + 2 fast-follows (unconditional HALT at zero spend; zero-budget guard).
+- **CRA-192** model aliases: `crawfish.toml [models]` → `ModelsConfig` threaded to runtime+cost; Claude-first back-compat preserved; alias→alias rejected at load. Review pending → merged on green gate.
+
+**Phase-2a status: 11/12 merged** (184, 171, 172, 191, 185, 173, 192, 175, 187, 181, 190). Only **CRA-176 (Tuner)** remains — in progress. Integrated gate on `main`: ruff/format/mypy-strict clean (74 files) · **pytest 497 passed**.
+
+**Orchestration note:** parallel worktree agents are fast but git-state-fragile — a doc-only spike run in the *main* checkout concurrent with merges, plus worktree `uv sync`, tangled HEAD/branch refs and re-pointed the editable install once. Recovered each time (worktree prune + `uv sync` + verify `crawfish.__file__`). Lesson: keep spikes/doc-only work OUT of the main checkout during merges; one big-issue worktree at a time.
+
 ## Review-surfaced notes for downstream issues
 - **CRA-185** (taint-conformance suite): add explicit acceptance criterion — `tool`/MCP-result
   emissions MUST be `tainted=True`. The Emission envelope *carries* taint; producers enforce it.
