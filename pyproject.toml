@@ -50,3 +50,6 @@ disallow_untyped_defs = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["packages/crawfish/tests", "packages/crawfish-slack/tests"]
+markers = [
+    "integration: real-sandbox / external-primitive tests; capability-probed, auto-skip in CI",
+]

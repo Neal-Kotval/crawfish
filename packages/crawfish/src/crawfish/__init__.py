@@ -122,6 +122,26 @@ from crawfish.executor import (
     Roadmap,
 )
 from crawfish.inspector import RunReport, format_report, inspect_run, tail_events
+from crawfish.jail import (
+    BwrapJail,
+    Denial,
+    DenialKind,
+    FakeJail,
+    Jail,
+    JailPath,
+    JailResult,
+    NoJail,
+    PathMode,
+    SandboxPolicy,
+    SeatbeltJail,
+    StaticOnlyError,
+    TaintSet,
+    UnsupportedPlatformError,
+    emit_denials,
+    registry_descriptors,
+    rehydrate_registry,
+    select_jail,
+)
 from crawfish.ledger import ExecState, ExecutionLedger
 from crawfish.manage import PipelineStatus, format_table, manage_list, restart_target
 from crawfish.memory import Memory
@@ -569,6 +589,25 @@ __all__ = [
     "EgressBroker",
     "EgressDenied",
     "run_out_of_process",
+    # Phase 2 — sandboxed pipelines (CRA-179, the Jail abstraction, ADR 0016)
+    "Jail",
+    "FakeJail",
+    "NoJail",
+    "BwrapJail",
+    "SeatbeltJail",
+    "JailPath",
+    "PathMode",
+    "JailResult",
+    "Denial",
+    "DenialKind",
+    "SandboxPolicy",
+    "TaintSet",
+    "StaticOnlyError",
+    "UnsupportedPlatformError",
+    "select_jail",
+    "registry_descriptors",
+    "rehydrate_registry",
+    "emit_denials",
     # Phase 2 contracts (CRA-184 interface freeze)
     "Emission",
     "EmissionKind",
