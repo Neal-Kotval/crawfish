@@ -134,6 +134,14 @@ All four built concurrently off `main`, each through its review gauntlet, merged
 
 **Orchestration note:** parallel worktree agents are fast but git-state-fragile — a doc-only spike run in the *main* checkout concurrent with merges, plus worktree `uv sync`, tangled HEAD/branch refs and re-pointed the editable install once. Recovered each time (worktree prune + `uv sync` + verify `crawfish.__file__`). Lesson: keep spikes/doc-only work OUT of the main checkout during merges; one big-issue worktree at a time.
 
+### ✅ Phase-2b core wave — DONE (merged, 574 passed)
+- **CRA-183 / CRA-188** spikes: ADR 0011 (do-not-adopt ruvLLM/rvagent → seeded LocalHTTPProvider + wasmtime-py; no escalation) · ADR 0016 (Jail abstraction).
+- **CRA-179** sandboxed pipelines: `jail.py` — `Jail` ABC (FakeJail + BwrapJail/SeatbeltJail + NoJail), `select_jail`. Static-only `allow_paths`/`allow_net` (rejected before spawn in all backends), folder-escape + egress denial (real, non-vacuous), `JAIL_VIOLATION` audit emissions (secret-free), taint re-tag across boundary, registry rehydration. Review APPROVE + 2 fixes (network-granted output tainted on real backends; backends bind RO system+interpreter so they're actually usable, integration tests now meaningful).
+- **CRA-174** transferable typed Context: `Context`/`ContextEntry` artifact threading through team.py (replaces lossy string threading); carry strategies (Full/Recency/TypedFields/Summary); taint+lineage preserved (survives compaction); ArtifactRef single-deref per ADR 0013. Review APPROVE.
+- **CRA-182** cost/routing: `RoutingPolicy` (first-match, via shared `resolve_model` — no drift, `estimate_cost` matches runtime), `CachingRuntime` over RecordReplay (hit=$0), credential-free `LocalHTTPProvider` (mocked, no egress). Review APPROVE.
+
+**Status: 17/22 done.** Remaining: CRA-178 (★ secret broker), CRA-180 (consent), CRA-189 (red-team demo), CRA-177 (learning), CRA-186 (integration gate).
+
 ## Review-surfaced notes for downstream issues
 - **CRA-185** (taint-conformance suite): add explicit acceptance criterion — `tool`/MCP-result
   emissions MUST be `tainted=True`. The Emission envelope *carries* taint; producers enforce it.
