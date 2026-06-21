@@ -292,6 +292,24 @@ def _cmd_visualize(args: argparse.Namespace) -> int:
     return 0
 
 
+# ----------------------------------------------------------------- dashboard (CRA-181)
+def _cmd_dashboard(args: argparse.Namespace) -> int:
+    """Serve the auto-dashboard projected from the typed emission stream (loopback)."""
+    from crawfish.visualize import LOOPBACK, serve_emission_dashboard
+
+    server = serve_emission_dashboard(_open_store(args.dir), port=args.port, since=args.since)
+    host, port = str(server.server_address[0]), server.server_address[1]
+    print(f"crawfish emission dashboard → http://{host}:{port}  (loopback only; Ctrl-C to stop)")
+    assert host == LOOPBACK  # never bind a public interface
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:  # pragma: no cover - interactive
+        print("\nstopped")
+    finally:
+        server.server_close()
+    return 0
+
+
 # -------------------------------------------------------------------------- export
 def _cmd_export(args: argparse.Namespace) -> int:
     from crawfish.ccexport import export_claude_code
@@ -400,6 +418,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=7878, help="dashboard port (127.0.0.1)")
     p.add_argument("--dir", default=".", help="project directory")
     p.set_defaults(func=_cmd_visualize)
+
+    p = sub.add_parser(
+        "dashboard",
+        help="serve the auto-dashboard over the emission stream (loopback only)",
+    )
+    p.add_argument(
+        "--port", type=int, default=7879, help="dashboard port (127.0.0.1; distinct from visualize)"
+    )
+    p.add_argument("--since", default=None, help="time window, e.g. -15m / -24h (default: all)")
+    p.add_argument("--dir", default=".", help="project directory")
+    p.set_defaults(func=_cmd_dashboard)
 
     p = sub.add_parser("export", help="export a Definition to another runtime")
     p.add_argument(
