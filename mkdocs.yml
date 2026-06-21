@@ -6,6 +6,11 @@ repo_url: https://github.com/Neal-Kotval/crawfish
 
 theme:
   name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  font:
+    text: IBM Plex Sans
+    code: JetBrains Mono
   palette:
     - scheme: default
       primary: red
@@ -20,8 +25,15 @@ theme:
   features:
     - navigation.sections
     - navigation.top
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - toc.follow
     - content.code.copy
     - search.suggest
+
+extra_css:
+  - assets/extra.css
 
 markdown_extensions:
   - admonition
