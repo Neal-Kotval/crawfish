@@ -26,6 +26,12 @@ from crawfish.runtime.context_strategy import (
 from crawfish.runtime.mcp import allowed_mcp_tools, build_mcp_config, resolve_secret
 from crawfish.runtime.mock import MockRuntime
 from crawfish.runtime.prompt import compile_prompt, pick_agent, split_inputs
+from crawfish.runtime.provider_runtime import (
+    ProviderFailover,
+    ProviderRuntime,
+    expand_candidates,
+)
+from crawfish.runtime.providers import ClientProvider, MockProvider
 from crawfish.runtime.replay import CassetteMiss, RecordReplayRuntime
 from crawfish.runtime.select import RUNTIME_FACTORIES, get_runtime
 from crawfish.runtime.stubs import ClientRuntime, ManagedRuntime
@@ -44,6 +50,11 @@ __all__ = [
     "MockRuntime",
     "ClientRuntime",
     "ManagedRuntime",
+    "ProviderRuntime",
+    "ProviderFailover",
+    "expand_candidates",
+    "MockProvider",
+    "ClientProvider",
     "RecordReplayRuntime",
     "CassetteMiss",
     "get_runtime",
