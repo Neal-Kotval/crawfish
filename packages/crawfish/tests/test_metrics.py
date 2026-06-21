@@ -187,8 +187,10 @@ def test_schema_conformance_scores_partial_records() -> None:
     # SchemaConformance validates against the default registry; register the record there.
     from crawfish.typesystem import default_registry
 
-    default_registry.register_record("Triage", {"cls": "str", "score": "float"})
-    schema = [Parameter(name="out", type="Triage")]
+    # Test-unique record name so this global-registry mutation can't collide with
+    # another test's "Triage" (cross-test landmine flagged in CRA-175 review).
+    default_registry.register_record("TriageMetricsTest", {"cls": "str", "score": "float"})
+    schema = [Parameter(name="out", type="TriageMetricsTest")]
     full = Output(output_schema=[], value='{"cls": "bug", "score": 0.9}', produced_by="r")
     assert schema_conformance(schema).evaluate(full) == 1.0
     half = Output(output_schema=[], value='{"cls": "bug"}', produced_by="r")
