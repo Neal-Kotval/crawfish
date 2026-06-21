@@ -1,0 +1,343 @@
+/* ============================================================================
+   Crawfish docs — "instrument panel"
+   Techy + glassmorphism over the brand palette.
+   Palette from logo_redfish.svg: signal red #ef5551, ink #1b2026.
+   Type: Space Grotesk (display) · IBM Plex Sans (body) · JetBrains Mono (code).
+   ========================================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+:root {
+  --craw-red: #ef5551;
+  --craw-red-dark: #d63b37;
+  --craw-red-soft: #f37b78;
+  --craw-ink: #1b2026;
+
+  --craw-display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+
+  /* glass tuning */
+  --craw-blur: saturate(160%) blur(14px);
+  --craw-radius: 14px;
+}
+
+/* Display face on headings + the brand wordmark area ------------------------ */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-nav__title,
+.md-header__title {
+  font-family: var(--craw-display);
+  font-feature-settings: "ss01", "ss02";
+}
+.md-typeset h1 {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.md-typeset h2 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.md-typeset h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Mono utility voice for structural labels — the techy "signature" --------- */
+.md-nav__title,
+.md-tabs__link,
+.md-footer-nav__title,
+.md-typeset .md-button {
+  font-family: var(--md-code-font-family, "JetBrains Mono", monospace);
+}
+.md-nav--primary > .md-nav__title,
+.md-sidebar--secondary .md-nav__title {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.62rem;
+  opacity: 0.7;
+}
+
+/* ============================================================================
+   LIGHT SCHEME
+   ========================================================================== */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--craw-red);
+  --md-primary-fg-color--light: var(--craw-red-soft);
+  --md-primary-fg-color--dark: var(--craw-red-dark);
+  --md-primary-bg-color: var(--craw-ink);
+  --md-primary-bg-color--light: #4a525c;
+  --md-accent-fg-color: var(--craw-red-dark);
+
+  --md-default-bg-color: #f4efe7; /* paper */
+  --md-default-fg-color: var(--craw-ink);
+  --md-default-fg-color--light: #444b54;
+  --md-default-fg-color--lighter: #767d86;
+
+  --md-typeset-a-color: var(--craw-red-dark);
+  --md-code-bg-color: rgba(255, 255, 255, 0.66);
+  --md-code-fg-color: #2b3138;
+
+  --craw-glass-bg: rgba(255, 255, 255, 0.6);
+  --craw-glass-border: rgba(255, 255, 255, 0.75);
+  --craw-glass-line: rgba(27, 32, 38, 0.08);
+  --craw-glass-shadow: 0 8px 30px rgba(27, 32, 38, 0.08);
+  --craw-header-bg: rgba(244, 239, 231, 0.72);
+}
+
+/* Ambient field: faint red signal glows + a hairline grid, pinned on scroll.
+   This is what the frosted panels refract. */
+[data-md-color-scheme="default"] body {
+  background-color: #f4efe7;
+  background-image:
+    radial-gradient(46rem 36rem at 88% -8%, rgba(239, 85, 81, 0.14), transparent 60%),
+    radial-gradient(40rem 34rem at -6% 18%, rgba(239, 85, 81, 0.08), transparent 58%),
+    linear-gradient(rgba(27, 32, 38, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(27, 32, 38, 0.028) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
+  background-attachment: fixed;
+}
+
+/* ============================================================================
+   DARK SCHEME  (near-white text, glass shines here)
+   ========================================================================== */
+[data-md-color-scheme="slate"] {
+  --md-hue: 215;
+  --md-primary-fg-color: var(--craw-red);
+  --md-primary-fg-color--light: var(--craw-red-soft);
+  --md-primary-fg-color--dark: var(--craw-red-dark);
+  --md-primary-bg-color: #eef1f5;
+  --md-accent-fg-color: var(--craw-red-soft);
+
+  --md-default-bg-color: #12161b;
+  --md-default-fg-color: #eef1f5; /* near-white body text */
+  --md-default-fg-color--light: #c4ccd6;
+  --md-default-fg-color--lighter: #8b95a3;
+  --md-default-fg-color--lightest: #4a525c;
+
+  --md-typeset-color: #eef1f5;
+  --md-typeset-a-color: var(--craw-red-soft);
+  --md-code-bg-color: rgba(255, 255, 255, 0.045);
+  --md-code-fg-color: #dfe5ec;
+
+  --craw-glass-bg: rgba(255, 255, 255, 0.045);
+  --craw-glass-border: rgba(255, 255, 255, 0.12);
+  --craw-glass-line: rgba(255, 255, 255, 0.1);
+  --craw-glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --craw-header-bg: rgba(18, 22, 27, 0.66);
+}
+
+[data-md-color-scheme="slate"] body {
+  background-color: #12161b;
+  background-image:
+    radial-gradient(48rem 38rem at 90% -10%, rgba(239, 85, 81, 0.22), transparent 60%),
+    radial-gradient(42rem 34rem at -8% 16%, rgba(239, 85, 81, 0.1), transparent 58%),
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
+  background-attachment: fixed;
+}
+/* Force readable body copy + headings in dark mode */
+[data-md-color-scheme="slate"] .md-typeset,
+[data-md-color-scheme="slate"] .md-typeset h1,
+[data-md-color-scheme="slate"] .md-typeset h2,
+[data-md-color-scheme="slate"] .md-typeset h3,
+[data-md-color-scheme="slate"] .md-typeset h4,
+[data-md-color-scheme="slate"] .md-nav__link,
+[data-md-color-scheme="slate"] .md-header__title {
+  color: #eef1f5;
+}
+[data-md-color-scheme="slate"] .md-typeset h2 {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================================
+   GLASS SURFACES (scheme-agnostic — read the --craw-* vars above)
+   ========================================================================== */
+
+/* Frosted header */
+.md-header {
+  background-color: var(--craw-header-bg);
+  -webkit-backdrop-filter: var(--craw-blur);
+  backdrop-filter: var(--craw-blur);
+  border-bottom: 1px solid var(--craw-glass-line);
+  box-shadow: none;
+  color: var(--md-primary-bg-color);
+}
+.md-tabs {
+  background-color: transparent;
+  color: var(--md-primary-bg-color);
+}
+
+/* Search field as an inset glass slot */
+.md-search__form {
+  border-radius: 10px;
+  background-color: var(--craw-glass-bg);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--craw-glass-line);
+}
+.md-search__input {
+  color: inherit;
+}
+[data-md-color-scheme="default"] .md-search__input::placeholder {
+  color: rgba(27, 32, 38, 0.5);
+}
+[data-md-color-scheme="slate"] .md-search__input::placeholder {
+  color: rgba(238, 241, 245, 0.5);
+}
+.md-search__output {
+  border-radius: 10px;
+}
+
+/* Code blocks — the centerpiece glass panel */
+.md-typeset pre > code,
+.md-typeset .highlight > pre > code {
+  border-radius: var(--craw-radius);
+}
+.md-typeset pre {
+  border-radius: var(--craw-radius);
+}
+.md-typeset .highlight {
+  border-radius: var(--craw-radius);
+  background: var(--craw-glass-bg);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--craw-glass-border);
+  box-shadow: var(--craw-glass-shadow);
+}
+.md-typeset .highlight > pre,
+.md-typeset .highlight code {
+  background: transparent;
+}
+.md-typeset code {
+  border-radius: 6px;
+}
+
+/* Inline code as a signal chip — pipeline arrows live here */
+.md-typeset :not(pre) > code {
+  background: var(--craw-glass-bg);
+  border: 1px solid var(--craw-glass-line);
+  color: var(--md-code-fg-color);
+  padding: 0.12em 0.42em;
+}
+
+/* Tables, admonitions, quotes — glass cards */
+.md-typeset table:not([class]) {
+  border-radius: var(--craw-radius);
+  overflow: hidden;
+  background: var(--craw-glass-bg);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--craw-glass-border);
+  box-shadow: var(--craw-glass-shadow);
+}
+.md-typeset table:not([class]) th {
+  background: transparent;
+  font-family: var(--md-code-font-family, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.66rem;
+}
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: var(--craw-radius);
+  background: var(--craw-glass-bg);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--craw-glass-border);
+  border-left: 3px solid var(--craw-red);
+  box-shadow: var(--craw-glass-shadow);
+}
+
+/* Section divider rule on h2 — techy hairline */
+.md-typeset h2 {
+  border-top: 1px solid var(--craw-glass-line);
+  padding-top: 1.6rem;
+  margin-top: 2.6rem;
+}
+
+/* Links: signal red with an animated underline */
+.md-typeset a {
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.22s ease;
+}
+.md-typeset a:hover {
+  background-size: 100% 1px;
+}
+
+/* Active nav item: red label + a small signal bar */
+.md-nav__link--active,
+.md-nav__item .md-nav__link--active {
+  color: var(--craw-red) !important;
+  font-weight: 600;
+}
+.md-sidebar--secondary .md-nav__link--active {
+  position: relative;
+}
+.md-sidebar--secondary .md-nav__link--active::before {
+  content: "";
+  position: absolute;
+  left: -0.7rem;
+  top: 0.15em;
+  bottom: 0.15em;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--craw-red);
+}
+
+/* Footer */
+.md-footer {
+  background-color: var(--craw-ink);
+}
+.md-footer-meta {
+  background-color: #0e1216;
+}
+
+/* Thin techy scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--craw-red) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(239, 85, 81, 0.6);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Red selection */
+::selection {
+  background: rgba(239, 85, 81, 0.28);
+}
+
+/* ============================================================================
+   LOGO  (wordmark; swap to light-text variant in dark mode)
+   ========================================================================== */
+.md-header__topic:first-child {
+  display: none; /* logo already spells "crawfish" */
+}
+.md-logo img {
+  height: 1.7rem;
+  width: auto;
+}
+[data-md-color-scheme="slate"] .md-logo img {
+  content: url("logo-dark.svg");
+}
+
+/* ============================================================================
+   QUALITY FLOOR
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset a {
+    transition: none;
+  }
+}
