@@ -25,7 +25,14 @@ from crawfish.ccexport import (
     map_tools,
     model_alias,
 )
-from crawfish.config import ProfileConfig, ProjectManifest, ProjectPaths, load_manifest
+from crawfish.config import (
+    ModelsConfigError,
+    ProfileConfig,
+    ProjectManifest,
+    ProjectPaths,
+    load_manifest,
+    load_models_config,
+)
 from crawfish.core import (
     BudgetExceeded,
     Cancelled,
@@ -438,6 +445,8 @@ __all__ = [
     "ProjectManifest",
     "ProjectPaths",
     "load_manifest",
+    "load_models_config",
+    "ModelsConfigError",
     "DoctorFinding",
     "DoctorReport",
     "diagnose",
