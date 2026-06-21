@@ -189,15 +189,26 @@ def manage_context(
         return turns
     result = strategy.compact(turns)
     if result.compacted:
-        ctx.store.append_event(
-            ctx.run_id,
-            {
-                "event": "context.compaction",
-                "strategy": strategy.name,
-                "turns_before": len(turns),
-                "turns_after": len(result.turns),
-                "reclaimed_tokens": result.reclaimed_tokens,
-            },
+        # A typed COMPACTION emission. If any compacted turn carried fluid data the
+        # summary turn stays fluid, so propagate that taint across the emission
+        # boundary (compacted untrusted data never silently becomes trusted).
+        from crawfish.emission import Emission, EmissionKind, emit
+
+        tainted = any(t.is_fluid_data for t in result.turns)
+        emit(
+            ctx.store,
+            Emission(
+                kind=EmissionKind.COMPACTION,
+                run_id=ctx.run_id,
+                org_id=ctx.org_id,
+                attrs={
+                    "strategy": strategy.name,
+                    "turns_before": len(turns),
+                    "turns_after": len(result.turns),
+                    "reclaimed_tokens": result.reclaimed_tokens,
+                },
+                tainted=tainted,
+            ),
             org_id=ctx.org_id,
         )
     return result.turns

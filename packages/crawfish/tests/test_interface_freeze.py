@@ -108,12 +108,12 @@ def test_emission_taint_propagation_flag_carried() -> None:
     assert tainted.tainted is True
 
 
-def test_emission_serialization_shims_are_stubs() -> None:
+def test_emission_serialization_round_trips() -> None:
+    # CRA-171 lands the behavioural half: to_event/from_event now round-trip.
     em = Emission(kind=EmissionKind.RUN_START, run_id="r1", attrs={"runtime": "mock"})
-    with pytest.raises(NotImplementedError):
-        em.to_event()
-    with pytest.raises(NotImplementedError):
-        Emission.from_event({"kind": "run_start"})
+    event = em.to_event()
+    assert event["kind"] == "run_start"
+    assert Emission.from_event(event) == em
 
 
 # --- Output validation contract ----------------------------------------------

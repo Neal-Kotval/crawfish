@@ -16,6 +16,7 @@ import pytest
 from crawfish.core.context import RunContext
 from crawfish.definition import Definition
 from crawfish.deploy import DeployRegistry, RunFn, Supervisor, deploy, stop
+from crawfish.emission import Emission
 from crawfish.manage import manage_list
 from crawfish.observer import FailureRateAbove, Observer
 from crawfish.runtime import MockRuntime, run_team
@@ -136,3 +137,31 @@ def test_demo_definition_exports_to_claude_code(triage: Definition, tmp_path: Pa
     assert paths[0].name == "triage-bot.md"
     assert "triage" in text.lower()
     assert "GITHUB_TOKEN" not in text and "***REDACTED***" not in text
+
+
+def test_demo_run_produces_typed_emission_stream(triage: Definition) -> None:
+    """CRA-171 dogfood: running the real triage-bot lands a typed emission stream.
+
+    Deterministic (MockRuntime, no live model). Asserts the run's ledger reads back
+    as typed :class:`Emission`s — RUN_START/RUN_FINISH lifecycle plus the MODEL
+    telemetry the runtime now emits — and that the fluid ticket body propagates taint
+    onto the RUN_FINISH emission across the emission boundary.
+    """
+    from crawfish.emission import EmissionKind, read_emissions
+    from crawfish.run import Run
+
+    store = SqliteStore()
+    ctx = RunContext(store=store)  # type: ignore[arg-type]
+    run = Run(triage, {"project": "acme", "ticket_body": "login button does nothing"})
+    asyncio.run(run.execute(ctx, MockRuntime()))
+
+    emissions = read_emissions(store, ctx.run_id)
+    assert emissions, "expected a typed emission stream"
+    assert all(isinstance(e, Emission) for e in emissions)
+    kinds = {e.kind for e in emissions}
+    assert {EmissionKind.RUN_START, EmissionKind.RUN_FINISH, EmissionKind.MODEL} <= kinds
+
+    # The fluid ticket_body taints the Output; RUN_FINISH inherits the taint marker.
+    finishes = [e for e in emissions if e.kind is EmissionKind.RUN_FINISH]
+    assert finishes and finishes[-1].tainted is True
+    assert finishes[-1].attrs["status"] == "done"

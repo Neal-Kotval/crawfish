@@ -130,35 +130,71 @@ def test_budget_projects_hard_cost_budget() -> None:
 
 # -- spent_today ------------------------------------------------------------
 def test_spent_today_sums_event_costs() -> None:
+    """Sums cost off the typed emission stream (cost nested under ``attrs``) and
+    still totals legacy loose dicts (back-compat)."""
     from datetime import datetime
+
+    from crawfish import Emission, EmissionKind, emit
 
     store = SqliteStore(":memory:")
     today = datetime.now(UTC)
-    store.append_event(
-        "run-1",
-        {"kind": "runtime.run", "cost_usd": 0.25, "ts": today.isoformat()},
+    ts = today.timestamp()
+    emit(
+        store,
+        Emission(
+            kind=EmissionKind.MODEL, run_id="run-1", attrs={"model": "m", "cost_usd": 0.25}, ts=ts
+        ),
     )
-    store.append_event(
-        "run-1",
-        {"kind": "run.finish", "cost_usd": 0.50, "ts": today.isoformat()},
+    emit(
+        store,
+        Emission(
+            kind=EmissionKind.RUN_FINISH,
+            run_id="run-1",
+            attrs={"status": "done", "cost_usd": 0.50},
+            ts=ts,
+        ),
     )
-    store.append_event(
-        "run-1",
-        {"kind": "runtime.tool", "cost_usd": 99.0, "ts": today.isoformat()},  # ignored kind
+    # A non-cost-bearing kind must be ignored even if it carries a cost_usd attr.
+    emit(
+        store,
+        Emission(
+            kind=EmissionKind.TOOL, run_id="run-1", attrs={"tool": "x", "cost_usd": 99.0}, ts=ts
+        ),
     )
+    # A legacy loose dict on the same ledger still totals.
+    store.append_event("run-1", {"kind": "run.finish", "cost_usd": 0.10, "ts": today.isoformat()})
     total = spent_today(store, run_ids=["run-1"], now=today)
-    assert total == pytest.approx(0.75)
+    assert total == pytest.approx(0.85)
     store.close()
 
 
 def test_spent_today_excludes_other_days() -> None:
+    """Per-day exclusion works for the typed emission's epoch-float ``ts``."""
     from datetime import datetime, timedelta
+
+    from crawfish import Emission, EmissionKind, emit
 
     store = SqliteStore(":memory:")
     now = datetime.now(UTC)
     yesterday = now - timedelta(days=1)
-    store.append_event("r", {"kind": "run.finish", "cost_usd": 1.0, "ts": now.isoformat()})
-    store.append_event("r", {"kind": "run.finish", "cost_usd": 5.0, "ts": yesterday.isoformat()})
+    emit(
+        store,
+        Emission(
+            kind=EmissionKind.RUN_FINISH,
+            run_id="r",
+            attrs={"status": "done", "cost_usd": 1.0},
+            ts=now.timestamp(),
+        ),
+    )
+    emit(
+        store,
+        Emission(
+            kind=EmissionKind.RUN_FINISH,
+            run_id="r",
+            attrs={"status": "done", "cost_usd": 5.0},
+            ts=yesterday.timestamp(),
+        ),
+    )
     assert spent_today(store, run_ids=["r"], now=now) == pytest.approx(1.0)
     store.close()
 

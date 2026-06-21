@@ -132,12 +132,39 @@ class ObserverSurface:
 
     # -- observer events (append-only, ordered) -----------------------------
     def emit(self, event: ObserverEvent) -> None:
-        """Append an observer event to the ``pipeline``'s ordered stream."""
+        """Append an observer event to the ``pipeline``'s ordered stream.
+
+        Keeps the :class:`ObserverEvent` shape on the ``observer:<pipeline>`` stream
+        (unchanged), and — when the finding concerns a specific run — *also* writes a
+        typed ``OBSERVER`` :class:`~crawfish.emission.Emission` onto that run's stream
+        so it joins the unified typed emission stream the inspector reads.
+        """
         self._store.append_event(
             f"{_EVENT_STREAM}:{event.pipeline}",
             event.model_dump(mode="json"),
             org_id=self._org,
         )
+        if event.run_id:
+            from crawfish.emission import Emission, EmissionKind, emit
+
+            emit(
+                self._store,
+                Emission(
+                    kind=EmissionKind.OBSERVER,
+                    run_id=event.run_id,
+                    org_id=self._org,
+                    pipeline=event.pipeline,
+                    node_id=event.observer,
+                    ts=event.ts,
+                    attrs={
+                        "kind": event.kind,
+                        "severity": event.severity.value,
+                        "detail": event.detail,
+                        "observer": event.observer,
+                    },
+                ),
+                org_id=self._org,
+            )
 
     def events(
         self,

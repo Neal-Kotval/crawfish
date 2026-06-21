@@ -78,6 +78,8 @@ from crawfish.emission import (
     REQUIRED_ATTRS,
     Emission,
     EmissionKind,
+    emit,
+    read_emissions,
 )
 from crawfish.engine import Engine, run_pipeline
 from crawfish.eval import (
@@ -438,6 +440,8 @@ __all__ = [
     "EmissionKind",
     "REQUIRED_ATTRS",
     "EMISSION_SCHEMA_VERSION",
+    "emit",
+    "read_emissions",
     "ValidationFailure",
     "ValidationError",
     "StructuralDiff",

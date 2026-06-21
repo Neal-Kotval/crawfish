@@ -81,8 +81,10 @@ def test_manage_context_emits_telemetry() -> None:
     strat = LinearCompact(threshold=1, keep_recent=2)
     out = manage_context(_turns(8), strat, ctx)
     assert len(out) < 8
-    events = [e["event"] for e in ctx.store.events(ctx.run_id)]
-    assert "context.compaction" in events
+    from crawfish.emission import EmissionKind, read_emissions
+
+    kinds = [em.kind for em in read_emissions(ctx.store, ctx.run_id)]
+    assert EmissionKind.COMPACTION in kinds
 
 
 def test_default_strategy_resolves() -> None:

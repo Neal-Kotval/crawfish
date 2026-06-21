@@ -92,9 +92,13 @@ async def test_runaway_hard_killed_at_cost_cap(tmp_path: Path) -> None:
     with pytest.raises(BudgetExceeded):
         await run.execute(ctx, CommandRuntime(transport=expensive))
     assert run.status is RunStatus.FAILED
-    # telemetry captured despite the kill
-    spans = [e for e in ctx.store.events(ctx.run_id) if e.get("name") == "run.finish"]
-    assert spans and spans[-1]["status"] == "failed"
+    # telemetry captured despite the kill — typed RUN_FINISH on the emission stream
+    from crawfish.emission import EmissionKind, read_emissions
+
+    finishes = [
+        em for em in read_emissions(ctx.store, ctx.run_id) if em.kind is EmissionKind.RUN_FINISH
+    ]
+    assert finishes and finishes[-1].attrs["status"] == "failed"
 
 
 async def test_run_record_durable_and_restorable(tmp_path: Path) -> None:
@@ -110,12 +114,14 @@ async def test_run_record_durable_and_restorable(tmp_path: Path) -> None:
 
 
 async def test_telemetry_spans_emitted(tmp_path: Path) -> None:
+    from crawfish.emission import EmissionKind, read_emissions
+
     d = _definition(tmp_path)
     ctx = _ctx()
     run = Run(d, {"repo": "acme/app", "pr_body": "x"})
     await run.execute(ctx, MockRuntime())
-    names = {e.get("name") for e in ctx.store.events(ctx.run_id) if e.get("type") == "span"}
-    assert {"run.start", "run.finish"} <= names
+    kinds = {em.kind for em in read_emissions(ctx.store, ctx.run_id)}
+    assert {EmissionKind.RUN_START, EmissionKind.RUN_FINISH} <= kinds
 
 
 async def test_run_output_tainted_when_inputs_fluid(tmp_path: Path) -> None:

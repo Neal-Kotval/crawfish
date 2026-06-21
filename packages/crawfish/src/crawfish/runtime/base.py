@@ -96,16 +96,30 @@ class AgentRuntime(ABC):
 
     @staticmethod
     def _emit_telemetry(ctx: RunContext, result: RunResult, runtime: str) -> None:
-        """Persist a compact run summary to the Store's event ledger."""
-        ctx.store.append_event(
-            ctx.run_id,
-            {
-                "event": "runtime.run",
-                "runtime": runtime,
-                "model": result.model,
-                "cost_usd": result.cost_usd,
-                "events": len(result.events),
-                "session_id": result.session_id,
-            },
+        """Persist a compact run summary to the Store's event ledger.
+
+        Routed through the typed :class:`~crawfish.emission.Emission` substrate
+        (``MODEL`` kind) and written via ``emit`` → ``Store.append_event``, so the
+        transport and any ``ScrubbingStore`` redaction are unchanged. Pure runtime
+        telemetry has no ``Output`` in hand, so ``tainted`` defaults False; ``ts`` is
+        left at the contract default (no wall-clock read on this path).
+        """
+        # Local import keeps the runtime substrate free of an emission import cycle.
+        from crawfish.emission import Emission, EmissionKind, emit
+
+        emit(
+            ctx.store,
+            Emission(
+                kind=EmissionKind.MODEL,
+                run_id=ctx.run_id,
+                org_id=ctx.org_id,
+                attrs={
+                    "model": result.model,
+                    "cost_usd": result.cost_usd,
+                    "events": len(result.events),
+                    "session_id": result.session_id,
+                    "runtime": runtime,
+                },
+            ),
             org_id=ctx.org_id,
         )

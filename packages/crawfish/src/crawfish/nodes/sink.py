@@ -145,18 +145,29 @@ class Sink(Node, ABC, Generic[T]):
 
         await self._write(output, ctx)
 
-        # Telemetry: record that a write happened. Never include the credential
-        # value or the (possibly model-derived) output value.
-        ctx.store.append_event(
-            ctx.run_id,
-            {
-                "type": "sink.write",
-                "sink": self.name,
-                "node_id": self.id,
-                "output_id": output.id,
-                "batch_id": ctx.batch_id,
-                "idempotency_key": key,
-            },
+        # Telemetry: record that a consequential side effect committed, as a typed
+        # SINK emission. The target is the static sink name (static-only, never a
+        # fluid/model-derived value); we never include the credential value or the
+        # (possibly model-derived) output value. ``tainted`` propagates from the
+        # producing Output across the emission boundary.
+        from crawfish.emission import Emission, EmissionKind, emit
+
+        emit(
+            ctx.store,
+            Emission(
+                kind=EmissionKind.SINK,
+                run_id=ctx.run_id,
+                org_id=ctx.org_id,
+                node_id=self.id,
+                attrs={
+                    "target": self.name,
+                    "committed": True,
+                    "output_id": output.id,
+                    "batch_id": ctx.batch_id,
+                    "idempotency_key": key,
+                },
+                tainted=output.tainted,
+            ),
             org_id=ctx.org_id,
         )
         return True
