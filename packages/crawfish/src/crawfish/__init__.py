@@ -225,7 +225,13 @@ from crawfish.validation import (
     validate_output,
 )
 from crawfish.versioning import Freezable, FrozenError, Version
-from crawfish.visualize import dashboard_state, serve_dashboard
+from crawfish.visualize import (
+    collect_emissions,
+    dashboard_state,
+    emission_dashboard_state,
+    serve_dashboard,
+    serve_emission_dashboard,
+)
 from crawfish.workflow import Workflow
 
 __version__ = "0.1.0"
@@ -363,6 +369,9 @@ __all__ = [
     "StuckRun",
     "dashboard_state",
     "serve_dashboard",
+    "emission_dashboard_state",
+    "collect_emissions",
+    "serve_emission_dashboard",
     "ClaudeCodeAgent",
     "ClaudeCodeSkill",
     "definition_to_cc_agent",
