@@ -10,6 +10,7 @@ against a stored regression baseline.
 
 from __future__ import annotations
 
+import json
 import re
 
 from pydantic import BaseModel, Field
@@ -23,6 +24,7 @@ from crawfish.output import Output
 from crawfish.runtime.base import AgentRuntime
 from crawfish.runtime.team import run_team
 from crawfish.store.base import Store
+from crawfish.validation import canonicalize
 
 __all__ = [
     "EvalCase",
@@ -33,6 +35,8 @@ __all__ = [
     "save_baseline",
     "load_baseline",
     "gate_against_baseline",
+    "upconvert_case",
+    "migrate_golden_set",
 ]
 
 
@@ -93,13 +97,84 @@ class GoldenSet:
 
     def get(self, case_id: str) -> EvalCase | None:
         rec = self._store.get_record(self._kind, case_id, org_id=self._org)
-        return None if rec is None else EvalCase.model_validate(rec)
+        return None if rec is None else EvalCase.model_validate(upconvert_case(rec))
 
     def cases(self) -> list[EvalCase]:
         return [
-            EvalCase.model_validate(r)
+            EvalCase.model_validate(upconvert_case(r))
             for r in self._store.list_records(self._kind, org_id=self._org)
         ]
+
+    def migrate(self) -> int:
+        """Rewrite every stored case through :func:`upconvert_case`, persisting the
+        typed form. Returns the count of cases whose ``output``/``label`` changed.
+
+        Idempotent: a second call is a no-op (already-typed cases up-convert to
+        themselves). Use this to bulk-lift a golden set captured in the string era to
+        typed values in place; the lazy read path keeps callers correct meanwhile.
+        """
+        changed = 0
+        for raw in self._store.list_records(self._kind, org_id=self._org):
+            lifted = upconvert_case(raw)
+            if lifted != raw:
+                case = EvalCase.model_validate(lifted)
+                self._store.put_record(
+                    self._kind, case.id, case.model_dump(mode="json"), org_id=self._org
+                )
+                changed += 1
+        return changed
+
+
+# -- golden-set string→typed migration (CRA-172 handoff) ---------------------
+def _lift_string(value: JSONValue) -> JSONValue:
+    """Up-convert a string that holds a single JSON document to its typed value.
+
+    A plain string that is NOT a self-contained JSON object/array (e.g. free text, or
+    a model that emitted two objects) is left untouched — we never guess. Records are
+    canonicalised so the lifted form is reproducible under record/replay.
+    """
+    if not isinstance(value, str):
+        return canonicalize(value)
+    stripped = value.strip()
+    if not stripped or stripped[0] not in "{[":
+        return value
+    try:
+        decoded, end = json.JSONDecoder().raw_decode(stripped)
+    except (ValueError, TypeError):
+        return value
+    if stripped[end:].strip():
+        return value  # trailing junk / second object — ambiguous, leave as string
+    return canonicalize(decoded)
+
+
+def upconvert_case(rec: dict[str, JSONValue]) -> dict[str, JSONValue]:
+    """Up-convert a stored EvalCase row from the string era to typed values.
+
+    Captured golden sets stored before CRA-172 hold ``output``/``label`` as JSON-encoded
+    *strings*; metrics now read TYPED ``Output.value``. This lifts those fields in place
+    (pure + deterministic). Already-typed rows pass through unchanged, so it is safe to
+    apply on every read. This is the eval analogue of CRA-191's ``RECORD_UPCONVERTERS``:
+    because golden-set ``kind`` values are dynamic (``golden:NAME@VERSION``), the lazy
+    read path is applied in :meth:`GoldenSet.get`/:meth:`GoldenSet.cases` rather than via
+    the static converter table.
+    """
+    out = dict(rec)
+    if "output" in out:
+        out["output"] = _lift_string(out["output"])
+    if "label" in out:
+        out["label"] = _lift_string(out["label"])
+    return out
+
+
+def migrate_golden_set(
+    store: Store, name: str, *, version: str = "0.1", org_id: str = "local"
+) -> int:
+    """Bulk-migrate a named/versioned golden set's cases to typed values in place.
+
+    Convenience wrapper over :meth:`GoldenSet.migrate`. Returns the number of cases
+    rewritten.
+    """
+    return GoldenSet(store, name, org_id=org_id, version=version).migrate()
 
 
 _SCORE_RE = re.compile(r"-?\d+(?:\.\d+)?")

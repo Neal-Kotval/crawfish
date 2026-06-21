@@ -21,11 +21,12 @@ from collections.abc import Callable, Sequence
 
 from crawfish.batch import Task
 from crawfish.core.context import RunContext
-from crawfish.core.types import JSONValue
+from crawfish.core.types import JSONValue, Parameter
 from crawfish.definition.types import Definition
 from crawfish.output import Output
 from crawfish.run import Run
 from crawfish.runtime.base import AgentRuntime
+from crawfish.validation import canonicalize, structural_diff, validate_output
 
 __all__ = [
     "Metric",
@@ -35,15 +36,62 @@ __all__ = [
     "FieldPresent",
     "IsNonempty",
     "ConfidenceThreshold",
+    "FieldExactMatch",
+    "SetOverlap",
+    "NumericTolerance",
+    "SchemaConformance",
+    "StructuralMatch",
     "output_number",
     "field_present",
     "is_nonempty",
     "confidence_threshold",
+    "field_exact_match",
+    "set_overlap",
+    "numeric_tolerance",
+    "schema_conformance",
+    "structural_match",
     "compare",
     "is_regression",
 ]
 
 _NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def _typed_value(output: Output[JSONValue]) -> JSONValue:
+    """The TYPED, canonicalised Output value.
+
+    Post-CRA-172, a Definition with a declared (RECORD/LIST) schema carries a real
+    ``dict``/``list`` in ``Output.value``; semantic/structural metrics read that
+    directly. A plain string (no-schema back-compat) is decoded **only if** it is a
+    single self-contained JSON document — guarding the CRA-172 follow-up so multiple
+    emitted objects never silently score the wrong one. Records are canonicalised so
+    unordered keys score reproducibly under record/replay.
+    """
+    value = output.value
+    if isinstance(value, str):
+        decoded = _decode_single_json(value)
+        if decoded is not None:
+            value = decoded
+    return canonicalize(value)
+
+
+def _decode_single_json(text: str) -> JSONValue | None:
+    """Decode ``text`` iff it is exactly ONE JSON document (no trailing junk).
+
+    Guards the multi-JSON-object hazard (CRA-172 follow-up): ``raw_decode`` parses the
+    first value, then we require the remainder to be whitespace. ``{"a":1}{"b":2}`` and
+    ``{"a":1}\n{"b":2}`` therefore return ``None`` rather than scoring just ``{"a":1}``.
+    """
+    stripped = text.strip()
+    if not stripped or stripped[0] not in "{[":
+        return None
+    try:
+        decoded, end = json.JSONDecoder().raw_decode(stripped)
+    except (ValueError, TypeError):
+        return None
+    if stripped[end:].strip():
+        return None  # a second object follows — ambiguous, refuse to guess
+    return decoded
 
 
 def _as_mapping(value: object) -> dict[str, JSONValue] | None:
@@ -53,18 +101,40 @@ def _as_mapping(value: object) -> dict[str, JSONValue] | None:
     ``dict`` in ``Output.value`` — that path is read directly with no decoding. The
     string-decode fallback survives only for the **back-compat** case: a Definition with
     *no* declared outputs keeps a plain-string ``Output.value`` (``RunResult.text``);
-    when that string JSON-encodes an object we decode it so field metrics still apply.
+    when that string JSON-encodes a *single* object we decode it so field metrics still
+    apply. Multiple JSON objects are refused (see :func:`_decode_single_json`).
     """
     if isinstance(value, dict):
         return value
     if isinstance(value, str):
-        try:
-            decoded = json.loads(value)
-        except (ValueError, TypeError):
-            return None
+        decoded = _decode_single_json(value)
         if isinstance(decoded, dict):
             return decoded
     return None
+
+
+def _field(value: JSONValue, field: str | None) -> JSONValue:
+    """Resolve ``field`` (dotted path) within a typed value; ``None`` if absent."""
+    if field is None:
+        return value
+    cur: JSONValue = value
+    for part in field.split("."):
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        else:
+            return None
+    return cur
+
+
+def _as_members(value: JSONValue) -> set[str]:
+    """Normalise a value to a set of JSON-string members (order-free, hashable)."""
+    if isinstance(value, (list, tuple, set, frozenset)):
+        items: list[JSONValue] = list(value)
+    elif value is None:
+        items = []
+    else:
+        items = [value]
+    return {json.dumps(canonicalize(i), sort_keys=True) for i in items}
 
 
 # -- the metric protocol ----------------------------------------------------
@@ -165,7 +235,208 @@ class ConfidenceThreshold(Metric):
         return 1.0 if score >= self.threshold else 0.0
 
 
+# -- structured-output & semantic metrics (read TYPED Output.value) ---------
+class FieldExactMatch(Metric):
+    """``1.0`` if ``field`` (dotted path) of the typed value equals ``expected``.
+
+    Comparison is canonical: records are key-sorted and lists keep order, so a
+    ``{"a":1,"b":2}`` value matches an ``{"b":2,"a":1}`` expectation. ``field=None``
+    compares the whole value.
+    """
+
+    def __init__(self, expected: JSONValue, *, field: str | None = None, name: str | None = None):
+        self.expected = canonicalize(expected)
+        self.field = field
+        suffix = "" if field is None else f"[{field}]"
+        self.name = name or f"field_exact_match{suffix}"
+
+    def evaluate(self, output: Output[JSONValue]) -> float:
+        actual = canonicalize(_field(_typed_value(output), self.field))
+        return 1.0 if actual == self.expected else 0.0
+
+
+class SetOverlap(Metric):
+    """Order-free overlap of a list/set ``field`` against ``expected`` members.
+
+    ``mode`` selects the score: ``"f1"`` (harmonic mean of precision/recall, the
+    default) or ``"jaccard"`` (intersection / union). Members are compared by canonical
+    JSON so nested records/order do not matter. Two empty sets score ``1.0``.
+    """
+
+    def __init__(
+        self,
+        expected: JSONValue,
+        *,
+        field: str | None = None,
+        mode: str = "f1",
+        name: str | None = None,
+    ):
+        if mode not in ("f1", "jaccard"):
+            raise ValueError(f"mode must be 'f1' or 'jaccard', got {mode!r}")
+        self.expected = _as_members(expected)
+        self.field = field
+        self.mode = mode
+        suffix = "" if field is None else f"[{field}]"
+        self.name = name or f"set_overlap.{mode}{suffix}"
+
+    def evaluate(self, output: Output[JSONValue]) -> float:
+        actual = _as_members(_field(_typed_value(output), self.field))
+        inter = len(actual & self.expected)
+        if not actual and not self.expected:
+            return 1.0
+        if self.mode == "jaccard":
+            union = len(actual | self.expected)
+            return inter / union if union else 1.0
+        # F1: precision = inter/|actual|, recall = inter/|expected|
+        if inter == 0:
+            return 0.0
+        precision = inter / len(actual)
+        recall = inter / len(self.expected)
+        return 2 * precision * recall / (precision + recall)
+
+
+class NumericTolerance(Metric):
+    """``1.0`` if a numeric ``field`` is within ``tol`` of ``expected``, else ``0.0``.
+
+    ``relative=True`` makes ``tol`` a fraction of ``|expected|`` (with an absolute floor
+    for ``expected == 0``). Non-numeric/absent values score ``0.0``.
+    """
+
+    def __init__(
+        self,
+        expected: float,
+        *,
+        field: str | None = None,
+        tol: float = 1e-9,
+        relative: bool = False,
+        name: str | None = None,
+    ):
+        self.expected = float(expected)
+        self.field = field
+        self.tol = float(tol)
+        self.relative = relative
+        suffix = "" if field is None else f"[{field}]"
+        self.name = name or f"numeric_tolerance{suffix}"
+
+    def evaluate(self, output: Output[JSONValue]) -> float:
+        raw = _field(_typed_value(output), self.field)
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            return 0.0
+        bound = self.tol
+        if self.relative:
+            bound = max(self.tol * abs(self.expected), self.tol)
+        return 1.0 if abs(float(raw) - self.expected) <= bound else 0.0
+
+
+class SchemaConformance(Metric):
+    """Fraction in ``[0,1]`` of declared-schema checks the typed value passes.
+
+    Re-validates the (string) Output against ``schema`` via
+    :func:`~crawfish.validation.validate_output`; the score is ``1 - errors/checks``
+    where ``checks`` is the number of declared *leaf* fields the schema resolves to
+    (so a 2-field record missing one field scores ``0.5``, not ``0.0``). A clean parse
+    with no errors is ``1.0``; an unparseable payload yields a single ``NOT_JSON`` error
+    against ``checks`` and, for a one-field schema, scores ``0.0``.
+    """
+
+    def __init__(self, schema: list[Parameter], *, name: str | None = None):
+        self.schema = list(schema)
+        self.name = name or "schema_conformance"
+
+    def evaluate(self, output: Output[JSONValue]) -> float:
+        from crawfish.validation import ValidationFailure
+
+        value = output.value
+        text = value if isinstance(value, str) else json.dumps(value)
+        _typed, errors = validate_output(text, self.schema)
+        # An unparseable payload is a total failure, not "one error of N".
+        if any(e.failure is ValidationFailure.NOT_JSON for e in errors):
+            return 0.0
+        checks = max(_schema_leaf_count(self.schema), 1)
+        return max(0.0, 1.0 - len(errors) / checks)
+
+
+def _schema_leaf_count(schema: list[Parameter]) -> int:
+    """Number of declared leaf fields the ``schema`` resolves to (records recursed)."""
+    from crawfish.typesystem.registry import TypeKind, default_registry
+
+    def count(type_name: str, seen: frozenset[str]) -> int:
+        if type_name in seen:
+            return 1
+        td = default_registry.resolve(type_name)
+        if td.kind is TypeKind.RECORD and td.fields:
+            return sum(count(ft, seen | {type_name}) for ft in td.fields.values())
+        if td.kind is TypeKind.OPTIONAL and td.item is not None:
+            return count(td.item, seen | {type_name})
+        return 1
+
+    return sum(count(p.type, frozenset()) for p in schema)
+
+
+class StructuralMatch(Metric):
+    """Semantic-diff score of the typed value against an ``expected`` value.
+
+    Uses :func:`~crawfish.validation.structural_diff` (order-canonical for records).
+    ``1.0`` when the diff is empty; otherwise ``1 - changes/total_paths`` so a value
+    that differs in one of ten fields scores ``0.9``. A field ``path`` restricts the
+    comparison to that subtree.
+    """
+
+    def __init__(self, expected: JSONValue, *, field: str | None = None, name: str | None = None):
+        self.expected = canonicalize(expected)
+        self.field = field
+        suffix = "" if field is None else f"[{field}]"
+        self.name = name or f"structural_match{suffix}"
+
+    def evaluate(self, output: Output[JSONValue]) -> float:
+        actual = _field(_typed_value(output), self.field)
+        diff = structural_diff(self.expected, actual)
+        if diff.equal:
+            return 1.0
+        changes = len(diff.added) + len(diff.removed) + len(diff.changed)
+        total = _leaf_count(self.expected) + len(diff.added)
+        if total <= 0:
+            return 0.0
+        return max(0.0, 1.0 - changes / total)
+
+
+def _leaf_count(value: JSONValue) -> int:
+    """Number of leaf paths in ``value`` (records/lists recursed; min 1)."""
+    if isinstance(value, dict):
+        return sum(_leaf_count(v) for v in value.values()) or 1
+    if isinstance(value, (list, tuple)):
+        return sum(_leaf_count(v) for v in value) or 1
+    return 1
+
+
 # -- factory aliases (Metric subclasses, exposed as ergonomic factories) -----
+def field_exact_match(expected: JSONValue, *, field: str | None = None) -> FieldExactMatch:
+    """Factory: a metric that checks a field equals ``expected`` (canonical compare)."""
+    return FieldExactMatch(expected, field=field)
+
+
+def set_overlap(expected: JSONValue, *, field: str | None = None, mode: str = "f1") -> SetOverlap:
+    """Factory: an order-free set-overlap metric (F1 or Jaccard) over a list field."""
+    return SetOverlap(expected, field=field, mode=mode)
+
+
+def numeric_tolerance(
+    expected: float, *, field: str | None = None, tol: float = 1e-9, relative: bool = False
+) -> NumericTolerance:
+    """Factory: a metric that checks a numeric field is within tolerance of ``expected``."""
+    return NumericTolerance(expected, field=field, tol=tol, relative=relative)
+
+
+def schema_conformance(schema: list[Parameter]) -> SchemaConformance:
+    """Factory: a metric scoring how well the typed value conforms to ``schema``."""
+    return SchemaConformance(schema)
+
+
+def structural_match(expected: JSONValue, *, field: str | None = None) -> StructuralMatch:
+    """Factory: a semantic-diff metric scoring the value against ``expected``."""
+    return StructuralMatch(expected, field=field)
+
+
 def output_number(*, field: str | None = None, default: float = 0.0) -> OutputNumber:
     """Factory: a metric that extracts a numeric from the Output value."""
     return OutputNumber(field=field, default=default)
