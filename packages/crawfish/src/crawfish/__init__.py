@@ -143,6 +143,7 @@ from crawfish.jail import (
     rehydrate_registry,
     select_jail,
 )
+from crawfish.learning import LearningLoop, PromotionOutcome, VersionRecord
 from crawfish.ledger import ExecState, ExecutionLedger
 from crawfish.manage import PipelineStatus, format_table, manage_list, restart_target
 from crawfish.memory import Memory
@@ -475,6 +476,9 @@ __all__ = [
     "BatchExecutor",
     "BatchRunResult",
     "ExecutionLedger",
+    "LearningLoop",
+    "PromotionOutcome",
+    "VersionRecord",
     "ObserverEvent",
     "ObserverSurface",
     "RunInfo",
