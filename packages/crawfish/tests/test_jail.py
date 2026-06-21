@@ -20,6 +20,7 @@ import pytest
 from crawfish.core.types import Flow
 from crawfish.emission import EmissionKind, read_emissions
 from crawfish.jail import (
+    FLUID_TAINT,
     BwrapJail,
     Denial,
     DenialKind,
@@ -303,3 +304,22 @@ def test_seatbelt_blocks_egress_for_real(tmp_path) -> None:  # pragma: no cover
         allow_net=False,
     )
     assert res.exit_code != 0
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not SeatbeltJail().available(), reason="sandbox-exec unavailable")
+def test_real_backend_taints_output_when_network_granted(tmp_path) -> None:  # pragma: no cover
+    # CRA-179 review MAJOR: under an explicit allow_net=True grant a real backend's
+    # output is presumptively tainted (it may have pulled untrusted remote data), so it
+    # stays a faithful taint proxy for FakeJail.
+    jail = SeatbeltJail()
+    allowed = tmp_path / "work"
+    allowed.mkdir()
+    res = jail.run(
+        [sys.executable, "-c", "pass"],
+        allow_paths=[JailPath(str(allowed), PathMode.RW)],
+        allow_net=True,
+    )
+    # The taint contract holds regardless of the child's exit code: a network-granted
+    # real-backend run is presumptively tainted (the MAJOR fix).
+    assert FLUID_TAINT in res.out_taint

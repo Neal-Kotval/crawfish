@@ -455,13 +455,20 @@ class _RealJail(Jail):
         code, out, err, timed = _spawn(wrapped, stdin=stdin, env=env, cwd=None, timeout_s=timeout_s)
         # On a real backend the kernel/Seatbelt blocks escapes *before* they happen, so
         # a clean exit means no denial. The child re-tags its own output taint via a
-        # stdout protocol; absent that we conservatively carry input taint forward.
+        # stdout protocol; absent that we conservatively carry input taint forward AND —
+        # when network egress was explicitly granted — presumptively taint the output,
+        # since a network-granted child may have pulled in untrusted remote data
+        # (CRA-179 review MAJOR: keeps real backends a faithful taint proxy for FakeJail
+        # under `allow_net=True`; under the default deny-net there is no egress path).
+        out_taint = set(taint)
+        if allow_net:
+            out_taint.add(FLUID_TAINT)
         denied = (Denial(DenialKind.TIMEOUT, " ".join(cmd)),) if timed else ()
         return JailResult(
             exit_code=code,
             stdout=out,
             stderr=err,
-            out_taint=frozenset(taint),
+            out_taint=frozenset(out_taint),
             denied=denied,
             timed_out=timed,
         )
@@ -508,6 +515,14 @@ class BwrapJail(_RealJail):
         argv: list[str] = ["bwrap", "--unshare-user", "--unshare-pid", "--die-with-parent"]
         if not allow_net:
             argv += ["--unshare-net"]  # loopback-only: no egress path exists
+        # Bind read-only OS runtime so the interpreter/child can actually start. These
+        # are RO and do NOT widen the writable scope (only allow_paths RW are writable);
+        # paths outside these + allow_paths stay unreachable, so an escape (e.g. reading
+        # /etc/shadow) still fails — and the Linux integration test is now meaningful
+        # rather than failing vacuously because python never loaded (CRA-179 review MINOR).
+        argv += ["--proc", "/proc", "--dev", "/dev"]
+        for sys_path in ("/usr", "/lib", "/lib64", "/bin", "/sbin"):
+            argv += ["--ro-bind-try", sys_path, sys_path]
         for p in allow_paths:
             flag = "--bind" if p.mode is PathMode.RW else "--ro-bind"
             argv += [flag, p.path, p.path]
@@ -535,7 +550,25 @@ class SeatbeltJail(_RealJail):
 
     def profile(self, allow_paths: Sequence[JailPath], allow_net: bool) -> str:
         """Render the Seatbelt SBPL profile for these paths (also used by tests)."""
-        lines = ["(version 1)", "(deny default)", "(allow process-fork)", "(allow process-exec)"]
+        lines = [
+            "(version 1)",
+            "(deny default)",
+            "(allow process-fork)",
+            "(allow process-exec)",
+            "(allow sysctl-read)",
+            "(allow mach-lookup)",
+        ]
+        # Read-only access to OS runtime + the interpreter prefix so a real host-side
+        # child (e.g. python) can actually start. These are READ-ONLY and do NOT widen
+        # the writable scope (only allow_paths RW are writable) or the network posture;
+        # arbitrary user files outside these + allow_paths stay denied, so a folder
+        # escape still fails. Without this the child can't `execvp` and the backend is
+        # unusable (CRA-179 review MINOR). `/private/var/folders` covers macOS temp dirs.
+        for ro in ("/usr", "/System", "/Library", "/bin", "/sbin", "/dev", "/private/var/folders"):
+            lines.append(f'(allow file-read* (subpath "{ro}"))')
+        for prefix in {sys.base_prefix, sys.prefix}:
+            esc_prefix = prefix.replace('"', '\\"')
+            lines.append(f'(allow file-read* (subpath "{esc_prefix}"))')
         for p in allow_paths:
             esc = p.path.replace('"', '\\"')
             lines.append(f'(allow file-read* (subpath "{esc}"))')
