@@ -100,6 +100,24 @@ Non-blocking follow-ups (→ CRA-175 evals/golden-set): `validate_output` keeps 
 top-level JSON object when a model emits several (best-effort, no signal); `ValidationFailure.EMPTY_SCHEMA`
 is a reserved-but-unemitted reason. Golden-set string→typed migration helper to be owned by CRA-175.
 
+### ✅ CRA-191 — Store schema migration mechanism — phase-2a — DONE (pending merge)
+Branch: `nealkotval/cra-191-...`. Versioned migrate-on-open for SqliteStore.
+
+Shipped: `store/migrations.py` (`Migration`, ordered `MIGRATIONS`, `CURRENT_SCHEMA_VERSION`,
+`StoreMigrationError`, `apply_migrations`, `RECORD_UPCONVERTERS`/`upconvert_record`). `PRAGMA
+user_version` + apply-on-open; downgrade refused; baseline (v1) + a real v2 (index on
+`events(org_id,run_id)`); read-path per-kind up-converters (generalizes `Emission.from_event`).
+ADR 0014 + ARCHITECTURE.md migration-authoring contract.
+
+**Review-surfaced MAJOR fixed:** `with conn:` does NOT wrap DDL in a transaction under stdlib
+sqlite3 → the "rolls back on error" contract was false. Fixed with explicit `BEGIN`/`COMMIT`/
+`ROLLBACK` around each migration (covers DDL; `user_version` is header-stored & transactional),
++ a regression test proving a failing multi-statement migration rolls back fully and leaves
+`user_version` unchanged.
+
+DoD gate: ruff clean · format clean · mypy strict clean (71 files) · pytest 421 passed.
+Note: emission retention/rotation + `max_per_run` wiring explicitly deferred (separate concern).
+
 ## Review-surfaced notes for downstream issues
 - **CRA-185** (taint-conformance suite): add explicit acceptance criterion — `tool`/MCP-result
   emissions MUST be `tainted=True`. The Emission envelope *carries* taint; producers enforce it.

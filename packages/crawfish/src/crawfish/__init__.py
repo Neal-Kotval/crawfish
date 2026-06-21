@@ -192,7 +192,13 @@ from crawfish.stability import (
     stability_of,
     stable,
 )
-from crawfish.store import SqliteStore, Store
+from crawfish.store import (
+    CURRENT_SCHEMA_VERSION,
+    Migration,
+    SqliteStore,
+    Store,
+    StoreMigrationError,
+)
 from crawfish.testing import (
     assert_rubric,
     assert_snapshot,
@@ -253,6 +259,9 @@ __all__ = [
     # store
     "Store",
     "SqliteStore",
+    "StoreMigrationError",
+    "Migration",
+    "CURRENT_SCHEMA_VERSION",
     # engine
     "Engine",
     "run_pipeline",

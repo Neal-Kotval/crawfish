@@ -4,6 +4,10 @@ WAL mode + a process lock let thousands of fan-out runs write telemetry, outputs
 and idempotency claims concurrently without lock contention. Idempotency uses a
 single ``INSERT OR IGNORE`` so check-then-write is atomic (no race). All SQL lives
 here; call sites use the protocol.
+
+Schema evolution is handled by :mod:`crawfish.store.migrations`: the version lives in
+``PRAGMA user_version`` and forward migrations run on open. See that module for the
+migration-authoring contract.
 """
 
 from __future__ import annotations
@@ -14,38 +18,14 @@ import threading
 from pathlib import Path
 
 from crawfish.core.types import JSONValue
+from crawfish.store.migrations import (
+    CURRENT_SCHEMA_VERSION,
+    StoreMigrationError,
+    apply_migrations,
+    upconvert_record,
+)
 
-__all__ = ["SqliteStore"]
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS records (
-    org_id TEXT NOT NULL,
-    kind   TEXT NOT NULL,
-    id     TEXT NOT NULL,
-    json   TEXT NOT NULL,
-    updated_at REAL NOT NULL,
-    PRIMARY KEY (org_id, kind, id)
-);
-CREATE TABLE IF NOT EXISTS kv (
-    org_id    TEXT NOT NULL,
-    namespace TEXT NOT NULL,
-    key       TEXT NOT NULL,
-    json      TEXT NOT NULL,
-    PRIMARY KEY (org_id, namespace, key)
-);
-CREATE TABLE IF NOT EXISTS idempotency (
-    org_id TEXT NOT NULL,
-    key    TEXT NOT NULL,
-    PRIMARY KEY (org_id, key)
-);
-CREATE TABLE IF NOT EXISTS events (
-    org_id TEXT NOT NULL,
-    run_id TEXT NOT NULL,
-    seq    INTEGER NOT NULL,
-    json   TEXT NOT NULL,
-    PRIMARY KEY (org_id, run_id, seq)
-);
-"""
+__all__ = ["CURRENT_SCHEMA_VERSION", "SqliteStore", "StoreMigrationError"]
 
 
 class SqliteStore:
@@ -58,8 +38,11 @@ class SqliteStore:
         if str(path) != ":memory:":
             self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
-        self._conn.executescript(_SCHEMA)
-        self._conn.commit()
+        # Migrate-on-open under the lock: a concurrent opener sees the bumped
+        # user_version and applies nothing. Raises StoreMigrationError on a downgrade.
+        with self._lock:
+            apply_migrations(self._conn)
+            self._conn.commit()
 
     # -- records ------------------------------------------------------------
     def put_record(
@@ -83,7 +66,9 @@ class SqliteStore:
                 "SELECT json FROM records WHERE org_id=? AND kind=? AND id=?",
                 (org_id, kind, id),
             ).fetchone()
-        return json.loads(row["json"]) if row else None
+        if row is None:
+            return None
+        return upconvert_record(kind, json.loads(row["json"]))
 
     def list_records(self, kind: str, *, org_id: str = "local") -> list[dict[str, JSONValue]]:
         with self._lock:
@@ -91,7 +76,7 @@ class SqliteStore:
                 "SELECT json FROM records WHERE org_id=? AND kind=? ORDER BY updated_at",
                 (org_id, kind),
             ).fetchall()
-        return [json.loads(r["json"]) for r in rows]
+        return [upconvert_record(kind, json.loads(r["json"])) for r in rows]
 
     def delete_record(self, kind: str, id: str, *, org_id: str = "local") -> None:
         with self._lock:
