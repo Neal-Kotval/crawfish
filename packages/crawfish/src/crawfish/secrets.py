@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 import tomllib
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
@@ -37,6 +37,16 @@ __all__ = [
     "read_capabilities",
     "Capabilities",
     "Grant",
+    # CRA-180 — install-time capability consent + the grant manifest
+    "ConsentRequest",
+    "ConsentDecider",
+    "AutoConsent",
+    "DenyConsent",
+    "CallbackConsent",
+    "GrantManifest",
+    "ConsentDeclined",
+    "consent_install",
+    "GRANT_RECORD_KIND",
     # CRA-178 — secret schema + sidecar broker (egress-mediated injection)
     "SecretRequest",
     "LeaseHandle",
@@ -234,6 +244,240 @@ def read_capabilities(project_dir: str | Path) -> Capabilities:
         return Capabilities()
     data = tomllib.loads(path.read_text()).get("capabilities", {})
     return Capabilities(secrets=list(data.get("secrets", [])), egress=list(data.get("egress", [])))
+
+
+# ---------------------------------------------------------------------------
+# CRA-180 — install-time capability consent + the grant manifest
+#
+# Capabilities are DECLARED (``[capabilities]``) but, until here, never ENFORCED at
+# install: nothing surfaces them for consent or records that the user agreed. This
+# section closes that gap. A ``craw install`` flow reads a package's declared
+# :class:`Capabilities`, surfaces them (secrets by REFERENCE, never value; egress by
+# host), and on explicit approval records a :class:`Grant` — the consented manifest the
+# broker (CRA-178) and jail (CRA-179) already consume. On decline, NO grant is written,
+# so the package is fail-closed: the broker denies any lease for a secret/destination it
+# was never granted.
+#
+# Consent is EXPLICIT + STATIC: the surface shows only the static declared capabilities
+# (a fluid value can never appear here, and can never grant a capability). A detached /
+# non-interactive install can never silently self-approve — the default decider denies
+# (mirrors CRA-178's ``QueuedApprovalQueue`` fail-closed default).
+# ---------------------------------------------------------------------------
+
+#: The Store record ``kind`` under which consented grants are persisted. One grant per
+#: (org_id, package) — re-consenting a package overwrites its prior grant.
+GRANT_RECORD_KIND = "capability_grant"
+
+
+class ConsentDeclined(RuntimeError):
+    """Raised when an install is attempted but consent was not (explicitly) granted.
+
+    Fail-closed: a declined or non-interactive-without-approval install raises this and
+    writes NO grant, so the package can lease nothing it wasn't granted.
+    """
+
+
+@dataclass(frozen=True)
+class ConsentRequest:
+    """The static consent surface presented to a decider at install time.
+
+    Carries the package name and the DECLARED capabilities (secrets by REFERENCE name,
+    egress by host) — never a secret value. A decider inspects this and returns a bool.
+    """
+
+    package: str
+    secrets: tuple[str, ...] = ()
+    egress: tuple[str, ...] = ()
+
+    @classmethod
+    def from_capabilities(cls, package: str, caps: Capabilities) -> ConsentRequest:
+        return cls(package=package, secrets=tuple(caps.secrets), egress=tuple(caps.egress))
+
+    def summary(self) -> str:
+        """Human-readable, references-only summary (no values ever)."""
+        parts = []
+        if self.secrets:
+            parts.append(f"secrets (by reference): {', '.join(self.secrets)}")
+        if self.egress:
+            parts.append(f"network egress: {', '.join(self.egress)}")
+        return "; ".join(parts) if parts else "no special capabilities"
+
+
+@runtime_checkable
+class ConsentDecider(Protocol):
+    """The injectable consent decision seam (so tests never touch real stdin).
+
+    ``decide`` receives the static :class:`ConsentRequest` and returns ``True`` to grant.
+    Real interactive installs supply a stdin/prompt-backed decider; tests inject a fake.
+    """
+
+    def decide(self, request: ConsentRequest) -> bool: ...
+
+
+class AutoConsent:
+    """Approve every request. For explicit, non-interactive ``--yes`` installs only."""
+
+    def decide(self, request: ConsentRequest) -> bool:  # noqa: D102
+        return True
+
+
+class DenyConsent:
+    """Deny every request — the fail-closed default for a detached/non-interactive install.
+
+    A detached context has no human to consent; silently auto-approving would defeat the
+    consent gate, so the default denies and the install raises :class:`ConsentDeclined`.
+    """
+
+    def decide(self, request: ConsentRequest) -> bool:  # noqa: D102
+        return False
+
+
+class CallbackConsent:
+    """Wrap a plain ``(ConsentRequest) -> bool`` callable as a decider.
+
+    The CLI passes a stdin-prompt callback; a test passes a lambda returning a fixed
+    decision (determinism — no real prompt).
+    """
+
+    def __init__(self, fn: Callable[[ConsentRequest], bool]) -> None:
+        self._fn = fn
+
+    def decide(self, request: ConsentRequest) -> bool:  # noqa: D102
+        return bool(self._fn(request))
+
+
+class GrantManifest:
+    """A Store-backed, queryable manifest of consented capability grants.
+
+    Owns grant creation/storage (CRA-180). One grant per (``org_id``, ``package``); the
+    broker (CRA-178) and jail (CRA-179) look the grant up here to enforce least privilege.
+    Persistence rides the ``Store`` seam (record kind :data:`GRANT_RECORD_KIND`), so SQLite
+    → Postgres stays a driver swap; the stored envelope is versioned and up-converts lazily
+    on read via CRA-191's ``RECORD_UPCONVERTERS``.
+    """
+
+    def __init__(self, store: Store, *, org_id: str = "local") -> None:
+        self._store = store
+        self._org_id = org_id
+
+    @staticmethod
+    def _to_record(grant: Grant) -> dict[str, JSONValue]:
+        return {
+            "v": 1,
+            "package": grant.package,
+            "secrets": list(grant.secrets),
+            "egress": list(grant.egress),
+            "granted_at": grant.granted_at,
+            "grant_id": grant.grant_id,
+        }
+
+    @staticmethod
+    def _from_record(data: Mapping[str, JSONValue]) -> Grant:
+        raw_secrets = data.get("secrets") or []
+        raw_egress = data.get("egress") or []
+        secrets = raw_secrets if isinstance(raw_secrets, list) else []
+        egress = raw_egress if isinstance(raw_egress, list) else []
+        granted_at = data.get("granted_at") or 0.0
+        return Grant(
+            package=str(data.get("package", "")),
+            secrets=tuple(str(s) for s in secrets),
+            egress=tuple(str(e) for e in egress),
+            granted_at=float(granted_at) if isinstance(granted_at, (int, float)) else 0.0,
+            grant_id=str(data.get("grant_id") or new_id()),
+        )
+
+    def save(self, grant: Grant) -> None:
+        """Persist (or overwrite) the grant for ``grant.package``."""
+        self._store.put_record(
+            GRANT_RECORD_KIND, grant.package, self._to_record(grant), org_id=self._org_id
+        )
+
+    def lookup(self, package: str) -> Grant | None:
+        """Return the consented grant for ``package``, or None if it was never granted."""
+        rec = self._store.get_record(GRANT_RECORD_KIND, package, org_id=self._org_id)
+        if rec is None:
+            return None
+        return self._from_record(upconvert_grant_record(rec))
+
+    def list(self) -> list[Grant]:
+        """Every consented grant in this org (for an audit/consent surface)."""
+        return [
+            self._from_record(upconvert_grant_record(r))
+            for r in self._store.list_records(GRANT_RECORD_KIND, org_id=self._org_id)
+        ]
+
+    def revoke(self, package: str) -> None:
+        """Remove a package's grant (fail-closed: it can lease nothing afterward)."""
+        self._store.delete_record(GRANT_RECORD_KIND, package, org_id=self._org_id)
+
+
+def upconvert_grant_record(data: Mapping[str, JSONValue]) -> dict[str, JSONValue]:
+    """Lift a stored grant envelope to the current shape (CRA-191 read-path up-convert).
+
+    Pure + deterministic. A pre-versioning row (no ``v``) is treated as v1 and stamped.
+    Registered into ``RECORD_UPCONVERTERS`` for :data:`GRANT_RECORD_KIND` at import time.
+    """
+    out = dict(data)
+    if "v" not in out:
+        out["v"] = 1
+    return out
+
+
+def consent_install(
+    package: str,
+    caps: Capabilities,
+    *,
+    store: Store,
+    decider: ConsentDecider | None = None,
+    org_id: str = "local",
+    now: float | None = None,
+) -> Grant:
+    """Surface ``caps`` for consent and, on approval, record + return the :class:`Grant`.
+
+    The install-time gate (CRA-180):
+
+      1. Build a STATIC :class:`ConsentRequest` from the declared capabilities (secrets by
+         REFERENCE, egress by host — never a value).
+      2. Ask the ``decider`` (default :class:`DenyConsent` — fail-closed for a detached /
+         non-interactive context; nothing self-approves silently).
+      3. On approval: mint a :class:`Grant` (the consented manifest), persist it via the
+         :class:`GrantManifest` (Store seam), and return it.
+      4. On decline: write NO grant and raise :class:`ConsentDeclined` — the package stays
+         fail-closed (the broker/jail deny any ungranted lease).
+    """
+    decider = decider or DenyConsent()
+    request = ConsentRequest.from_capabilities(package, caps)
+    if not decider.decide(request):
+        raise ConsentDeclined(
+            f"capability consent for {package!r} was declined; no grant recorded "
+            f"(package cannot lease {request.summary()})"
+        )
+    if now is None:
+        import time
+
+        now = time.time()
+    grant = Grant(
+        package=package,
+        secrets=request.secrets,
+        egress=request.egress,
+        granted_at=now,
+    )
+    GrantManifest(store, org_id=org_id).save(grant)
+    return grant
+
+
+# Register the grant up-converter on the CRA-191 read path (lazy import to keep secrets a
+# low-level module — migrations depends only on core.types, not on secrets).
+def _register_grant_upconverter() -> None:
+    from crawfish.store.migrations import RECORD_UPCONVERTERS
+
+    RECORD_UPCONVERTERS.setdefault(
+        GRANT_RECORD_KIND,
+        lambda d: upconvert_grant_record(d),
+    )
+
+
+_register_grant_upconverter()
 
 
 # ---------------------------------------------------------------------------

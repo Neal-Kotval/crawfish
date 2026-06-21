@@ -87,15 +87,45 @@ def _cmd_list(args: argparse.Namespace) -> int:
 
 
 # ------------------------------------------------------------------------ install
+def _package_name(path: str) -> str:
+    """The grant key for a unit/package: its manifest name, else the directory stem."""
+    from crawfish.config import load_manifest
+
+    try:
+        name = load_manifest(path).name
+    except Exception:
+        name = ""
+    return name or Path(path).resolve().name
+
+
 def _cmd_install(args: argparse.Namespace) -> int:
-    from crawfish.secrets import read_capabilities
+    from crawfish.secrets import (
+        AutoConsent,
+        ConsentDeclined,
+        ConsentRequest,
+        DenyConsent,
+        consent_install,
+        read_capabilities,
+    )
 
     caps = read_capabilities(args.path)
-    print(f"'{args.path}' requests — {caps.summary()}")
-    if not args.yes:
-        print("re-run with --yes to consent and enable this package.")
+    package = _package_name(args.path)
+    request = ConsentRequest.from_capabilities(package, caps)
+    # Surface the STATIC declared capabilities — secrets by REFERENCE, never value.
+    print(f"'{package}' requests — {request.summary()}")
+
+    # Consent decider: --yes is an explicit non-interactive approval; otherwise a
+    # non-interactive context is fail-closed (DenyConsent), so nothing self-approves.
+    decider = AutoConsent() if args.yes else DenyConsent()
+    store = _open_store(args.path)
+    try:
+        grant = consent_install(package, caps, store=store, decider=decider)
+    except ConsentDeclined:
+        print("capabilities NOT consented; no grant recorded (re-run with --yes to consent).")
         return 1
-    print("capabilities consented; package enabled.")
+    finally:
+        store.close()
+    print(f"capabilities consented; grant {grant.grant_id} recorded for '{package}'.")
     return 0
 
 
