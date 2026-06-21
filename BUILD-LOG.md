@@ -118,6 +118,13 @@ sqlite3 → the "rolls back on error" contract was false. Fixed with explicit `B
 DoD gate: ruff clean · format clean · mypy strict clean (71 files) · pytest 421 passed.
 Note: emission retention/rotation + `max_per_run` wiring explicitly deferred (separate concern).
 
+### ✅ Parallel wave (isolated worktrees, merged sequentially) — phase-2a — DONE
+All four built concurrently off `main`, each through its review gauntlet, merged in order. Final integrated gate: ruff/format/mypy-strict clean (73 files) · **pytest 471 passed**.
+- **CRA-181** craw auto-dashboard — `craw dashboard` (loopback 7879) renders any `Emission.attrs` key generically; taint surfaced; DNS-rebind guard. Review APPROVE.
+- **CRA-185** test-fixture & determinism harness — `canned_transport`, per-provider stream-json fixtures, injection fixtures, `assert_taint_conformance` (load-bearing, negative-tested). Review APPROVE.
+- **CRA-173** unified provider layer — `ProviderRuntime` (failover + `ProviderPolicy` gating + alias-expand-all-entries + uniform telemetry/cost), `MockProvider`/`ClientProvider`. **Security sequencing upheld: zero egress / zero `.env` key onboarding; credential acquisition deferred to CRA-178.** Review APPROVE.
+- **CRA-175** evals + metrics expansion — typed-value metrics (FieldExactMatch/SetOverlap/NumericTolerance/SchemaConformance/StructuralMatch), golden-set string→typed migration, deterministic LLM-judge, multi-JSON guard. Review APPROVE + MINOR (test registry collision) hardened post-merge.
+
 ## Review-surfaced notes for downstream issues
 - **CRA-185** (taint-conformance suite): add explicit acceptance criterion — `tool`/MCP-result
   emissions MUST be `tainted=True`. The Emission envelope *carries* taint; producers enforce it.
