@@ -148,6 +148,14 @@ All four built concurrently off `main`, each through its review gauntlet, merged
 
 **Status: 19/22 done.** In flight: CRA-180 (consent + grant manifest), CRA-189 (red-team demo). Then CRA-186 (integration gate) closes the epic.
 
+### 🏁 PHASE 2 COMPLETE — 22/22 merged & green on `main`
+Final DoD on a clean checkout: `ruff` clean · `ruff format --check` clean · `mypy --strict` clean (82 files) · **pytest 632 passed, 1 skipped** (bwrap integration test, auto-skips off-Linux). Combined diff: 91 files, ~13.4k insertions.
+- **CRA-180** consent + grant manifest (fail-closed DenyConsent default; references-only; Store-persisted, revoke→deny).
+- **CRA-189** red-team demo (6 attack classes, all genuinely denied + audited; non-vacuous per review).
+- **CRA-186** integration/E2E gate — composes all 5 seam pillars; **NO integration bugs found** (every seam composed first try); taint conformance passes across Emission/Output/Context/jail.
+
+ADRs shipped: 0011 (ruvLLM/rvagent do-not-adopt), 0013 (emission taxonomy + inline Output.value + single resolve_model), 0014 (versioned store migrations), 0015 (Tuner = in-house search), 0016 (sandbox Jail abstraction). Pass-3 whole-epic audit: in progress.
+
 ## Review-surfaced notes for downstream issues
 - **CRA-185** (taint-conformance suite): add explicit acceptance criterion — `tool`/MCP-result
   emissions MUST be `tainted=True`. The Emission envelope *carries* taint; producers enforce it.
