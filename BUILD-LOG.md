@@ -142,6 +142,12 @@ All four built concurrently off `main`, each through its review gauntlet, merged
 
 **Status: 17/22 done.** Remaining: CRA-178 (★ secret broker), CRA-180 (consent), CRA-189 (red-team demo), CRA-177 (learning), CRA-186 (integration gate).
 
+### ✅ CRA-178 (★ secret broker) / CRA-177 (learning) — phase-2b — DONE (merged, 596 passed)
+- **CRA-178** secret broker: `SecretBroker` keeps values out-of-band; nodes get a value-free `LeaseHandle`; injection at egress; Grant-gated, static-only, redirect-proof (host re-checked vs broker table), SECRET_LEASE audit (ref not value), fail-closed approval queue. **Security review REJECT→fixed**: the MCP leak was still open (`build_mcp_config` embedded the secret VALUE in the agent-readable config; brokered builder had zero callers) → fixed to reference-by-name only, value appears nowhere (tested). Residual: transparent network interception depends on jail/network layer (documented).
+- **CRA-177** learning agents: `LearningLoop` composes the Tuner; two-gate promotion (Tuner regression-gate + `gate_against_baseline` vs stored baseline) — never promotes a worse candidate; content-hashed reversible lineage with `rollback`; autonomy ceiling inherited. Review APPROVE.
+
+**Status: 19/22 done.** In flight: CRA-180 (consent + grant manifest), CRA-189 (red-team demo). Then CRA-186 (integration gate) closes the epic.
+
 ## Review-surfaced notes for downstream issues
 - **CRA-185** (taint-conformance suite): add explicit acceptance criterion — `tool`/MCP-result
   emissions MUST be `tainted=True`. The Emission envelope *carries* taint; producers enforce it.
