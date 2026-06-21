@@ -162,14 +162,19 @@ from crawfish.retry import ItemResult, ItemStatus, RetryPolicy
 from crawfish.run import InputBindingError, Run, RunStatus, RunSuspended
 from crawfish.runtime import (
     AgentRuntime,
+    ClientProvider,
     ClientRuntime,
     CommandRuntime,
     ManagedRuntime,
+    MockProvider,
     MockRuntime,
+    ProviderFailover,
+    ProviderRuntime,
     RecordReplayRuntime,
     RunRequest,
     RunResult,
     RuntimeEvent,
+    expand_candidates,
     get_runtime,
 )
 from crawfish.sandbox import EgressBroker, EgressDenied, run_out_of_process
@@ -303,6 +308,11 @@ __all__ = [
     "MockRuntime",
     "ClientRuntime",
     "ManagedRuntime",
+    "ProviderRuntime",
+    "ProviderFailover",
+    "expand_candidates",
+    "MockProvider",
+    "ClientProvider",
     "RecordReplayRuntime",
     "RunRequest",
     "RunResult",
