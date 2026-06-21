@@ -28,6 +28,14 @@ def build_mcp_config(
     """Build a ``{"mcpServers": {...}}`` config (the shape `claude --mcp-config` reads).
 
     Secret values land in each server's ``env`` (by reference), never in any prompt.
+
+    .. deprecated:: CRA-178
+        This path injects the secret VALUE into a subprocess ``env`` the agent can
+        read — a prompt-injected agent can exfiltrate it. For any consequential
+        credential, build the config through
+        :func:`crawfish.secrets.brokered_mcp_config`, which leases the secret through
+        the :class:`~crawfish.secrets.SecretBroker` (Grant-gated, STATIC-only, audited)
+        and keeps the value out of the agent-readable env entirely.
     """
     servers: dict[str, object] = {}
     for conn in connections:
