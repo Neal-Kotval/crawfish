@@ -96,7 +96,7 @@ Thanks to everyone who has helped build Crawfish. 🦞
 
 [![Contributors](https://contrib.rocks/image?repo=Neal-Kotval/crawfish)](https://github.com/Neal-Kotval/crawfish/graphs/contributors)
 
-New here? The most welcome first contribution is a connector — see
+Get started as a contributor!
 [`CONTRIBUTING.md`](.github/CONTRIBUTING.md).
 
 ## Star History
