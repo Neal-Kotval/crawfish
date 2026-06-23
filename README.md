@@ -1,4 +1,9 @@
-# Crawfish
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/docs/assets/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/docs/assets/logo.svg" alt="Crawfish" width="420">
+  </picture>
+</p>
 
 [![CI](https://github.com/Neal-Kotval/crawfish/actions/workflows/ci.yml/badge.svg)](https://github.com/Neal-Kotval/crawfish/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/crawfish.svg)](https://pypi.org/project/crawfish/)
