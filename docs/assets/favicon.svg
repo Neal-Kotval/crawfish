@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="1859 815 500 500">
+  <defs>
+    <style>
+      .cf{fill:#ef5551;}
+      .eye{fill:#000;}
+      .s20,.s45{fill:none;stroke:#ef5551;stroke-miterlimit:10;}
+      .s20{stroke-width:20px;}
+      .s45{stroke-width:45px;}
+    </style>
+  </defs>
+  <g>
+    <ellipse class="cf" cx="2116.07" cy="991.04" rx="70.4" ry="49.47"/>
+    <ellipse class="cf" cx="2118.89" cy="1097.73" rx="57.56" ry="156.46"/>
+    <ellipse class="cf" cx="2116.07" cy="1254.2" rx="23.46" ry="42.36"/>
+    <ellipse class="cf" cx="2139.53" cy="1254.2" rx="23.46" ry="42.36" transform="translate(-299.93 807.4) rotate(-20)"/>
+    <ellipse class="cf" cx="2092.6" cy="1254.2" rx="42.36" ry="23.46" transform="translate(198.3327 2791.6397) rotate(-70)"/>
+    <ellipse class="eye" cx="2077.55" cy="949.62" rx="11.75" ry="7.42" transform="translate(-199.5 767.83) rotate(-20)"/>
+    <ellipse class="eye" cx="2159.6" cy="949.62" rx="7.42" ry="11.75" transform="translate(528.6202 2654.1858) rotate(-70)"/>
+    <rect class="cf" x="2078.37" y="830.66" width="13.17" height="128.63" transform="translate(-180.36 767.07) rotate(-20)"/>
+    <rect class="cf" x="2141.68" y="830.66" width="13.17" height="128.63" transform="translate(435.66 -680.78) rotate(20)"/>
+    <path class="s45" d="M1996.8,991.04c7.13,53.79,64.62,92.57,125.62,88.67,54.77-3.5,101.08-40.68,107.08-88.67"/>
+    <path class="s20" d="M1980.74,936.15c-16.77,5.38-27.62,15.76-27.92,26.89-.4,14.65,17.49,29.73,40.33,29.94,24.04.23,40.5-16.14,41.79-29.94,1.4-15.01-15.31-25.29-18-26.89"/>
+    <path class="s20" d="M2225.04,936.15c-16.77,5.38-27.62,15.76-27.92,26.89-.4,14.65,17.49,29.73,40.33,29.94,24.04.23,40.5-16.14,41.79-29.94,1.4-15.01-15.31-25.29-18-26.89"/>
+  </g>
+</svg>

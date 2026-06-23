@@ -506,8 +506,12 @@
 /* Specific enough to beat Material's `.md-header__button.md-logo img` default. */
 .md-header__button.md-logo img,
 .md-logo img {
-  height: 1.7rem;
+  height: 2.1rem;
   width: auto;
+}
+/* Taller header bar to match the larger wordmark. */
+.md-header__inner {
+  min-height: 3.2rem;
 }
 [data-md-color-scheme="slate"] .md-header__button.md-logo img,
 [data-md-color-scheme="slate"] .md-logo img {
