@@ -16,6 +16,11 @@ deterministic pieces:
 No model call, no I/O, no wall clock, no global RNG: a fluid/untrusted value is *measured*,
 never trusted as an instruction, and the derived threshold is a function of recorded
 measurements only. The threshold is data the gate consumes, not a free knob.
+
+Cost preview: an escalation's stronger-model re-run (the ``2×`` tail this threshold
+gates) is priced into the honest cost band by :meth:`crawfish.cost.CostShape.escalate` /
+:meth:`crawfish.cost.CostShape.from_runtime` (F-6 / OPT-2, the single cost owner) — the
+re-priced strong attempt, never a flat ``2×`` of the base.
 """
 
 from __future__ import annotations

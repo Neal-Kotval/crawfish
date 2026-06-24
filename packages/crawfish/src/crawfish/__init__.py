@@ -74,6 +74,8 @@ from crawfish.cost import (
     BudgetState,
     CostEstimate,
     CostMeter,
+    CostShape,
+    compose_cost,
     estimate_cost,
     spent_today,
 )
@@ -265,6 +267,18 @@ from crawfish.refine import (
     StopCondition,
     VerifierStop,
     feature_loop,
+)
+from crawfish.resolve import (
+    LOCKFILE_VERSION,
+    CandidateSource,
+    InMemoryCandidateSource,
+    Lockfile,
+    Pin,
+    ResolutionError,
+    SemVer,
+    read_lockfile,
+    resolve,
+    write_lockfile,
 )
 from crawfish.retry import ItemResult, ItemStatus, RetryPolicy
 from crawfish.routing import (
@@ -901,4 +915,19 @@ __all__ = [
     "GrammarKind",
     "GrammarError",
     "parse_grammar",
+    # M5 — surfaces & accuracy
+    # Honest cost interval (CRA-220)
+    "CostShape",
+    "compose_cost",
+    # Dependency resolver + lockfile for summoned units (CRA-222)
+    "resolve",
+    "Lockfile",
+    "Pin",
+    "CandidateSource",
+    "InMemoryCandidateSource",
+    "SemVer",
+    "ResolutionError",
+    "read_lockfile",
+    "write_lockfile",
+    "LOCKFILE_VERSION",
 ]

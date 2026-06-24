@@ -371,6 +371,10 @@ class Run:
         dead-letter) rather than spawning another metered model call. Otherwise the extra
         turn is charged through the runtime exactly like the first, so ``ctx.cost_budget``
         caps total spend and the overshoot is bounded by one call.
+
+        Cost preview: this ``+1`` worst-case re-prompt is folded into the honest cost band
+        by :meth:`crawfish.cost.CostShape.repair` (F-6 / OPT-2) — the cost owner; this path
+        does not re-implement the multiplier.
         """
         ctx.cancel_token.raise_if_cancelled()
         # Pre-flight: don't start a metered repair call with no headroom left. ``None``

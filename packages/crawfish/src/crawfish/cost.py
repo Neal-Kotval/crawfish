@@ -54,6 +54,7 @@ from crawfish.runtime.command import DEFAULT_MODEL
 
 if TYPE_CHECKING:
     from crawfish.definition.types import Definition
+    from crawfish.runtime.base import AgentRuntime
     from crawfish.store.base import Store
 
 __all__ = [
@@ -370,6 +371,18 @@ class CostShape:
         return cls("retry", float(n), measured_rate=measured_rate, rate_ci=rate_ci)
 
     @classmethod
+    def repair(cls, *, measured_rate: float | None = None, rate_ci: float = 0.0) -> CostShape:
+        """``Run._repair`` worst case = the base call + one repair re-prompt (``2×``).
+
+        A schema-failing output triggers exactly one extra metered call (``run.py``
+        ``self.repair_count += 1``, capped at one), so the worst case doubles the leaf.
+        ``measured_rate`` is the fraction of calls that actually fail validation and pay
+        the repair (from the ledger), so ``expected = 1 + p`` — the repair tail folded
+        honestly rather than assumed-never (lower bound) or assumed-always.
+        """
+        return cls("repair", 2.0, measured_rate=measured_rate, rate_ci=rate_ci)
+
+    @classmethod
     def recurse(cls, *, branching: int, max_depth: int) -> CostShape:
         """``recurse`` worst case = ``branching ** max_depth`` leaf calls."""
         if branching < 1:
@@ -377,6 +390,69 @@ class CostShape:
         if max_depth < 0:
             raise ValueError("recurse max_depth must be >= 0")
         return cls("recurse", float(branching**max_depth))
+
+    # --- infer the shape chain from an assembled runtime (F-6 helper) -------
+    @classmethod
+    def from_runtime(
+        cls,
+        runtime: AgentRuntime,
+        *,
+        model_prices: dict[str, float] | None = None,
+        config: ModelsConfig | None = None,
+    ) -> list[CostShape]:
+        """Infer the operator-cost shape chain from an assembled wrapper chain.
+
+        The "Open (resolved)" of OPT-2: rather than hand-listing the operators, walk
+        the runtime's ``_inner`` nesting and emit one :class:`CostShape` per
+        cost-bearing wrapper, **outermost-first** — exactly the order
+        :func:`compose_cost` folds. So a ``QuorumRuntime(k=5)`` wrapping an
+        ``EscalatingRuntime`` over a leaf ``CommandRuntime`` yields
+        ``[quorum(5), escalate(...)]``, and ``compose_cost(base, shapes)`` previews
+        the ``5 × (1 + strong/base)`` worst case the runtime can actually spend.
+
+        Only the **runtime-resident** re-run wrappers are inferable here:
+        :class:`~crawfish.runtime.escalate.EscalatingRuntime` and
+        :class:`~crawfish.runtime.quorum.QuorumRuntime`. ``Refine`` (a Node),
+        ``Retry`` (a policy) and ``recurse`` (a control-flow shape) are not part of the
+        runtime nesting, so the caller adds those shapes alongside this list when those
+        operators wrap the run.
+
+        For escalation the strong attempt is re-priced from ``model_prices`` (resolved
+        through the shared :func:`resolve_model` so the preview can't drift from the
+        run): ``strong_multiplier = strong_price / primary_price``. With no prices (or a
+        free primary) it degrades to the count-based ``2×`` — never an undercount. Pure
+        static traversal: no model call, no ``run``.
+        """
+        # Imported here (not at module top) to avoid a runtime->cost import cycle: the
+        # cost model is the substrate every plane consumes, including the runtimes.
+        from crawfish.runtime.escalate import EscalatingRuntime
+        from crawfish.runtime.quorum import QuorumRuntime
+
+        prices = model_prices if model_prices is not None else DEFAULT_MODEL_PRICES
+        shapes: list[CostShape] = []
+        node: object = runtime
+        # Walk the wrapper chain outermost-first, collecting one shape per re-run wrapper
+        # and following the single ``_inner`` seam down to the concrete leaf runtime.
+        while True:
+            if isinstance(node, EscalatingRuntime):
+                primary = _resolve_model(node._primary, config)
+                strong = _resolve_model(node._strong, config)
+                shapes.append(
+                    cls.escalate(
+                        base_price=prices.get(primary, 0.0),
+                        strong_price=prices.get(strong, 0.0),
+                    )
+                )
+            elif isinstance(node, QuorumRuntime):
+                # The static worst case is k samples; with no pinned k it is the floor
+                # (``min_k``), the most the sequential test could still draw.
+                k = node._k if node._k is not None else node._min_k
+                shapes.append(cls.quorum(max(1, k)))
+            inner = getattr(node, "_inner", None)
+            if inner is None:
+                break
+            node = inner
+        return shapes
 
 
 def compose_cost(base: CostEstimate, shapes: Sequence[CostShape]) -> CostEstimate:
