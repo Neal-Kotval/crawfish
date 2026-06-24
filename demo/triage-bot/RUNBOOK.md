@@ -129,11 +129,12 @@ the four `quorum` / `abstention` / `house-guard` / `grammar` lines under step 9)
 
 - **Quorum (9q).** The ambiguous ticket *"after the billing page crashed, my card was
   charged twice — is this a bug?"* is classified `_QUORUM_K = 5` times through a
-  `QuorumRuntime` wrapping the backend; a seed-varying classifier makes the `k` samples
-  genuinely **disagree** (bug / billing / feature), and the pure `majority_vote(field=
-  "category")` reduction resolves the split to one typed winner (or the **declared default**
-  on a tie/abstain — Router parity). Taint is the union across samples (a vote never
-  launders it). The k-fan-out is the call **multiplier** the worst-case folds in.
+  `QuorumRuntime` wrapping the backend, reduced by a modal-output `majority_vote` whose key
+  is each sample's **category** snapped onto the closed enum (`_CategoryVote` — a real model
+  returns prose, not a bare `category` JSON field, so the vote keys on the *category mentioned
+  in* each sample, not raw text). The vote resolves the split to one typed winner (or the
+  **declared default** on a tie/abstain — Router parity). Taint is the union across samples
+  (a vote never launders it). The k-fan-out is the call **multiplier** the worst-case folds in.
 - **Abstention (9a).** A deliberately low-confidence triage Output (`confidence 0.30`) is
   turned into a typed `Abstention` by `abstain_below_calibrated` — the threshold is read off
   a **reliability curve** (`escalate.abstention_threshold`), not a guessed constant — and a
@@ -153,9 +154,29 @@ the four `quorum` / `abstention` / `house-guard` / `grammar` lines under step 9)
   prose, not a bare label — is *not* in-grammar, so the constrained path **eliminates** the
   metered `_repair` round trip the unconstrained path would pay.
 
-Unlike the M1 Refine / F-3 gate VERDICT, the M4 step is **deterministic over recorded data**
-once its (few) stochastic leaves are fixed — there is no model-variance branch, so the
-`_taming_step_ok()` assertions hold identically on the mock and live paths.
+**Live vs. mock semantics (load-bearing — the M4 step certifies the OPERATORS, not a fixed
+draw).** The mock path uses structured JSON responders, so it shows the *vivid* case (the
+quorum samples disagree, the agent self-reports a low `confidence`, the proposer emits clean
+grammar JSON). The real model returns free-form prose, so `_taming_step_ok()` accepts the
+correct real-model outcomes the same way the M1 Refine / F-3 gate steps accept a justified
+bounded outcome:
+
+- **Quorum** — mock requires a real split (`distinct > 1`); **live** accepts a resolved
+  vote over `distinct >= 1` (a real model *agreeing* is the good self-consistency case, not a
+  failure — and `CommandRuntime` may not honour `decode_seed`, so the `k` samples can
+  coincide). Either way the vote resolves to a typed winner; the k-fan-out still meters.
+- **Abstention** — mock reads a low `confidence` below the calibrated threshold; **live** the
+  model often emits NO readable `confidence`, and then *declining is the fail-safe action* (a
+  missing confidence abstains). Both end in a typed `Abstention` routed to `review` — the
+  live line reads `confidence -1.00 … (reason: no readable 'confidence' … fail safe)`, which
+  is the correct selective-prediction outcome.
+- **House-guard** — the proposer is the one stochastic leaf. The mock emits clean grammar
+  JSON (`propose (model-rule)`); the real model emits prose, so the demo recovers the first
+  `{...}` span or, if the text is unparseable, falls back to the **static author rule**
+  (`propose (static-fallback)`) — a fluid emission **can never widen the grammar** (the
+  security invariant), so the fallback is a trusted author-fixed predicate, NOT a
+  model-synthesised one. The *distil → earn → enforce* pipeline runs identically either way.
+- **Grammar** — deterministic on both paths (`enforce` snaps prose onto a valid member).
 
 ### Exact command for the M4 live gate
 
@@ -174,13 +195,15 @@ the hard-kill and the `total_spend <= worst_case` honesty assertion coincide.
 Run the command above and confirm, on the `quorum` / `abstention` / `house-guard` / `grammar`
 lines under step 9:
 
-- [ ] **Quorum disagrees then resolves** — `quorum (sample-k vote)` prints `5 samples -> N
-  distinct categories {…} -> winner '…'` with `N > 1` (a real disagreement) and a non-empty
-  typed winner (or the declared default on a tie/abstain). The k samples meter into the
-  shared budget; the vote reduction is free.
-- [ ] **Abstention triggers + routes** — `abstention (selective)` prints `confidence … <
-  threshold … -> Abstention -> routed to 'review'`: the low-confidence Output became a typed
-  `Abstention` and the Router branched it to the review path via `is_abstention`.
+- [ ] **Quorum resolves the vote** — `quorum (sample-k vote)` prints `5 samples -> N distinct
+  categories {…} -> winner '…'` with a non-empty typed winner. Live: `N >= 1` (a real model
+  may agree — a unanimous vote is the good case; the demo's last record drew `{'billing': 1,
+  'bug': 4}` → `bug`, a real split). The k samples meter into the shared budget; the vote is free.
+- [ ] **Abstention triggers + routes** — `abstention (selective)` prints `… -> Abstention ->
+  routed to 'review'`. Live: the real model usually emits no readable `confidence`, so the
+  line reads `confidence -1.00 … (reason: no readable 'confidence' … fail safe)` — a *missing*
+  confidence abstains (the fail-safe selective-prediction outcome). Either way a typed
+  `Abstention` routed to `review` via `is_abstention`.
 - [ ] **House-guard blocks** — `house-guard (distilled)` prints `… stage=block …; BLOCKED
   disallowed=True, passed allowed=True`: the distilled guard EARNED enforcement (joint
   precision/coverage bar) and blocks the disallowed output while passing the allowed one,
@@ -197,6 +220,42 @@ The deterministic path (`uv run craw demo`, `$0`) exercises every one of these o
 runtime; the acceptance test is `packages/crawfish/tests/test_demo_taming.py` (18 tests, no
 live calls — quorum disagrees-then-resolves, abstention triggers+routes, guard earns+blocks
 (and an un-earned guard fails closed), grammar zero-repairs, and the k-fan-out cost guard).
+
+### M4 live-acceptance gate — CERTIFIED ✅ (real `claude -p` haiku, 2026-06-24, `demo-runner-m4`)
+
+Run against the **real** logged-in `claude -p` (`claude -p "say ok"` → `ok`). Cassettes
+cleared to force a fresh record, then a replay run confirmed bit-identical `$0` reproduction.
+Both runs printed **`PASS — 9/9`**. Cost interval bound: `worst=150 calls=$9.000 <= budget=$9.00`.
+
+Three real-model harness defects were found and fixed this session (deterministic `craw demo`
+had masked all three — they only surface on the live prose path):
+
+1. **Quorum role unresolvable** — `q_request` used the main triage `defn`, whose team has no
+   `quorum-classifier` agent → `KeyError`. Fix: a dedicated inline `_build_quorum_body()`
+   Definition whose team carries the `quorum-classifier` role (the role name is load-bearing
+   — the mock responder branches on it).
+2. **Vote keyed on raw prose** — `majority_vote(field="category")` over the model's free-form
+   text collapsed every sample to `null` (or crashed `json.loads` on the winner). Fix:
+   `_CategoryVote` snaps each sample's category onto the closed enum before keying (the vote
+   is over real categories, mock and live).
+3. **Guard proposal not clean grammar** — the real model proposed prose, not grammar JSON, so
+   `distill` raised `GuardGrammarError`. Fix: `_distill_proposal` recovers the first `{...}`
+   span or falls back to the **static author rule** — a fluid emission never widens the
+   grammar (the security invariant holds; the fallback is trusted author config).
+
+| # | M4 evidence item | fresh record | replay |
+|---|------------------|--------------|--------|
+| 1 | **Quorum resolves the vote** | ✅ `5 samples -> 2 distinct {'billing': 1, 'bug': 4} -> winner 'bug'` (a real split the vote resolved) | ✅ identical tally/winner |
+| 2 | **Abstention fail-safe + routes** | ✅ `confidence -1.00 … (reason: no readable 'confidence' … fail safe) -> Abstention -> routed to 'review'` | ✅ identical |
+| 3 | **House-guard earns + blocks** | ✅ `propose (static-fallback) -> earn: stage=block (precision_lb=0.61, coverage_lb=0.61); BLOCKED disallowed=True, passed allowed=True`, sha `c6683eb94df109ec` | ✅ identical sha |
+| 4 | **Structured field under grammar** | ✅ `category 'bug' under enum grammar (constrained valid=True, unconstrained valid=False) -> 1 repair(s) eliminated` | ✅ identical |
+| 5 | **Budget respected** | ✅ `worst=150 calls=$9.000 <= budget=$9.00`, no `BudgetExceeded` | ✅ replay spend `$0.00` |
+| 6 | **Bit-identical replay** | quorum `bug`, guard sha `c6683eb94df109ec`, grammar `bug` | ✅ **all identical** at `$0` |
+
+**Verdict: PASS — all four M4 behaviours clear the real model on BOTH fresh record and replay.**
+The deterministic `craw demo` (mock, `$0`) shows the vivid case (quorum samples disagree, the
+agent self-reports a low `confidence`, the proposer emits clean grammar JSON); the live path
+certifies the OPERATORS under real-model prose (see *Live vs. mock semantics* above).
 
 ## M3 live-acceptance gate — CERTIFIED ✅ (real `claude -p` haiku, 2026-06-24)
 

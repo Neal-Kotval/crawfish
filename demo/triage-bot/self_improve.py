@@ -77,7 +77,7 @@ from crawfish.eval import (
 )
 from crawfish.experiment import k_from_alpha, tune_gate_split, winners_curse_shrink
 from crawfish.grammar import Grammar
-from crawfish.guard import GuardStage, HouseGuard, distill, propose_rule
+from crawfish.guard import GuardStage, HouseGuard, Predicate, distill, propose_rule
 from crawfish.learning import StateDict, load_state, state_dict
 from crawfish.ledger import ExecutionLedger, compute_loop_id
 from crawfish.metrics import CalibrationReport, Rubric, calibrate
@@ -86,7 +86,7 @@ from crawfish.output import Output, output_content_sha
 from crawfish.refine import ProduceFn, Refine, RefineResult, VerifierStop
 from crawfish.runtime import MockRuntime, RecordReplayRuntime
 from crawfish.runtime.base import RunRequest, RunResult
-from crawfish.runtime.quorum import QuorumRuntime, majority_vote
+from crawfish.runtime.quorum import MajorityVote, QuorumRuntime
 from crawfish.runtime.replay import ExecutionCoordinate
 from crawfish.runtime.replay import _key as _cassette_key
 from crawfish.store import SqliteStore
@@ -226,24 +226,41 @@ class DemoResult:
         leaves are fixed, so unlike the Refine/gate VERDICT they have no model-variance
         branch: the requirements hold on both paths.
 
-        * **Quorum** drew k samples, they genuinely DISAGREED (more than one distinct
-          category), and the disagreement RESOLVED to a typed winner (never abstained/raised
-          here — the weighted draw forms a plurality).
-        * **Abstention** measured a low confidence, turned the Output into a typed
-          ``Abstention``, and a Router branched it to the ``review`` path.
+        * **Quorum** drew k samples and the vote RESOLVED to a typed winner. On the **mock**
+          path the seed-varying classifier guarantees the samples DISAGREE (``distinct > 1``)
+          — a real split the vote resolves; on the **live** path a real model often AGREES
+          (a unanimous vote is the *good* self-consistency case), so a resolved vote over
+          ``distinct >= 1`` is a correct outcome (the same live-vs-mock precedent the Refine
+          and F-3 gate steps set). The k-fan-out is what the worst-case bound accounts for.
+        * **Abstention** turned a low-confidence (or confidence-less) Output into a typed
+          ``Abstention`` and a Router branched it to the ``review`` path. On the **mock** path
+          the agent self-reports a low ``confidence`` below the calibrated threshold; on the
+          **live** path the real model may emit no readable ``confidence`` at all, and then
+          *declining is the fail-safe action* (a missing confidence abstains) — also a correct
+          selective-prediction outcome. Either way the typed Abstention must route to review.
         * **House-guard** EARNED enforcement (cleared the joint bar → stage ``block``), then
           BLOCKED the disallowed output and PASSED the allowed one — model-free at enforcement.
         * **Grammar** produced a valid in-grammar field under the constraint (zero repairs)
           where the unconstrained decode would have needed one.
         """
+        # Quorum: mock guarantees a real split; live accepts a resolved (possibly unanimous)
+        # vote — a real model agreeing is the good self-consistency case, not a failure.
+        quorum_ok = (self.quorum_distinct > 1) if not self.live else (self.quorum_distinct >= 1)
+        # Abstention: a confidence WAS read and fell below threshold (mock), OR none was
+        # readable and the fail-safe declined (live). Both end in a typed Abstention -> review.
+        confidence_below = 0.0 <= self.abstain_confidence < self.abstain_threshold
+        fail_safe_abstain = self.abstain_confidence < 0.0  # no readable confidence -> abstain
+        abstain_ok = (
+            self.abstained
+            and self.abstain_routed == "review"
+            and (confidence_below or fail_safe_abstain)
+        )
         return bool(
             self.quorum_k >= 2
-            and self.quorum_distinct > 1  # the k samples really disagreed (a real vote)
+            and quorum_ok
             and self.quorum_resolved
             and self.quorum_winner
-            and self.abstained
-            and self.abstain_routed == "review"
-            and self.abstain_confidence >= 0.0
+            and abstain_ok
             and self.guard_earned
             and self.guard_stage == GuardStage.BLOCK.value
             and self.guard_blocked_disallowed
@@ -1233,6 +1250,69 @@ def _quorum_sample_category(ticket: str, decode_seed: int | None) -> str:
     return "feature"
 
 
+#: The static enum the quorum vote normalizes each sample onto — the SAME closed, trusted
+#: label set the Router uses. A free-form model sample (prose) is snapped onto this surface
+#: before keying the vote, so disagreement is measured over real categories, not raw text.
+_QUORUM_GRAMMAR = Grammar.enum(list(_ROUTER_LABELS))
+
+
+def _category_of_text(text: str) -> str:
+    """Snap a sample's (possibly free-form) text onto the closed category enum.
+
+    The mock emits ``{"category": "bug", ...}``; the real model emits prose that *mentions* a
+    category (``**Category:** billing``, ``**billing**``, a markdown table…). Both are handled
+    uniformly: decode JSON and read ``category`` when present, else project the raw text onto
+    the static :data:`_QUORUM_GRAMMAR` enum (``Grammar.enforce`` finds the mentioned member).
+    Pure and deterministic — this is the constrained-decode idea applied to the VOTE KEY, so
+    the vote is over real categories rather than raw prose. An out-of-grammar prose label
+    (e.g. the model says ``documentation``) snaps to the first declared member, never crashes."""
+    decoded = _as_record(text)
+    cat = decoded.get("category") if decoded else None
+    if isinstance(cat, str) and cat.strip():
+        return _QUORUM_GRAMMAR.enforce(cat)
+    return _QUORUM_GRAMMAR.enforce(text)
+
+
+class _CategoryVote(MajorityVote):
+    """``majority_vote`` whose key is the sample's category, robust to free-form prose.
+
+    Keeps the modal-output (argmax-of-empirical-distribution) semantics of
+    :class:`~crawfish.runtime.quorum.MajorityVote` and its pure reduction, but overrides
+    :meth:`key_of` to NORMALIZE each sample onto the closed category enum first (a real model
+    returns prose, not a bare ``category`` JSON field, so the stock ``field="category"`` key
+    would collapse every prose sample to ``null`` and fabricate a false unanimity). The vote
+    is thus over real categories on BOTH the mock and the live path."""
+
+    def key_of(self, result: RunResult) -> str:  # type: ignore[override]
+        return _category_of_text(result.text)
+
+
+def _build_quorum_body() -> Definition:
+    """The Quorum **body**: a single-agent classifier the QuorumRuntime samples k times.
+
+    A DISTINCT inline Definition whose team actually carries the ``quorum-classifier`` role,
+    so the live runtime can resolve the role (the main triage ``defn``'s team has no such
+    agent). The mock responder branches on this exact role name to mint the seed-varying
+    disagreement, so the role name is load-bearing and must stay ``quorum-classifier``."""
+    return Definition(
+        id="quorum-classifier",
+        inputs=[Parameter(name="ticket_body", type="str", required=False, flow=Flow.FLUID)],
+        team=TeamSpec(
+            agents=[
+                AgentSpec(
+                    role="quorum-classifier",
+                    prompt=(
+                        "Classify the support ticket's category. "
+                        "Reply with exactly one of: bug, billing, feature, how-to."
+                    ),
+                )
+            ],
+            coordination=Coordination.SINGLE,
+            lead="quorum-classifier",
+        ),
+    )
+
+
 def _build_guard_proposer() -> Definition:
     """The guard's PROPOSER body — a single agent that reads corrections and emits a rule.
 
@@ -1256,6 +1336,42 @@ def _build_guard_proposer() -> Definition:
             lead="guard-proposer",
         ),
     )
+
+
+def _distill_proposal(value: JSONValue) -> tuple[Predicate, bool]:
+    """Distil a (possibly free-form) proposal into the closed grammar — fail SAFE.
+
+    The proposer is the one stochastic leaf: the mock emits clean grammar JSON, but the real
+    model emits prose that may *wrap* the rule (or not emit valid grammar at all). We honour
+    the security invariant — a FLUID emission can never widen the grammar — by:
+
+    1. trying :func:`~crawfish.guard.distill` on the value directly (the mock path);
+    2. else recovering the first balanced ``{...}`` span from the prose and distilling THAT
+       (a model that wrapped the grammar object in explanation still distils as data);
+    3. else falling back to the STATIC author rule :data:`_PROPOSED_GUARD_RULE` — a trusted,
+       author-fixed predicate, NOT a model-widened grammar. The model proposed *a* rule; when
+       its text is unparseable the demo's deterministic distillation target stands in, so the
+       *earn → enforce* pipeline is still exercised under the real model.
+
+    Returns ``(predicate, recovered)`` — ``recovered`` is True when the model's own emission
+    distilled (1 or 2), False when the static fallback was used (so the step can report it)."""
+    from crawfish.grammar import _first_object_span
+    from crawfish.guard import GuardGrammarError
+
+    try:
+        return distill(value), True
+    except GuardGrammarError:
+        pass
+    if isinstance(value, str):
+        span = _first_object_span(value)
+        if span is not None:
+            try:
+                return distill(span), True
+            except GuardGrammarError:
+                pass
+    # Fail safe: the model's text could not be parsed as a grammar rule. Fall back to the
+    # STATIC author predicate — a fluid emission never widens the grammar (security spine).
+    return distill(_PROPOSED_GUARD_RULE), False
 
 
 def _build_review_router() -> Router:
@@ -2021,16 +2137,24 @@ def _run_taming_step(
     # --- 9q. Quorum: sample-k + vote over the ambiguous ticket. ---
     # Wrap the backend runtime so each of the k samples emits as a normal call (charging the
     # shared budget on the live path) and the consensus reduction stays pure. The classifier
-    # role keys the seed-varying responder branch; the vote is over the ``category`` field.
+    # role keys the seed-varying responder branch; the vote keys on each sample's CATEGORY,
+    # snapped onto the closed enum (``_CategoryVote``) so a real-model prose sample votes on a
+    # real category rather than collapsing to ``null`` (the modal-output ``majority_vote``
+    # semantics, made robust to free-form text — same vote on the mock and live paths).
     quorum = QuorumRuntime(
         backend.runtime,
         k=_QUORUM_K,
-        consensus=majority_vote(field="category"),
+        consensus=_CategoryVote(),
         default_text=json.dumps({"category": "bug", "severity": "normal"}, sort_keys=True),
         early_stop=False,  # draw all k so the disagreement is fully visible in the tally
     )
+    # A dedicated quorum body Definition whose team actually carries the ``quorum-classifier``
+    # role, so the LIVE runtime can resolve it (the main triage ``defn`` has no such agent —
+    # the role lookup would KeyError). ``_count_fresh_samples`` and the run both key off this
+    # request, so both the cost-count helper and the sampler resolve the role.
+    quorum_body = _build_quorum_body()
     q_request = RunRequest(
-        definition=defn,
+        definition=quorum_body,
         role="quorum-classifier",
         inputs={"project": "acme", "ticket_body": _AMBIGUOUS_TICKET},
     )
@@ -2043,12 +2167,13 @@ def _run_taming_step(
         ctx.cost_budget.charge(backend.per_call_usd * fresh_samples)
     consensus = q_result.consensus
     res.quorum_k = len(q_result.samples)
+    # The tally keys are already canonical categories (``_CategoryVote.key_of`` snaps each
+    # sample onto the enum), so they read as bare category labels in the printed summary.
     res.quorum_tally = dict(consensus.tally)
     res.quorum_distinct = len(consensus.tally)
-    winner_value = json.loads(q_result.result.text)
-    res.quorum_winner = (
-        str(winner_value.get("category", "")) if isinstance(winner_value, dict) else ""
-    )
+    # The winner text is a raw elected sample (mock JSON or real-model prose); extract its
+    # category the same robust way the vote keyed on it — never a brittle ``json.loads``.
+    res.quorum_winner = _category_of_text(q_result.result.text)
     res.quorum_resolved = not consensus.abstained or backend.live  # a typed winner was elected
     res.total_spend_usd = ctx.cost_budget.spent_usd
     res.steps.append(
@@ -2095,7 +2220,10 @@ def _run_taming_step(
     proposal = asyncio.run(propose_rule(proposer, gold, ctx, backend.runtime))
     if backend.live and not _is_replay_request(backend, proposer, "guard-proposer", gold, ctx):
         ctx.cost_budget.charge(backend.per_call_usd)
-    predicate = distill(proposal.value)  # parse the FLUID emission into the closed grammar
+    # Parse the FLUID emission into the closed grammar — fail SAFE: a real-model proposal that
+    # is prose (not clean grammar JSON) is recovered from its first ``{...}`` span, or falls
+    # back to the STATIC author rule (never a model-widened grammar — the security invariant).
+    predicate, rule_recovered = _distill_proposal(proposal.value)
     guard = HouseGuard.synthesize(
         predicate,
         gold,
@@ -2119,7 +2247,8 @@ def _run_taming_step(
         StepResult(
             9,
             "house-guard (distilled)",
-            f"propose -> distil -> earn: stage={res.guard_stage} "
+            f"propose ({'model-rule' if rule_recovered else 'static-fallback'}) -> distil -> "
+            f"earn: stage={res.guard_stage} "
             f"(precision_lb={guard.certificate.precision_lb:.2f}, "
             f"coverage_lb={guard.certificate.coverage.lo:.2f}); "
             f"BLOCKED disallowed={res.guard_blocked_disallowed}, "

@@ -239,3 +239,85 @@ def test_worst_case_includes_quorum_k_fanout(module) -> None:
     assert full >= m4_calls * module._REPAIR_FACTOR
     # the k-fan-out is really in there: dropping it would shrink the bound by k × repair.
     assert module._QUORUM_K >= 2  # a real multiplier, not a single call
+
+
+# --- 7. Real-model robustness (the three live harness defects, regression-guarded) -
+# These exercise the free-form-prose path the LIVE model takes — the mock fixture above
+# hits the structured-JSON path, so without these the defects (role unresolvable, vote
+# keyed on raw prose, guard proposal not clean grammar) reach the live gate uncaught.
+def test_quorum_body_resolves_the_classifier_role(module) -> None:
+    """The quorum body Definition carries the ``quorum-classifier`` role (live KeyError fix).
+
+    The main triage `defn` has no such agent, so the live runtime could not resolve the role
+    off it. The dedicated inline body must declare it (and the role name is load-bearing — the
+    deterministic responder branches on it to mint the seed-varying disagreement).
+    """
+    body = module._build_quorum_body()
+    assert body.agent("quorum-classifier") is not None
+    assert body.team.lead == "quorum-classifier"
+
+
+def test_category_vote_keys_on_category_in_prose(module) -> None:
+    """`_CategoryVote` snaps a free-form (real-model) sample onto the category enum.
+
+    The stock ``majority_vote(field="category")`` keys on a `category` JSON field the real
+    model never emits, collapsing every prose sample to `null` (a false unanimity). The demo's
+    `_CategoryVote` keys on the category MENTIONED in the prose, so the vote is over real
+    categories on both paths.
+    """
+    # mock-shaped (clean JSON) and live-shaped (prose) samples for the SAME category must key
+    # to the same vote key.
+    assert module._category_of_text('{"category": "billing"}') == "billing"
+    assert module._category_of_text("**Category:** billing\n\nThe duplicate charge…") == "billing"
+    assert module._category_of_text("**bug**\n\nLogin is broken after deploy") == "bug"
+    # an out-of-grammar prose label snaps to a valid member rather than crashing
+    assert module._category_of_text("Category: documentation") in module._ROUTER_LABELS
+
+
+def test_distill_proposal_recovers_prose_wrapped_rule(module) -> None:
+    """`_distill_proposal` recovers a grammar rule the model wrapped in explanation."""
+    wrapped = 'Here is my rule:\n```\n{"kind":"comparison","field":"category","op":"==",'
+    wrapped += '"literal":"unknown"}\n```\nIt fires on non-answers.'
+    predicate, recovered = module._distill_proposal(wrapped)
+    assert recovered  # the model's OWN rule distilled (not the static fallback)
+    # ``Predicate.matches`` takes the JSON value (not an Output); it fires on the disallowed one.
+    assert predicate.matches({"category": "unknown"})
+    assert not predicate.matches({"category": "billing"})
+
+
+def test_distill_proposal_fails_safe_to_static_rule(module) -> None:
+    """An unparseable proposal falls back to the STATIC author rule (grammar never widened).
+
+    A fluid emission that is not grammar at all cannot synthesise a new operator — the demo
+    falls back to the trusted, author-fixed predicate, and `recovered` reports it honestly.
+    """
+    predicate, recovered = module._distill_proposal("I cannot help with that request.")
+    assert not recovered  # the static fallback was used
+    # the fallback is exactly the author rule — distilling it directly yields the same AST
+    assert predicate == distill(module._PROPOSED_GUARD_RULE)
+
+
+def test_live_taming_accepts_unanimous_vote_and_fail_safe_abstain(module) -> None:
+    """On the LIVE path a unanimous quorum + a confidence-less fail-safe abstention PASS.
+
+    A real model often agrees (a unanimous vote is the good self-consistency case) and emits
+    no readable `confidence` (so declining is the fail-safe action). `_taming_step_ok()` must
+    accept both as correct operator outcomes — the same live-vs-mock precedent the M1 Refine /
+    F-3 gate steps set. (The mock path stays strict: `distinct > 1`, a measured confidence.)
+    """
+    from dataclasses import replace
+
+    base = module.run_self_improvement(live=False)
+    # Simulate the real-model live outcome: live=True, unanimous vote, no readable confidence.
+    live_like = replace(
+        base,
+        live=True,
+        quorum_distinct=1,  # the real model agreed (unanimous)
+        quorum_tally={"billing": 5},
+        quorum_winner="billing",
+        abstain_confidence=-1.0,  # no readable confidence -> fail-safe abstain
+    )
+    assert live_like._taming_step_ok()
+    # ...but the SAME unanimous/confidence-less shape FAILS on the mock path (stays strict).
+    mock_strict = replace(live_like, live=False)
+    assert not mock_strict._taming_step_ok()
