@@ -30,3 +30,7 @@ dist/
 # Harness-created agent worktrees (never track)
 .claude/worktrees/
 .playwright-mcp/
+
+# Planning prompts (not part of the shipped repo)
+PROJECT-ONESHOT-CLAUDE-CODE-PROMPT.md
+CONTINUE-STACK-CLAUDE-CODE-PROMPT.md
