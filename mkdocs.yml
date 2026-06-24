@@ -126,6 +126,7 @@ nav:
   - Architecture:
       - Overview: architecture/ARCHITECTURE.md
       - Security spine: architecture/SECURITY.md
+      - Security-review DoD: architecture/SECURITY-REVIEW-DOD.md
       - API stability: architecture/API-STABILITY.md
   - Product: product/PRODUCT.md
   - Roadmap: roadmap/README.md

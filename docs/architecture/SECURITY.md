@@ -137,12 +137,66 @@ five guarantees. Identity additions are recorded in
    registry), so exclusivity holds across processes and survives the SQLite→Postgres swap
    — see [ADR 0018](decisions/0018-borrow-lifetime-semantics.md).
 
+## Agent-language spine extensions (Milestone S)
+
+The Agent Language widened the run with new **fluid surfaces** and added new **consequential
+gates**. These extend — never relax — the six invariants above. They are ratified as ADRs so
+the spine doc reflects the language-era boundaries.
+
+### The new fluid surfaces — and how each is bounded
+
+Each is `Flow.FLUID` (untrusted session data): it reaches the model as **data**, and any
+value derived from it stays `tainted`.
+
+| Surface | What it is | How it is bounded |
+| --- | --- | --- |
+| **Refine feedback** | prior model output fed back into the next iteration (CL-1) | stays fluid + tainted; cannot reach a static Sink target (ALG-3) |
+| **Router / Classifier labels** | a model-derived branch label | may gate **whether** a consequential action fires, never **choose** among distinct consequential Sinks (S3, ALG-3) |
+| **Verifier verdicts / Quorum samples** | a fold/vote over prior output (CL-1, TS-1) | aggregate taint = union: tainted if any input was (invariant 9) |
+| **Wiki / Rag retrieved hits** | summoned knowledge / retrieved documents | retrieved content is tainted; a summoned Wiki is frozen (eval mode) and cannot be mutated under a run |
+| **Generated artifacts** | a Definition/guard the `craw code` loop produced | the generated artifact must pass the assembly gate (ALG-3) to ship; an un-benchmarked guard cannot gate (CL-2 precision gate, fails closed) |
+| **Correction corpus** | ground truth for learned guards/verifiers (F-4) | admitted only if `provenance == TRUSTED` **AND** `tainted is False`; the rest is quarantined |
+
+### The new invariants
+
+7. **A consequential Sink fires only in eval mode.** A Sink reached against an unfrozen
+   (train / `mutable`) Definition raises — only a frozen, content-hashed artifact may take
+   an irreversible action, so every side effect is attributable to one reproducible hash. A
+   summoned Wiki is likewise frozen in eval mode. See
+   [ADR 0020](decisions/0020-sink-fires-only-in-eval-mode.md).
+
+8. **Fluid→static-sink injection is rejected at assembly time.** The conservative ALG-3
+   check is a first-class, fail-closed **build gate**: a wiring where a `Flow.FLUID` value
+   could reach a consequential static-only slot is rejected *before any model call* — and a
+   generated artifact must clear it to ship (the generator as a trust boundary). Defense in
+   depth atop the runtime `StaticOnlyError`/`TargetMustBeStaticError`. Honest scope: sound
+   for the fragment it covers, incomplete, fail-closed. See
+   [ADR 0021](decisions/0021-alg3-assembly-time-rejection.md).
+
+9. **Aggregate taint is the union; `declassify` is the sole audited upgrade.** Any
+   fold/vote/summary is tainted if **any** input was (no laundering by aggregation), and the
+   only way taint is ever dropped is an explicit, audited `declassify` (ALG-6), unreachable
+   from a fluid dataflow path. Taint accrues monotonically. See
+   [ADR 0022](decisions/0022-aggregate-taint-union-and-declassify.md).
+
+The decision log behind these forks lives in `lang_notes/` (the autonomous architecture +
+security ledger, cross-linked from each ADR).
+
 ## Review gate
 
 Every feature is audited against these invariants before it ships. The security reviewer
 signs off before a Linear issue can move to `Done`; High/Critical findings **block**
-completion. The final pass includes a prompt-injection red-team against the demo's fluid
-inputs.
+completion. The per-PR checklist is the
+[Security-review Definition of Done](SECURITY-REVIEW-DOD.md).
+
+The sign-off pairs two suites:
+
+- the **static** invariant — the taint/non-interference conformance suite (ALG-7) asserts
+  `tainted` survives every boundary, including the aggregate-union rule;
+- the **behavioural** gate — the operator-level prompt-injection red-team
+  (`packages/crawfish/tests/test_redteam_security.py`, `crawfish.testing.redteam_attacks`)
+  asserts a concrete injection against each new fluid surface is **blocked** offline. A PR
+  that adds a new fluid surface must add ≥1 injection payload for it.
 
 ## See also
 

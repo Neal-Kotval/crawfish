@@ -23,12 +23,15 @@ import hashlib
 import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Generic
+from typing import TYPE_CHECKING, Generic
 
 from crawfish.core.context import RunContext
 from crawfish.core.ids import new_id
 from crawfish.core.types import Flow, JSONValue, Node, NodeKind, Parameter, T
 from crawfish.output import Output
+
+if TYPE_CHECKING:
+    from crawfish.definition.types import Definition
 
 # An approval callback returns True to allow the write, False to skip it.
 ApproveCallback = Callable[[], bool]
@@ -119,13 +122,28 @@ class Sink(Node, ABC, Generic[T]):
         ctx: RunContext,
         *,
         approve: ApproveCallback | None = None,
+        definition: Definition | None = None,
     ) -> bool:
         """Write ``output`` to this sink's static target.
 
         Returns ``True`` if the side effect ran, ``False`` if it was skipped
         (already written, or approval declined). Raises :class:`ApprovalRequired`
         when an ``always_ask`` sink is invoked without an ``approve`` callback.
+
+        **Hardening (#14): eval-only Sink.** When the producing ``definition`` is
+        supplied, the egress consults ``tuner.guard_consequential`` first — a
+        consequential Sink fires ONLY in eval/frozen mode (a train-mode artifact has
+        no stable content identity to key idempotency or attribute the effect to, so
+        it raises :class:`~crawfish.versioning.version.FrozenError`). This makes the
+        eval-only-Sink invariant universal, not just enforced where callers remember
+        it. Omitting ``definition`` preserves the legacy call shape.
         """
+        # #14: a consequential side effect requires an eval-mode (frozen) Definition.
+        if definition is not None:
+            from crawfish.tuner import guard_consequential
+
+            guard_consequential(definition)
+
         key = self._idempotency_key(output, ctx)
 
         # Approval gate FIRST, so a decline never burns the idempotency claim

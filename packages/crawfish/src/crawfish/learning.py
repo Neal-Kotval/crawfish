@@ -45,6 +45,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from crawfish.anomaly import AnomalyEngine, emit_promotion_audit, read_and_guard
 from crawfish.core.context import RunContext
 from crawfish.definition.types import (
     DECODE_KNOB_FIELDS,
@@ -130,12 +131,19 @@ class LearningLoop:
         *,
         org_id: str = "local",
         tolerance: float = 0.0,
+        breaker: AnomalyEngine | None = None,
     ) -> None:
         self.name = name
         self.tuner = tuner
         self.store = store
         self.org_id = org_id
         self.tolerance = tolerance
+        # SEC-4 (CRA-241): the circuit breaker for this autonomous self-mod loop. When set,
+        # ``improve`` consults it (over the recorded ledger) BEFORE promoting; a firing
+        # auto-halts the run (trips CancelToken + forces BudgetExceeded) and the cycle
+        # returns a non-promoting ``"halted:<rule>"`` outcome. Reuses the shipped
+        # AnomalyEngine auto-halt rather than reinventing one.
+        self.breaker = breaker
 
     # -- lineage persistence (Store-backed, reversible) ---------------------
     @property
@@ -202,6 +210,27 @@ class LearningLoop:
             save_baseline(self.store, self._baseline_name, base_scores, org_id=self.org_id)
         return base_sha
 
+    def _audit(
+        self,
+        event: str,
+        ctx: RunContext,
+        *,
+        candidate_sha: str,
+        baseline_sha: str,
+        gate_result: str | None = None,
+    ) -> None:
+        """Emit one append-only SEC-4 audit event for this loop's promotion path."""
+        emit_promotion_audit(
+            self.store,
+            event=event,
+            agent=self.name,
+            candidate_sha=candidate_sha,
+            baseline_sha=baseline_sha,
+            run_id=ctx.run_id,
+            org_id=self.org_id,
+            gate_result=gate_result,
+        )
+
     def _not_promoted(self, reason: str, parent_sha: str, result: TuneResult) -> PromotionOutcome:
         active = self.active()
         return PromotionOutcome(
@@ -257,7 +286,20 @@ class LearningLoop:
             org_id=self.org_id,
         )
         if not gate_clean:
+            self._audit("gated", ctx, candidate_sha=cand_sha, baseline_sha=parent_sha)
             return self._not_promoted("gated", parent_sha, result)
+
+        # -- SEC-4 circuit breaker: a runaway promotion/cost/rollback rate auto-halts ------
+        # Read the deterministic ledger and HALT (trips CancelToken + forces BudgetExceeded)
+        # before this promotion lands, so a bad/runaway loop cannot mutate prod silently.
+        if self.breaker is not None:
+            firings = read_and_guard(ctx, self.breaker, run_id=ctx.run_id)
+            if any(f.halts for f in firings):
+                rule = next((f.rule.kind for f in firings if f.halts), "breaker")
+                self._audit(
+                    "halted", ctx, candidate_sha=cand_sha, baseline_sha=parent_sha, gate_result=rule
+                )
+                return self._not_promoted(f"halted:{rule}", parent_sha, result)
 
         # -- promote: record the frozen candidate, activate it, advance the baseline ------
         self._record(
@@ -274,6 +316,9 @@ class LearningLoop:
         )
         self._set_active(cand_sha)
         save_baseline(self.store, self._baseline_name, cand_scores, org_id=self.org_id)
+        # SEC-4 audit trail: an append-only event for this auto-promotion (both shas +
+        # org_id), which the breaker's PromotionRateRule also counts next cycle.
+        self._audit("promoted", ctx, candidate_sha=cand_sha, baseline_sha=parent_sha)
 
         return PromotionOutcome(
             promoted=True,
@@ -299,6 +344,17 @@ class LearningLoop:
             raise KeyError(f"no version {sha!r} in lineage for agent {self.name!r}")
         self._set_active(sha)
         save_baseline(self.store, self._baseline_name, rec.scores, org_id=self.org_id)
+        # SEC-4 audit trail: a rollback is itself a recorded event the breaker counts
+        # (repeated rollbacks signal a churning self-mod loop → RollbackRateRule halts).
+        emit_promotion_audit(
+            self.store,
+            event="rolled_back",
+            agent=self.name,
+            candidate_sha=sha,
+            baseline_sha=rec.parent_sha or "",
+            run_id=f"rollback:{self.name}",
+            org_id=self.org_id,
+        )
         return rec.definition
 
 

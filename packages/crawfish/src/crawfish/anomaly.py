@@ -63,9 +63,15 @@ __all__ = [
     "StuckRunRule",
     "EmissionFloodRule",
     "BudgetApproachingRule",
+    "PromotionRateRule",
+    "RollbackRateRule",
     "Firing",
     "AnomalyEngine",
     "read_and_guard",
+    # SEC-4 (CRA-241) — circuit breaker + audit trail for the autonomous self-mod loop.
+    "PROMOTION_AUDIT_KIND",
+    "promotion_breaker",
+    "emit_promotion_audit",
 ]
 
 # A HALT forces the budget over its ceiling. With an unbounded (limit_usd=None)
@@ -436,6 +442,186 @@ def _latest_ts(emissions: Sequence[Emission]) -> float:
 
 def _as_float(value: object) -> float:
     return float(value) if isinstance(value, (int, float)) else 0.0
+
+
+# ===========================================================================
+# SEC-4 (CRA-241) — circuit breaker + audit trail for the autonomous self-mod loop
+# ---------------------------------------------------------------------------
+# AL-T6 (explore dial) + auto-promotion + ``craw code`` form an autonomous, production-
+# mutating loop. Such a loop needs (a) a CIRCUIT BREAKER that auto-halts on a runaway
+# promotion rate / cost spike / repeated rollback, and (b) an append-only AUDIT TRAIL on
+# every auto-promotion and halt. Both reuse the SHIPPED machinery here rather than
+# reinventing it: the breaker is an :class:`AnomalyEngine` over the deterministic ledger
+# (so the halt decision is a pure function of recorded anomalies), and the audit trail is
+# a typed emission on the same append-only ledger.
+
+#: The audit-trail emission marker (carried under a ``METRIC`` emission's ``attrs.metric``)
+#: for an auto-promotion / halt event in the self-modification loop.
+PROMOTION_AUDIT_KIND = "self_mod.promotion"
+
+
+class PromotionRateRule(AnomalyRule):
+    """Breach when auto-promotion *audit* events in ``window`` reach ``max_count``.
+
+    The blast-radius bound on a runaway promotion loop: a self-modification loop spinning
+    out promotions trips this on COUNT (independent of cost). Counts only
+    ``PROMOTION_AUDIT_KIND`` audit emissions (``event == "promoted"``), so an exploration
+    that promotes nothing never trips it. Default HALT — exceeding the cap requires an
+    explicit human re-enable.
+    """
+
+    kind = "promotion.rate"
+
+    def __init__(
+        self, *, max_count: int, window: str = "-1h", response: Response = Response.HALT
+    ) -> None:
+        super().__init__(response=response)
+        self.max_count = max_count
+        self.window = window
+
+    def evaluate(
+        self, emissions: Sequence[Emission], *, now: float, pipeline: str | None = None
+    ) -> Firing | None:
+        promotions = [
+            e
+            for e in _window_emissions(emissions, self.window, now)
+            if e.kind is EmissionKind.METRIC
+            and e.attrs.get("metric") == PROMOTION_AUDIT_KIND
+            and e.attrs.get("event") == "promoted"
+        ]
+        count = len(promotions)
+        if count < self.max_count:
+            return None
+        return self._fire(
+            f"{count} auto-promotions in {self.window.lstrip('-')} (≥ {self.max_count})",
+            {"count": count, "max_count": self.max_count},
+            now=now,
+            pipeline=pipeline,
+            emissions=promotions,
+        )
+
+
+class RollbackRateRule(AnomalyRule):
+    """Breach when rollback *audit* events in ``window`` reach ``max_count``.
+
+    Repeated rollbacks signal a self-modification loop promoting bad candidates: each
+    rollback is a recorded ``PROMOTION_AUDIT_KIND`` emission (``event == "rolled_back"``).
+    Hitting the cap HALTs the loop — a churn of promote/rollback is itself a runaway.
+    """
+
+    kind = "rollback.rate"
+
+    def __init__(
+        self, *, max_count: int, window: str = "-1h", response: Response = Response.HALT
+    ) -> None:
+        super().__init__(response=response)
+        self.max_count = max_count
+        self.window = window
+
+    def evaluate(
+        self, emissions: Sequence[Emission], *, now: float, pipeline: str | None = None
+    ) -> Firing | None:
+        rollbacks = [
+            e
+            for e in _window_emissions(emissions, self.window, now)
+            if e.kind is EmissionKind.METRIC
+            and e.attrs.get("metric") == PROMOTION_AUDIT_KIND
+            and e.attrs.get("event") == "rolled_back"
+        ]
+        count = len(rollbacks)
+        if count < self.max_count:
+            return None
+        return self._fire(
+            f"{count} rollbacks in {self.window.lstrip('-')} (≥ {self.max_count})",
+            {"count": count, "max_count": self.max_count},
+            now=now,
+            pipeline=pipeline,
+            emissions=rollbacks,
+        )
+
+
+def promotion_breaker(
+    *,
+    max_promotions_per_window: int,
+    window: str = "-1h",
+    cost_threshold_usd: float | None = None,
+    failure_rate_threshold: float | None = None,
+    max_rollbacks_per_window: int | None = None,
+) -> AnomalyEngine:
+    """Build the self-modification circuit breaker (the wired-up auto-halt).
+
+    Composes the shipped rules into one :class:`AnomalyEngine` whose firing auto-halts
+    further exploration/promotion (reusing :meth:`AnomalyEngine.guard` → HALT, which trips
+    the run's ``CancelToken`` and forces ``BudgetExceeded``). Trips on a runaway promotion
+    rate (always), and optionally on a cost spike, a failure-rate spike, or repeated
+    rollbacks. Pure/deterministic: every rule reads the recorded ledger only.
+    """
+    rules: list[AnomalyRule] = [
+        PromotionRateRule(
+            max_count=max_promotions_per_window, window=window, response=Response.HALT
+        )
+    ]
+    if cost_threshold_usd is not None:
+        rules.append(
+            CostSpikeRule(threshold_usd=cost_threshold_usd, window=window, response=Response.HALT)
+        )
+    if failure_rate_threshold is not None:
+        rules.append(
+            FailureRateRule(threshold=failure_rate_threshold, window=window, response=Response.HALT)
+        )
+    if max_rollbacks_per_window is not None:
+        rules.append(
+            RollbackRateRule(
+                max_count=max_rollbacks_per_window, window=window, response=Response.HALT
+            )
+        )
+    return AnomalyEngine(rules)
+
+
+def emit_promotion_audit(
+    store: Store,
+    *,
+    event: str,
+    agent: str,
+    candidate_sha: str,
+    baseline_sha: str,
+    run_id: str,
+    org_id: str = "local",
+    gate_result: str | None = None,
+    triggered_by: str = "auto",
+    ts: float = 0.0,
+) -> None:
+    """Write one append-only audit event for an auto-promotion / halt / rollback.
+
+    The SEC-4 audit trail: every promotion path emits a typed ``METRIC`` emission carrying
+    both shas, the gate result, who/what triggered it, and ``org_id`` — queryable via the
+    ledger and read by :func:`promotion_breaker`'s rate rules. ``event`` is one of
+    ``"promoted" | "halted" | "rolled_back" | "gated" | "no_improvement"``. The audit
+    record carries no fluid content (only typed/structural signals), so it can never be
+    spoofed into suppressing a halt.
+    """
+    from crawfish.emission import Emission, EmissionKind, emit
+
+    emit(
+        store,
+        Emission(
+            kind=EmissionKind.METRIC,
+            run_id=run_id,
+            org_id=org_id,
+            ts=ts,
+            attrs={
+                "metric": PROMOTION_AUDIT_KIND,
+                "event": event,
+                "agent": agent,
+                "candidate_sha": candidate_sha,
+                "baseline_sha": baseline_sha,
+                "gate_result": gate_result or event,
+                "triggered_by": triggered_by,
+                "org_id": org_id,
+            },
+        ),
+        org_id=org_id,
+    )
 
 
 def read_and_guard(

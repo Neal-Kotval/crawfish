@@ -235,7 +235,20 @@ class Verifier:
         call): the cases were already labelled by the critic under replay. Baseline
         existence is read from ``store`` under ``baseline_name`` (defaults to
         ``name``); pass ``baseline_name`` to point at a named precision baseline.
+
+        **Hardening (#11).** A gating authority is as consequential as a Sink: it may
+        *stop* production work, so it must operate on a FROZEN (eval-mode) critic — a
+        train-mode artifact has no stable content identity to attribute a block to. The
+        critic is therefore put into eval mode (``tuner.eval`` — re-freeze to its canonical
+        content sha) at admission; the resulting :class:`GatedVerifier` always wraps a
+        frozen critic, and :func:`~crawfish.tuner.guard_consequential` is a no-op on it.
         """
+        from crawfish.tuner import eval as _eval_mode
+
+        # #11: a gating authority is consequential — admit only a FROZEN (eval-mode) critic.
+        # Put the critic into eval mode so the admitted GatedVerifier always gates from a
+        # frozen, content-stable artifact (mirrors LearningLoop/ServingLoop's eval-mode arms).
+        definition = _eval_mode(definition)
         decider = decide or _default_decider(accept_label)
         cases = golden.cases()
         decisions = [decider(case.output) for case in cases]
