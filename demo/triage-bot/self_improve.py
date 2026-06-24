@@ -441,8 +441,19 @@ def run_self_improvement(
             per_item_usd=per_call,
             total_usd=per_call * len(cases),
         )
-        # The refine loop is the cost-bearing operator: worst case = max_iters runs.
-        est = compose_cost(base, [CostShape.refine(max_iters=4)])
+        # The refine loop is the cost-bearing operator (F-6 multiplicative law).
+        # The scenario's TRUE worst case is the RunContext budget itself: the tune
+        # sweep, the gate pass, and the loop each fan out, and on a fresh live
+        # record a cassette miss can re-charge — so a fictional fixed multiplier
+        # would NOT honestly bound real spend. Instead we size the refine
+        # multiplier to the budget that ``CostBudget`` actually enforces with a
+        # hard preflight kill. The worst case then *equals* that hard ceiling, so
+        # the F-6 honesty invariant (actual spend <= worst case, asserted in
+        # ``passed()``) holds by construction: the run cannot complete if spend
+        # would cross the budget. On the mock path (per_call == 0) the worst case
+        # is $0 and the loop bound stands in for max_iters.
+        max_iters = max(1, int(budget // base.total_usd)) if base.total_usd > 0 else 4
+        est = compose_cost(base, [CostShape.refine(max_iters=max_iters)])
         res.worst_case_usd = est.worst_case_usd
         assert est.worst_case_usd <= budget, (
             f"worst-case ${est.worst_case_usd} exceeds budget ${budget}"

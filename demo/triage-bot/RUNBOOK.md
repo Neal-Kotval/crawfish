@@ -159,3 +159,23 @@ replay (step 9 fixed-point sha identical across the two runs).
 > The **deterministic** path (`uv run craw demo`) passes 9/9 and the full `pytest` suite is
 > green (786 passed, 1 skipped). Cassettes under `.crawfish/` are gitignored local
 > artifacts and can be deleted to force a fresh re-record.
+
+### Real-model acceptance — VERIFIED (2026-06-23, `claude-haiku-4-5`)
+
+Run end-to-end against the **real** logged-in `claude -p` backend. A fourth harness
+fix landed first: step-6's worst case is now sized to the budget that `CostBudget`
+hard-enforces (a fictional fixed multiplier could not honestly bound a fresh-record
+fan-out), so the F-6 honesty invariant `actual_spend <= worst_case` holds by
+construction. Command: `uv run craw demo --live --model claude-haiku-4-5`.
+
+| evidence item | fresh record | replay (re-run) |
+|---|---|---|
+| **1. real (non-mock) reply** | ✅ real haiku transcripts in `.crawfish/cassettes/` | (replay) |
+| **2. gate fires correctly** | ✅ justified reject — `gate.promoted=False`, reason *"primary 'accuracy' not significant after Holm (m=1)"* (honest: 3 gate cases lack power) | identical |
+| **3. budget respected, worst-case bounds spend** | ✅ worst `$2.700` ≤ budget `$3.00`; run completed (spend within ceiling, hard-kill never tripped) | ✅ spend `$0.00` |
+| **4. live crash-resume re-charges $0** | — | ✅ **extra calls=0, spend `$0.00`** |
+| **5. cross-tenant isolation** | ✅ org-B gold cases = 0 | ✅ |
+| **6. bit-identical replay (by `output_content_sha`)** | loop fixed-point sha `17903acd49c9`, frozen sha `9dfc8be045b2` | ✅ **identical** sha across runs |
+
+Both runs printed `PASS — 9/9 F-foundations exercised end to end` (exit 0). The first
+record run spent a few cents of haiku; every subsequent run replays at `$0`.
