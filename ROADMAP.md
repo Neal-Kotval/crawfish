@@ -42,12 +42,12 @@ crash-resume. What's in the box today:
   `craw build` → container; a MkDocs docs site; an API-stability contract (stable /
   experimental / deprecated tiers + semver).
 
-## The agent language — control plane + composition surface shipped (in progress)
+## The agent language — control plane, composition surface + tunable-ML library shipped (in progress)
 
 Phase 2 includes a larger bet: an **agent language** where composition operators
 (Refine, Program, Quorum, Escalate) and a Tuner make agents self-improving over your
-data. The first two milestones — the **control plane** and the **composition surface** —
-have now shipped on top of the foundational primitives:
+data. The first three milestones — the **control plane**, the **composition surface**, and
+the flagship **tunable-ML library** — have now shipped on top of the foundational primitives:
 
 - **`Refine` — a bounded, metered, durable iterate-until-goal loop.** Run a producing
   Definition, check each frozen Output against an *external* stop condition, and iterate
@@ -68,10 +68,25 @@ have now shipped on top of the foundational primitives:
   and recursion are **assembly-required to be bounded** (`UnboundedCycleError` /
   `UnboundedRecursionError`); taint carries across every edge, and a fold never launders
   it.
+- **The tunable-ML library — an agent is a model with tunable weights (flagship).** This is
+  the *PyTorch-for-LLMs* half, unified with the rest by one idea: `mutable` is the train/eval
+  switch. `train()`/`eval()` make *which knobs may move* and *whether the artifact is sealed*
+  orthogonal axes, and `guard_consequential()` makes **acting eval-only** — only a sealed,
+  content-addressed agent touches the world. The tunable knob space is *data* (`TuneSpec`,
+  authored as `tune.toml`) that folds into the content hash, so **tuning versions the agent**.
+  `calibrate()` measures the run-to-run **noise band**; `promote_against_baseline()` promotes
+  only when a gain **clears that band** (the F-3 rejection invariant, made noise-robust); a
+  cost-regularized `Objective` re-ranks the gate-passing set so cost can never promote a
+  regression. `state_dict()`/`load_state()` are the architecture/weights split
+  (*Hugging-Face-for-agent-weights*), and `ServingLoop` is the budget-bounded, no-peeking,
+  deterministic-under-replay explore dial. **Only static knobs are ever promoted** — the whole
+  loop stays inside the security spine.
 
 See the [Refine & verify guide](docs/guide/refine-and-verify.md), the
 [Compose guide](docs/guide/compose.md), the
-[control-plane reference](docs/reference/refine-and-verify.md), and the
+[Train, calibrate & promote guide](docs/guide/train-and-tune.md), the
+[control-plane reference](docs/reference/refine-and-verify.md), the
+[Tuner & learning reference](docs/reference/tuner-and-learning.md), and the
 [release notes](docs/guide/release-notes.md).
 
 These stand on the *foundational primitives* shipped earlier — substrate contracts, not

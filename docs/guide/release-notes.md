@@ -3,6 +3,57 @@
 Notable, user-facing changes. For the exact public-symbol surface of any release, see the
 [API reference](api-reference.md); for the longer arc, see the [Roadmap](../roadmap/README.md).
 
+## Agent language — Milestone 3: the tunable-ML library
+
+The **flagship** half lands: an agent is now a *model with tunable weights*, and `mutable` is
+the train/eval switch. Crawfish gains the PyTorch-for-LLMs surface — measure run-to-run noise,
+search the knob space under a cost-regularized objective, promote only past that noise, and
+transfer the learned weights — without giving up a single determinism, typing, or versioning
+guarantee. New, all importable from the top-level `crawfish` package:
+
+- **`train()` / `eval()` / `guard_consequential()`** — the two-axis mode unifier. *Which*
+  knobs may move (Axis 1, `tunable`) and *whether* the artifact is sealed (Axis 2, mode) are
+  now orthogonal, mirroring PyTorch's `requires_grad` vs `.eval()`. `train(d)` is an unfrozen,
+  copy-on-write training copy; `eval(d)` re-freezes via the content hash (so `eval(train(d))`
+  is idempotent). `guard_consequential(d)` is the load-bearing gate: **a Sink write or a
+  recorded run is eval-only** — a training artifact has no stable identity to key idempotency.
+- **`TuneSpec` / `KnobDomain` / `tune_spec_sha`** — the tunable knob space as *data*, authored
+  as `tune.toml` and folded into the Definition's content hash. **Changing the search space
+  versions the agent** (an empty `tune.toml` stays hash-neutral). Pinned knobs (`tunable=False`)
+  are never proposed.
+- **`calibrate(...) → CalibrationReport`** — runs each golden case `runs` times under distinct
+  derived seeds and reports the **noise band** (`rubric_std`), structural `output_variance`,
+  Brier / ECE-with-CI calibration, a reliability curve, and an **evidence-derived**
+  `abstention_threshold`. Refuses a replay runtime (it would fabricate zero variance) and
+  honours the autonomy ceiling (`partial=True` on a budget/cancel breach). `extract_confidence`
+  / `abstention_threshold` (in `crawfish.escalate`) replace the old guessed escalation constant
+  with one read off measurements.
+- **`Objective` / `ObjectiveForm` / `ObjectiveScore`** — a cost-regularized loss
+  (`Σ wᵢ·scoreᵢ − λ·cost − μ·ece`) the Tuner maximizes **only among candidates that already
+  pass the hard regression gate**, so cost can break a tie or veto a marginal gain but can
+  **never** promote a quality regression. `cost_weight=0` reproduces today's winner; an
+  ε-constraint form and a Pareto mode are available.
+- **`promote_against_baseline(...) → PromotionVerdict`** — the variance-aware promotion gate:
+  promote only when the primary gain **clears the noise band** (`k·std`) *and* no metric
+  regresses past its own band. Reduces byte-for-byte to the single-point gate when no `std` is
+  recorded, so every existing baseline keeps working. `save_baseline_from_report` /
+  `load_baseline_std` carry the band; a `fresh_sample` corrects the winner's curse.
+- **`state_dict()` / `load_state()` / `StateDict` / `RoleKnobs`** — the architecture/weights
+  split (*Hugging-Face-for-agent-weights*). Extract the tunable knobs as JSON-only weights
+  (per-role knobs, coordination choice, few-shots, summons as references-by-version — **no**
+  architecture, **no** embedded Definition) and transfer them onto a sibling of the same shape.
+  `strict=True` refuses a shape mismatch (`IncompatibleStateError`); `strict=False` loads the
+  intersection; `only=[...]` transfers named groups. Copy-on-write — a new frozen artifact.
+- **`ServingLoop` / `ExploreSchedule` / `ExploreStrategy`** — the serving-time explore dial.
+  Routes `(1-ε)` of live items to the promoted best and `ε` to a trial candidate, choosing
+  *which* items explore by a seeded hash of the recorded `item_id` (a replay re-explores
+  exactly the same items). Decaying-ε, budget-bounded, and `graduate`s only after a
+  **pre-registered sample size** (no peeking) and only through the eval gate. **Only static
+  knobs are ever promoted** — the learning loop stays inside the security spine.
+
+Learn it: the [Train, calibrate & promote guide](train-and-tune.md) (runnable, mirrors the
+triage demo) and the [Concepts → PyTorch-for-LLMs half](concepts.md#the-pytorch-for-llms-half-train-eval-and-the-tunable-knob).
+
 ## Agent language — Milestone 2: the composition surface
 
 The control plane gains *shape*. Agent work that branches, cycles, and recurses is now a

@@ -12,6 +12,7 @@ On this page:
 - [Team coordination](#team-coordination), [Store seams](#the-store-and-artifactstore-seams), and [cost & inspection](#cost-budgets-and-inspection)
 - [The measurement loop](#the-measurement-loop) and [the control plane](#the-control-plane-refine-and-verify) — Refine & Verify
 - [The composition surface](#the-composition-surface-branch-cycle-recurse) — branch, cycle, recurse
+- [The PyTorch-for-LLMs half](#the-pytorch-for-llms-half-train-eval-and-the-tunable-knob) — train/eval mode, calibration, variance-aware promotion
 
 ## The directory model
 
@@ -323,6 +324,85 @@ shared budget guards the `O(b^d)` fan-out, and a fold **never launders taint** �
 reduced Output is tainted if any child input was.
 
 See the [Compose guide](compose.md) for the runnable walkthrough.
+
+## The PyTorch-for-LLMs half — train, eval and the tunable knob
+
+Everything above is the *deterministic, typed, versioned* half of Crawfish: an agent is a
+frozen artifact with a content hash, and the same inputs reproduce the same outputs. This
+section is the **other** half — the part that *learns*. The thesis is one sentence: **an
+agent is a model with tunable weights, and `mutable` is the train/eval switch.** The two
+halves are not bolted together; they are unified by mutability itself. A frozen Definition
+is in **eval mode** (reproducible, the only mode that may act); an unfrozen copy is in
+**train mode** (its knobs may move). PyTorch's `requires_grad` and `.eval()` are the direct
+ancestors, and the same hard lesson applies: *which knobs may move* and *whether the
+artifact is sealed* are **orthogonal axes**.
+
+**Axis 1 — `tunable` is data, not a flag on the model.** Which knobs the Tuner may search is
+a `TuneSpec`: a content-hashable list of `KnobDomain`s, each a dotted `path` into the knob
+vocabulary (`agent.<role>.model`, `.prompt`, `.temperature`, `.policies`, `team.coordination`,
+`injected_prompts`) plus the discrete `values` it may take and a `tunable` bit. A pinned
+knob (`tunable=False`) is never proposed. The spec is authored as `tune.toml` and folds into
+the Definition's content hash via `tune_spec_sha` — so **changing the search space versions
+the agent**, exactly like editing any other knob. Tuning *is* a content change. (An empty
+`tune.toml` is hash-neutral: a tune-less Definition keeps its sha byte-for-byte.)
+
+**Axis 2 — `train()` / `eval()` is the mutability switch.** `train(defn)` returns an
+*unfrozen* deep copy with a fresh `Version`; a training mutation is copy-on-write — it mints
+a new `version.sha` only when re-frozen, never an in-place edit of the original.
+`eval(defn)` re-freezes via the content-hash path, so `eval(train(d))` is **idempotent**:
+it hashes back to `d`'s eval sha whenever no knob actually moved. The load-bearing rule sits
+on this axis: `guard_consequential(defn)` raises unless `defn` is eval-mode. **A
+consequential side effect — a Sink write, a recorded run — is eval-only**, because a training
+artifact has no stable content identity to key idempotency or attribute the effect to. The
+prompt-injection boundary and the train/eval boundary are the *same* boundary: only sealed,
+content-addressed, eval-mode agents touch the world.
+
+**Calibration is the noise band.** A single benchmark run hides run-to-run variance, so the
+old eval gate compared two point estimates and the escalation threshold was a guessed
+constant. `calibrate(...)` runs each golden case `runs` times under distinct,
+deterministically-derived seeds and returns a `CalibrationReport`: per-metric `rubric_mean`
+and `rubric_std` (the **noise band**), `output_variance` (structural disagreement across
+re-runs), and — when cases carry labels — Brier (primary), ECE with a bootstrap CI
+(diagnostic), a reliability curve, and an **evidence-derived** `abstention_threshold` read
+off that curve rather than chosen. It refuses a replay runtime (replay would fabricate
+zero variance) and is bounded by the same autonomy ceiling as the Tuner.
+
+**Promotion is variance-aware.** `promote_against_baseline(...)` promotes a candidate only
+when its gain over the stored baseline **clears the per-metric noise band** (`k·std`,
+`k` from `alpha`), and only when *no* metric regresses past its own band — the hard F-3
+rejection invariant is preserved, just made noise-robust. A candidate that maxes one metric
+while truly regressing another is still rejected; a within-noise "win" does not promote. With
+no recorded `std` the band is zero-width and the gate reduces byte-for-byte to the
+single-point behaviour, so every pre-existing baseline keeps working.
+
+**The objective is cost-regularized.** A pure-quality rule would promote a 1%-better,
+5×-pricier candidate. An `Objective` re-ranks — only **among candidates that already pass the
+hard regression gate** — by `Σ wᵢ·scoreᵢ − λ·cost − μ·ece`, with the cost term normalized so
+`λ` is unit-free. Cost can break a tie or veto a marginal gain, but it can **never** promote
+a quality regression. An ε-constraint form minimizes cost subject to a quality floor.
+
+**The weights transfer.** `state_dict(defn)` extracts the tunable knobs — per-role
+`RoleKnobs`, the coordination choice, `injected_prompts`, and summoned units as
+**references-by-version** — as a JSON-only `StateDict`, carrying *no* architecture and *no*
+executable nested Definition. Its `structure_sha` is the architecture identity (the
+transfer-compatibility key); its `sha` is the knob-value identity. `load_state(defn, state)`
+is copy-on-write: `strict=True` refuses a shape mismatch (`IncompatibleStateError`),
+`strict=False` loads the structural intersection, and `only=[...]` transfers just the named
+knob groups. This is the architecture/weights split — Hugging-Face-for-agent-weights: learn
+on one Definition, carry what it learned onto a sibling of the same shape.
+
+**Serving has an explore dial.** `ServingLoop` is the serving-time explore/exploit overlay:
+it routes `(1-ε)` of live items to the promoted best and `ε` to a trial candidate, choosing
+*which* items explore by a seeded hash of the recorded `item_id` — so a replay re-explores
+**exactly** the same items. ε follows a decaying schedule and is bounded by the shared
+`CostBudget`. The trial `graduate`s only after a **pre-registered sample size** (no peeking —
+continuous optional-stopping would inflate false promotions), and even then only through the
+eval gate on the `LearningLoop`. Both arms are frozen, eval-mode Definitions; **only static
+knobs are ever promoted**, so the learning loop stays inside the
+[security spine](../architecture/SECURITY.md).
+
+Learn it end to end: the [Train, calibrate & promote guide](train-and-tune.md) (runnable,
+mirrors the triage demo) and the [Tuner & learning reference](../reference/tuner-and-learning.md).
 
 ## Next steps
 

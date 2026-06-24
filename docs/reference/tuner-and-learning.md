@@ -10,7 +10,18 @@ promote only a winner that clears the bar.
 `FewShotMutator` · `ChainMutator` · `SearchStrategy` · `TrialResult` · `TuneResult` ·
 `Tuner` · `LearningLoop` · `PromotionOutcome` · `VersionRecord`
 
-These live in `crawfish.tuner` and `crawfish.learning`.
+**Milestone 3 — the tunable-ML library** (the
+[PyTorch-for-LLMs half](../guide/concepts.md#the-pytorch-for-llms-half-train-eval-and-the-tunable-knob)):
+`train` · `eval` · `guard_consequential` · `TuneSpec` · `KnobDomain` · `tune_spec_sha` ·
+`Objective` · `ObjectiveForm` · `ObjectiveScore` · `calibrate` · `CalibrationReport` ·
+`ReliabilityBin` · `extract_confidence` · `abstention_threshold` · `promote_against_baseline` ·
+`PromotionVerdict` · `save_baseline_from_report` · `load_baseline_std` · `state_dict` ·
+`load_state` · `StateDict` · `RoleKnobs` · `IncompatibleStateError` · `ServingLoop` ·
+`ServingDecision` · `ExploreSchedule` · `ExploreStrategy` · `GraduationVerdict`
+
+These live in `crawfish.tuner`, `crawfish.learning`, `crawfish.metrics`, `crawfish.escalate`,
+and `crawfish.eval`, and are all re-exported from the top-level `crawfish` package. The
+runnable end-to-end walkthrough is the [Train, calibrate & promote guide](../guide/train-and-tune.md).
 
 ## Definitions, knobs, mutators, and the gate
 
@@ -453,8 +464,377 @@ Other methods: `history() -> list[VersionRecord]` (the full lineage); `active() 
 | None` (the currently-active record); `rollback(sha) -> Definition` (re-activate a prior
 version and reset the baseline to its scores; raises `KeyError` if `sha` is unknown).
 
+## The tunable-ML library (Milestone 3)
+
+The symbols below are the *PyTorch-for-LLMs* half: the train/eval mutability switch, the
+tunable knob space as data, calibration, the cost-regularized objective, the variance-aware
+promotion gate, weight transfer, and the serving-time explore dial. The conceptual frame is
+on the [Concepts page](../guide/concepts.md#the-pytorch-for-llms-half-train-eval-and-the-tunable-knob)
+and the runnable path is the [Train, calibrate & promote guide](../guide/train-and-tune.md).
+
+### Two-axis mode (`crawfish.tuner`)
+
+#### `train`
+
+```python
+def train(definition: Definition) -> Definition
+```
+
+**Train mode.** Returns an *unfrozen* deep copy with a fresh `Version` (`frozen is False`,
+`version.sha is None`). Copy-on-write: a training mutation mints a new `version.sha` when
+re-frozen, never an in-place edit of the original.
+
+#### `eval`
+
+```python
+def eval(definition: Definition) -> Definition
+```
+
+**Eval mode** (the default for a loaded Definition). Re-freezes via the content-hash path, so
+`eval(train(d))` is idempotent — it hashes back to `d`'s eval sha whenever no knob moved. Only
+in eval mode may a consequential Sink fire or a run be recorded. (Shadows the builtin `eval`;
+import it as `from crawfish import eval as eval_mode` if that collides in your module.)
+
+#### `guard_consequential`
+
+```python
+def guard_consequential(definition: Definition) -> None
+```
+
+The load-bearing gate every consequential boundary calls before an irreversible side effect.
+A no-op in eval mode; raises `FrozenError` against an unfrozen (train-mode) Definition — a
+training artifact has no stable content identity to key idempotency or attribute the effect to.
+
+#### `TuneSpec`
+
+`class TuneSpec(BaseModel)` (frozen) — the tunable knob space as content-hashable data (the
+typed form of `tune.toml`). Lives in `crawfish.tune` and is re-exported (identity-stable) from
+`crawfish.tuner`.
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `knobs` | `list[KnobDomain]` | `[]` | The declared knob domains. |
+
+| Method | Signature | Purpose |
+| --- | --- | --- |
+| `named_knobs` | `() -> Iterator[tuple[str, KnobDomain]]` | Yields only `tunable=True` knobs, **path-sorted** (set/insertion-order-free). |
+| `is_tunable` | `(path: str) -> bool` | Declared-and-tunable test; unknown paths are not tunable. |
+| `from_toml` | `(text: str) -> TuneSpec` *(classmethod)* | Parse the `[[knob]]` array-of-tables authoring shape. |
+| `to_dict` | `() -> dict` | Canonical, path-sorted, JSON-ready payload for export + hashing. |
+
+#### `KnobDomain`
+
+`class KnobDomain(BaseModel)` (frozen) — one knob's search domain.
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `path` | `str` | — (required) | Dotted address into the knob vocabulary (`agent.<role>.model` / `.prompt` / `.temperature` / `.sample_k` / `.context_strategy` / `.policies`, `team.coordination`, `injected_prompts`). |
+| `values` | `list[KnobValue]` | — (required) | The discrete values the knob may take (static scalar leaves). |
+| `tunable` | `bool` | `True` | When `False` the knob is pinned and never proposed. |
+
+#### `tune_spec_sha`
+
+```python
+def tune_spec_sha(spec: TuneSpec) -> str
+```
+
+Deterministic 12-char content hash of a `TuneSpec`. An empty spec hashes to a stable constant
+(an empty `tune.toml` is hash-neutral). `Definition.content_dict()` folds this in **only** for
+a non-empty tune, so declaring a knob versions the agent while a tune-less Definition keeps its
+sha byte-for-byte.
+
+### Cost-regularized objective (`crawfish.tuner`)
+
+#### `Objective`
+
+`class Objective(BaseModel)` (frozen) — the cost-regularized loss the Tuner maximizes **among
+candidates that already pass the hard regression gate**, so cost can never promote a quality
+regression.
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `weights` | `dict[str, float]` | `{}` | Per-metric quality weights; an absent metric defaults to `1.0` (a bare objective sums every metric). |
+| `cost_weight` | `float` | `0.0` | λ — the cost penalty. `0` reproduces today's pure-quality winner. |
+| `ece_weight` | `float` | `0.0` | μ — the calibration penalty (a passed-in value; ships as 0 until `calibrate` feeds it). |
+| `form` | `ObjectiveForm` | `LINEAR` | Scalarization vs ε-constraint. |
+| `quality_floor` | `float` | `0.0` | ε-constraint: the minimum acceptable `Σ wᵢ·scoreᵢ`. |
+| `cost_baseline_usd` | `float \| None` | `None` | Cost normalizer (set to the cheapest candidate's cost so λ is unit-free); `None` uses raw dollars. |
+
+| Method | Signature | Purpose |
+| --- | --- | --- |
+| `value` | `(scores, *, cost_usd, ece=0.0) -> float` | The scalar ranking key `Σ wᵢ·scoreᵢ − λ·cost − μ·ece`. |
+| `score` | `(scores, *, cost_usd, ece=0.0) -> ObjectiveScore` | The decomposed result. |
+| `quality` | `(scores) -> float` | `Σ wᵢ·scoreᵢ`. |
+
+#### `ObjectiveForm`
+
+`class ObjectiveForm(str, Enum)` — `LINEAR` (weighted scalarization) / `EPSILON` (minimize cost
+subject to `quality >= quality_floor`).
+
+#### `ObjectiveScore`
+
+`class ObjectiveScore(BaseModel)` (frozen) — `value`, `quality`, `cost_penalty`, `ece_penalty`,
+`feasible` (the ε-constraint gate; always `True` in linear form).
+
+**`Tuner` gains** (all optional; defaults preserve legacy behavior): `objective: Objective |
+None = None`, `pareto: bool = False`, `objective_items: int = 1`. `TrialResult.cost_usd` and
+`TrialResult.objective_value` are recorded per candidate (both `None` with no objective);
+`TuneResult.pareto_front: list[int]` is populated only when `pareto=True`.
+
+### Calibration (`crawfish.metrics`)
+
+#### `calibrate`
+
+```python
+async def calibrate(
+    definition: Definition,
+    golden: GoldenSet | Sequence[EvalCase],
+    *,
+    runs: int = 5,
+    ctx: RunContext,
+    runtime: AgentRuntime,
+    rubric: Rubric | None = None,
+    confidence_field: str = "confidence",
+    cost_per_run_usd: float = 0.0,
+    target_accuracy: float = 0.9,
+    n_bins: int = 10,
+    alpha: float = 0.05,
+    n_resamples: int = 1000,
+    base_seed: int = 0,
+    inputs_for: Callable[[EvalCase], dict[str, JSONValue]] | None = None,
+) -> CalibrationReport
+```
+
+Runs each golden case `runs` times under distinct, deterministically-derived per-run seeds and
+returns the noise band + calibration measurement. Drives the runtime directly via
+`RunRequest(decode_seed=...)`. The same `(base_seed, runs)` over the same golden yields a
+byte-identical report and seed schedule. **Raises `CalibrationError` on a `RecordReplayRuntime`**
+(replay would fabricate zero variance). Honours the autonomy ceiling — a budget/cancel breach
+returns a `partial=True` report.
+
+#### `CalibrationReport`
+
+`class CalibrationReport(BaseModel)` (frozen) — the `org_id`-tagged measurement the promotion
+gate and objective consume.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `rubric_mean` / `rubric_std` | `dict[str, float]` | Per-metric mean and **population** std across `runs × len(golden)` scored outputs (the noise band). |
+| `output_variance` | `float` | Mean fraction of structurally-differing fields across a case's re-runs; `0.0` iff every re-run agreed. |
+| `brier` | `float \| None` | **Primary** calibration metric (binning-free); `None` without labels. |
+| `ece` / `ece_ci` | `float \| None` / `tuple[float, float] \| None` | ECE diagnostic (equal-mass bins) and its bootstrap CI; `None` without labels; `ece ∈ [0,1]`. |
+| `reliability` | `tuple[ReliabilityBin, ...]` | The equal-mass confidence→accuracy curve. |
+| `abstention_threshold` / `abstention_rate` | `float` / `float` | The confidence below which acting is unsafe (read off `reliability`) and the share of outputs below it. |
+| `determinism_tier` / `infra_variance_floor` | `DeterminismTier` / `float` | The runtime's F-5 tier and, when not `honors-seed`, the variance attributed to infra. |
+| `org_id`, `definition_id`, `definition_version`, `content_sha`, `base_seed`, `runs`, `cases` | — | Tenancy + reproducibility coordinates. |
+| `partial` | `bool` | `True` when a budget/cancel ceiling cut the measurement short. |
+
+`report.gate_safe(margin) -> bool` (F-8 guard) forbids gating on `ece` when its CI is wider
+than the gate margin, and fails safe (`False`) with no CI.
+
+#### `ReliabilityBin`
+
+`class ReliabilityBin(BaseModel)` (frozen) — `confidence`, `accuracy`, `count` for one
+equal-mass bin.
+
+#### `CalibrationError`
+
+`class CalibrationError(RuntimeError)` — raised when `calibrate` is handed a `RecordReplayRuntime`.
+
+### Confidence & abstention (`crawfish.escalate`)
+
+#### `extract_confidence`
+
+```python
+def extract_confidence(output: Output[JSONValue], *, field: str = "confidence") -> float | None
+```
+
+Read a `[0,1]` self-reported confidence from a typed Output (a mapping field, or a bare numeric
+value), clamped; `None` when absent. The fluid value is **measured, never trusted as an
+instruction**.
+
+#### `abstention_threshold`
+
+```python
+def abstention_threshold(
+    bin_confidence: list[float],
+    bin_accuracy: list[float],
+    bin_count: list[int],
+    *,
+    target: float = 0.9,
+    default: float = 1.0,
+) -> float
+```
+
+The evidence-derived replacement for the old guessed escalation constant: the lowest bin
+confidence above which observed accuracy stays `>= target`. Empty bins are skipped; fails safe
+to `default` (`1.0` — abstain on everything) when no level is reliable. Pure and deterministic.
+
+### Variance-aware promotion (`crawfish.eval`)
+
+#### `promote_against_baseline`
+
+```python
+def promote_against_baseline(
+    store: Store,
+    name: str,
+    candidate: dict[str, float],
+    *,
+    primary: str,
+    alpha: float = 0.05,
+    tolerance: float = 0.0,
+    org_id: str = "local",
+    fresh_sample: dict[str, float] | None = None,
+    shrink_weight: float = 1.0,
+) -> PromotionVerdict
+```
+
+Promotes `candidate` iff BOTH: no metric regresses past its recorded noise band (the hard F-3
+invariant, made noise-robust), **and** the `primary` metric's gain exceeds `k·std`
+(`k` from `alpha`). With no recorded `std` the band is zero-width and the gate reduces
+byte-for-byte to `gate_against_baseline` + "primary gain > 0". A `fresh_sample` shrinks the
+stored baseline (winner's-curse correction). A rejected candidate writes nothing.
+
+#### `PromotionVerdict`
+
+`class PromotionVerdict` (frozen dataclass) — `promoted`, `regressed`, `cleared_band`,
+`primary`, `primary_gain`, `primary_band`, `reason` (auditable).
+
+#### `save_baseline_from_report`
+
+```python
+def save_baseline_from_report(
+    store: Store, name: str, report: CalibrationReport, *, org_id: str = "local"
+) -> None
+```
+
+Persist a baseline from a `CalibrationReport`: the report's `rubric_mean` becomes the scores
+and its `rubric_std` the noise band. The report's `org_id` is respected at the default.
+
+#### `load_baseline_std`
+
+```python
+def load_baseline_std(store: Store, name: str, *, org_id: str = "local") -> dict[str, float] | None
+```
+
+Load the per-metric std recorded alongside a baseline. `None` (no std record — any pre-CRA-212
+baseline) signals a zero-width band, reducing the gate to `gate_against_baseline`.
+
+`save_baseline` gained an optional `std: dict[str, float] | None = None`; the `scores` record
+format is unchanged (`std=None` writes exactly the old record and never erases an existing band).
+
+### Weight transfer (`crawfish.learning`)
+
+#### `state_dict`
+
+```python
+def state_dict(definition: Definition) -> StateDict
+```
+
+Extract the tunable knobs as the "weights" — per-role knobs, the coordination choice,
+`injected_prompts`, and summoned units as references-by-version. **Excludes** architecture keys
+(IO schema, dependency structure, team topology). JSON-only and deterministic.
+
+#### `load_state`
+
+```python
+def load_state(
+    definition: Definition,
+    state: StateDict,
+    *,
+    strict: bool = True,
+    only: list[str] | None = None,
+) -> Definition
+```
+
+Transfer the knob VALUES from `state` onto `definition`, **copy-on-write** (a NEW frozen
+Definition; the target is never mutated). `strict=True` raises `IncompatibleStateError` on a
+`structure_sha` mismatch; `strict=False` loads the structural intersection. `only` restricts
+the transferred groups — members of `{prompt, model, context_strategy, policies, decode,
+fewshots, coordination}`. `d.load_state(d.state_dict())` re-mints the same content sha.
+
+#### `StateDict`
+
+`class StateDict(BaseModel)` (frozen, JSON-only) — the tunable knobs as the "weights".
+
+| Field / property | Type | Notes |
+| --- | --- | --- |
+| `roles` | `dict[str, RoleKnobs]` | Per-role tunable knobs. |
+| `coordination` | `Coordination` | The team topology *choice* (a tunable knob). |
+| `injected_prompts` | `list[Prompt]` | Few-shots / appended instruction blocks. |
+| `summons` | `list[DefinitionRef]` | Summoned units as **references-by-version** (`{id, version}`); embedding a nested Definition is rejected. |
+| `structure_sha` | `str` | Content hash of the **architecture** — the transfer-compatibility key. |
+| `sha` *(property)* | `str` | Content hash of the knob **values**; editing any knob changes it (excludes `structure_sha`). |
+
+#### `RoleKnobs`
+
+`class RoleKnobs(BaseModel)` (frozen) — one role's knob bundle: `prompt`, `model`,
+`context_strategy`, `policies`, and decode knobs (`temperature` / `top_p` / `sample_k`, carried
+only when pinned). Every field is a static, author-supplied knob; none is fluid.
+
+#### `IncompatibleStateError`
+
+`class IncompatibleStateError(TypeError)` — `load_state(strict=True)` was asked to load onto an
+incompatible architecture (a `structure_sha` mismatch).
+
+### Serving-time explore (`crawfish.learning`)
+
+#### `ServingLoop`
+
+```python
+def __init__(
+    self,
+    promoted: Definition,
+    trial: Definition,
+    schedule: ExploreSchedule,
+    *,
+    seed: int = 0,
+    sample_size: int = 100,
+    min_lift: float = 0.0,
+    org_id: str = "local",
+) -> None
+```
+
+The serving-time explore/exploit overlay. Routes `(1-ε)` of items to `promoted`, `ε` to
+`trial`, choosing explored items by a seeded hash of the recorded `item_id` (a replay
+re-explores exactly the same items). `sample_size < 1` raises `ValueError`.
+
+| Method | Signature | Purpose |
+| --- | --- | --- |
+| `route` | `(item_id: str, ctx: RunContext) -> ServingDecision` | Route one live item; explores iff the budget has room AND the seeded item hash falls under the effective (decaying) rate. Advances the served counter. |
+| `explored_items` | `(item_ids: list[str], ctx: RunContext) -> list[str]` | The deterministic explored subset of a batch (side-effect-free). |
+| `graduate` | `(trial_rewards: list[float], baseline_rewards: list[float]) -> GraduationVerdict` | The no-peeking graduation gate (`decided=False` until `sample_size` outcomes). |
+
+ε is bounded by the shared `CostBudget`: once `remaining_usd == 0`, every item routes to the
+promoted best. Promotion stays with the `LearningLoop` (eval-gated + reversible).
+
+#### `ExploreSchedule`
+
+`class ExploreSchedule(BaseModel)` (frozen) — `epsilon` (base rate in `[0,1]`; `0` disables
+exploration), `decay` (effective rate after `n` served items is `epsilon / (1 + decay·n)`;
+`decay=0` is flat fixed-ε), `strategy: ExploreStrategy`. `rate_at(served) -> float` gives the
+effective rate.
+
+#### `ExploreStrategy`
+
+`class ExploreStrategy(str, Enum)` — `HASH` (the shipped deterministic router) plus reserved
+`UCB1` / `THOMPSON` hooks (declared so a future strategy plugs in without an API change).
+
+#### `ServingDecision`
+
+`class ServingDecision(BaseModel)` (frozen) — per-item routing verdict: `item_id`, `explore`,
+`version`.
+
+#### `GraduationVerdict`
+
+`class GraduationVerdict(BaseModel)` (frozen) — `decided`, `graduate`, `n_outcomes`,
+`sample_size`, `trial_mean`, `baseline_mean`, `reason`. `decided` is `False` until
+`n_outcomes >= sample_size` (no peeking); once decided, `graduate` is `True` iff the trial
+mean beats baseline by at least `min_lift`.
+
 ## See also
 
-- [Metrics](metrics.md) — the `Benchmark` and `Rubric` that turn a candidate run into scores.
-- [Evals](evals.md) — the golden set and `gate_against_baseline` the promotion gate leans on.
-- [Definition](definition.md) — the agents, prompts, and knobs the mutators turn.
+- [Train, calibrate & promote](../guide/train-and-tune.md) — the runnable end-to-end workflow for the symbols above.
+- [Metrics](metrics.md) — the `Benchmark` and `Rubric` that turn a candidate run into scores, and `calibrate`.
+- [Evals](evals.md) — the golden set, `gate_against_baseline`, and the variance-aware promotion gate.
+- [Definition](definition.md) — the agents, prompts, and knobs the mutators turn; `Definition.tune`.

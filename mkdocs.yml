@@ -62,6 +62,7 @@ nav:
       - Concepts: guide/concepts.md
       - Refine & verify: guide/refine-and-verify.md
       - Compose — branch, cycle, recurse: guide/compose.md
+      - Train, calibrate & promote: guide/train-and-tune.md
       - Cookbook: guide/cookbook.md
       - Contributing a connector: guide/contributing-a-connector.md
       - Connector ideas: guide/connector-ideas.md
