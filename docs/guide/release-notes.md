@@ -3,6 +3,64 @@
 Notable, user-facing changes. For the exact public-symbol surface of any release, see the
 [API reference](api-reference.md); for the longer arc, see the [Roadmap](../roadmap/README.md).
 
+## Agent language — Milestone 5: the operator surface
+
+The flagship slice completes. The control plane, composition surface, tunable-ML library, and
+tameness layer were *libraries*; Milestone 5 makes the whole optimization plane drivable from
+the shell and adds the two honesty primitives a self-optimizing app needs to trust what it
+drives. New, all reachable from `craw` or importable from the top-level `crawfish` package:
+
+- **The optimization plane on `craw` (CRA-219).** Five subcommands bind the already-shipped
+  primitives — nothing re-implements a cost model, a search, or a gate. **`craw eval`** scores
+  the frozen, eval-mode Definition against a Benchmark and gates on a named baseline (exits
+  non-zero *iff* a metric regresses — drop it straight into CI). **`craw tune`** searches the
+  knob space under the cost-regularized `Objective` and the variance-aware promotion gate, in
+  train mode, byte-identical under `--seed`, budget-bounded. **`craw refine`** runs the
+  verifier-gated `Refine` loop until a Rubric goal (`--until 'score>=0.95'`) or a bound.
+  **`craw learn`** runs one eval-gated self-versioning cycle, or `--rollback <sha>` (a pointer
+  move — *no model call*); a promotion/rollback emits an audit event. **`craw guard`** distils a
+  closed-grammar predicate (parsed *as data*, never `eval`/`exec`) into a `HouseGuard` at its
+  *earned* stage — a guard cannot self-promote to `block`. Every command shares
+  `--budget/--seed/--org/--model/--live/--json`, is deterministic by default (the mock runtime —
+  **no live model call** without `--live`), fires no Sink (the plane is egress-free), and emits
+  a versioned, snapshot-tested `--json` schema.
+- **The honest cost interval — `CostShape` / `compose_cost` (CRA-220).** `estimate_cost` was a
+  silent lower bound, blind to the re-run multipliers of escalation, repair, retry, and
+  `Refine` — a falsely-precise point that could only undershoot. `CostEstimate` now carries an
+  honest band: `total_usd` (the lower bound, unchanged), `expected_usd` (with a CI), and
+  `worst_case_usd`, with `total ≤ expected_lo ≤ expected ≤ expected_hi ≤ worst`. `CostShape` +
+  `compose_cost` fold a nesting of operators *multiplicatively* (a `Quorum(5)` over an
+  `Escalating(2×)` previews `10×`, escalation re-priced on the strong model);
+  `CostShape.from_runtime` infers the shapes from the assembled wrapper chain. The contract is
+  load-bearing: **the advertised `worst_case` is a true upper bound** a real run never exceeds.
+  Pure static analysis — no model call.
+- **Single-flight caching — `CacheStats.coalesced` (CRA-221).** A disk cassette only helps the
+  *second* run; two identical items in one `Batch` both miss and both spend. `CachingRuntime`
+  grows an in-process per-key `asyncio.Future` map so N concurrent identical callers share one
+  computation: exactly **one `inner.run` ⇒ one `CostBudget.charge`**, a strict strengthening of
+  the gas meter. Coalesced waiters charge `$0` and accrue their avoided spend into `saved_usd`;
+  `CacheStats` gains `coalesced`, and `total`/`hit_rate` count it. A strict refinement (the
+  coalescing key is the replay cassette key, so replay is bit-for-bit either way) and
+  tenant-safe (the key is salted with `org_id` — org A's computation is never served to org B);
+  an in-flight exception reaches every awaiter and clears the key so a retry recomputes.
+- **The dependency resolver + lockfile — `resolve` / `Lockfile` / `SemVer` (CRA-222).** A
+  Definition *summons* units by reference at a version constraint; an unpinned transitive
+  closure breaks replay reproducibility. A pure, offline resolver walks the closure, picks the
+  highest compatible version (`^`/`~`/exact ranges), detects conflicts (naming both requirers)
+  and cycles, and pins every ref to an exact version + `sha256:` integrity. `Lockfile` records
+  one small `closure_sha()` — the reference a run embeds. Reading a lockfile is **data-only**
+  (it never executes unit code) and re-verifies the recorded sha, **failing closed** on a
+  tampered file or an unknown `LOCKFILE_VERSION`; a mutated unit diverges the closure_sha, so an
+  un-versioned mutation can't enter a frozen closure. Driven from `craw lock` (`--check` is the
+  fail-closed CI drift gate). New public symbols: `resolve`, `Lockfile`, `Pin`, `SemVer`,
+  `CandidateSource`, `InMemoryCandidateSource`, `ResolutionError`, `read_lockfile`,
+  `write_lockfile`, `LOCKFILE_VERSION`.
+
+Learn it: the [Drive the language from the CLI guide](optimize-from-the-cli.md) (runnable,
+mirrors the triage demo — score and gate, the honest cost band, single-flight coalescing two
+in-flight calls, and a committed lockfile), the [CLI reference](cli.md), and the
+[Concepts → operator surface](concepts.md#the-operator-surface-drive-price-and-pin-the-language).
+
 ## Agent language — Milestone 4: taming stochasticity
 
 The one stochastic primitive — a model `Run` — gets bounded *itself*. Four disciplines layer

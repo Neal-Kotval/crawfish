@@ -468,6 +468,48 @@ enforcement** — and it is the same shape as everything else in the language: t
 part stays contained, and the program keeps accreting determinism around it. Learn it end to
 end in the [Taming stochasticity guide](tameness.md) (runnable, mirrors the triage demo).
 
+## The operator surface — drive, price, and pin the language
+
+The control plane, composition surface, tunable-ML half, and tameness layer are *libraries*.
+The **operator surface** makes them drivable from the shell and adds the two honesty
+primitives a self-optimizing app needs to trust what it drives.
+
+**The optimization plane is reachable from `craw`.** Five subcommands — `craw eval` (score and
+gate on a baseline), `tune` (search the knobs), `refine` (iterate to a goal), `learn`
+(self-version, or roll back), and `guard` (distil a deterministic guard) — bind the
+already-shipped primitives without re-implementing one of them. The point is closing the loop:
+the [self-optimizing app](../roadmap/README.md) drives Crawfish through the same shell you do,
+so the optimization plane must be reachable from `craw`. Every command is deterministic by
+default (the mock runtime, all randomness through `--seed`), fires no Sink (the plane is
+**egress-free**), and emits a versioned `--json` schema a downstream tool parses stably.
+
+**The advertised cost band is a true upper bound.** A point cost estimate is dishonest: one
+run per agent is blind to the re-run multipliers escalation, repair, retry, and `Refine` add,
+so the number could only *undershoot*. The cost preview is now an honest **interval** — a
+`lower` bound, an `expected` band from measured re-run rates, and a `worst_case` that folds
+every multiplier *multiplicatively* along the operator nesting (a `Quorum(5)` over an
+`Escalating(2×)` previews `10×`, escalation re-priced on the strong model). The contract is
+one-directional and load-bearing: **a real run never exceeds `worst_case`**, so a budget set to
+it can't be blown by the run it previewed. The fold is pure static analysis — no model call.
+
+**One charge for N identical in-flight calls.** A disk cassette only helps the *second* run;
+two identical items in the *same* batch both miss and both spend. **Single-flight** coalesces
+them: when N concurrent callers issue the same request, only the leader runs the real metered
+call and the rest await its result — exactly **one `inner.run` ⇒ one `CostBudget.charge`**, a
+strict strengthening of the gas meter. It is a strict refinement (the coalescing key is the
+replay cassette key, so replay is bit-for-bit either way) and tenant-safe (the key is salted
+with `org_id`, so org A's computation is never served to org B).
+
+**A reproducible dependency closure.** A Definition *summons* units by reference at a version
+constraint; an unpinned transitive closure breaks replay reproducibility. The resolver walks
+the closure, picks the highest compatible version, detects conflicts and cycles, and pins
+every ref to an exact `(version, sha256)` in a committable lockfile. A run embeds one small
+`closure_sha`, keeping run identity small. Reading a lockfile is **data-only** — it never
+executes unit code and re-verifies the recorded sha, **failing closed** on a tampered file or a
+drift; a mutated unit gets a new sha, so an un-versioned mutation cannot enter a frozen closure
+without a re-freeze. Learn it in the
+[Drive the language from the CLI guide](optimize-from-the-cli.md).
+
 ## Next steps
 
 - [Cookbook](cookbook.md) — copy-paste recipes, including eval-as-test.

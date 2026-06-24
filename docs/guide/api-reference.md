@@ -4,7 +4,7 @@
 > Do not edit by hand — regenerate on each release:
 > `uv run python docs/guide/gen_api_reference.py > docs/guide/api-reference.md`.
 
-`crawfish` version: `0.2.0` — 411 public symbols.
+`crawfish` version: `0.2.0` — 423 public symbols.
 
 Everything documented here is importable directly from the top-level package:
 
@@ -427,6 +427,18 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `GrammarKind` | enum | The dialect of a :class:`Grammar`. ``(str, Enum)`` per ADR 0004. |
 | `GrammarError` | class | Raised when text cannot be projected onto a constraint surface at all. |
 | `parse_grammar` | function | Read a per-call ``RunRequest.grammar`` dialect string back into a :class:`Grammar`. |
+| `CostShape` | class | One cost-bearing operator wrapper and its re-run multiplier (F-6 / OPT-2). |
+| `compose_cost` | function | Fold a nesting of :class:`CostShape`s onto a base estimate (F-6 / OPT-2). |
+| `resolve` | function | Resolve ``root``'s transitive summoned closure to a pinned :class:`Lockfile`. |
+| `Lockfile` | class | The pinned transitive closure of a resolve — reproducible and committable. |
+| `Pin` | class | One resolved unit in a lockfile: its id pinned to an exact version + integrity. |
+| `CandidateSource` | class | Injected, offline source of resolvable candidates (the resolver never reads disk |
+| `InMemoryCandidateSource` | class | A plain in-memory :class:`CandidateSource` — the default, and what tests inject. |
+| `SemVer` | class | A ``MAJOR.MINOR.PATCH`` semantic version; the comparator the resolver orders by. |
+| `ResolutionError` | class | An unsatisfiable or conflicting constraint set. Fails closed. |
+| `read_lockfile` | function | Parse canonical lockfile JSON back into a :class:`Lockfile` — **data only**. |
+| `write_lockfile` | function | Serialize a lockfile to its canonical JSON text (deterministic, committable). |
+| `LOCKFILE_VERSION` | value | int([x]) -> integer |
 
 ### `JSONValue`
 
@@ -645,7 +657,7 @@ TypeRegistry() -> 'None'
 
 *value* — `TypeRegistry`
 
-`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x10b32c990>`
+`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x108ac4c50>`
 
 ### `Version`
 
@@ -2410,7 +2422,7 @@ Stop then re-deploy ``name`` with its recorded dir + schedule. Returns success.
 Watch one pipeline: run rules (and an optional LLM judge) on a poll interval.
 
 ```python
-Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x10b7051c0>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
+Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x108deb240>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
 ```
 
 **Methods**
@@ -3385,11 +3397,14 @@ and session id, hashed deterministically.
 Running hit/miss + saved-spend accounting for a :class:`CachingRuntime`.
 
 ``hits``/``misses`` count requests served from / not from the cassette;
-``saved_usd`` totals the spend each hit avoided (the recorded result's ``cost_usd``,
-which a miss would have charged). ``spent_usd`` totals what misses actually charged.
+``coalesced`` counts requests that awaited an in-flight peer (single-flight) instead
+of issuing their own ``inner.run`` — a sub-class of "saved a spend" that is distinct
+from a persistent-cassette ``hit``. ``saved_usd`` totals the spend each hit *or*
+coalesced waiter avoided (the recorded result's ``cost_usd``, which it would otherwise
+have charged). ``spent_usd`` totals what misses actually charged.
 
 ```python
-CacheStats(hits: 'int' = 0, misses: 'int' = 0, saved_usd: 'float' = 0.0, spent_usd: 'float' = 0.0, _seen_keys: 'set[str]' = <factory>) -> None
+CacheStats(hits: 'int' = 0, misses: 'int' = 0, coalesced: 'int' = 0, saved_usd: 'float' = 0.0, spent_usd: 'float' = 0.0, _seen_keys: 'set[str]' = <factory>) -> None
 ```
 
 ### `CachingRuntime`
@@ -3403,6 +3418,15 @@ Each :meth:`run` reports, via :attr:`stats`, whether the request hit the cassett
 runtime records + the underlying model spends). A small in-process LRU of recently
 recorded results lets the wrapper price a hit even before the cassette is re-read,
 keeping ``saved_usd`` exact for repeated identical calls within a session.
+
+In front of that persistent cache sits the CRA-221 **single-flight** layer: an
+in-process per-key :class:`asyncio.Future` map (:attr:`_inflight`). When a request
+arrives while an identical one (same org-salted key) is still computing, this caller
+awaits the in-flight future instead of issuing its own ``inner.run`` — so N concurrent
+identical calls collapse to **one** model call and **one** ``CostBudget.charge``. The
+first (leader) caller resolves the future for every waiter on success, or propagates
+the exception to all of them on failure; either way the key is removed in a ``finally``
+so a later retry recomputes (no poisoned future is ever cached).
 
 ```python
 CachingRuntime(inner: 'RecordReplayRuntime', *, cassette_dir: 'str | Path | None' = None, track_capacity: 'int' = 1024) -> 'None'
@@ -4645,7 +4669,7 @@ clean unprivileged primitive and is deferred (ADR 0009) → :class:`UnsupportedP
 *function*
 
 ```python
-registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x10b32c990>) -> 'list[dict[str, object]]'
+registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x108ac4c50>) -> 'list[dict[str, object]]'
 ```
 
 Serialize a registry's records to JSON descriptors for the child.
@@ -6569,4 +6593,236 @@ Read a per-call ``RunRequest.grammar`` dialect string back into a :class:`Gramma
 The inverse of :meth:`Grammar.to_request_grammar`. A runtime that mediates the
 constraint reads the request's grammar string through this to recover the typed
 constraint, then applies :meth:`Grammar.enforce`.
+
+### `CostShape`
+
+*class*
+
+One cost-bearing operator wrapper and its re-run multiplier (F-6 / OPT-2).
+
+A bare :class:`Definition` estimate assumes each agent runs once; the control
+plane wraps that base call in operators that re-run the leaf. :class:`CostShape`
+names one such wrapper. The **worst-case multiplier** is the most times the
+inner call can fire:
+
+====================  ======================  ==================================
+Operator              ``kind``                worst-case multiplier
+====================  ======================  ==================================
+``Refine``            ``"refine"``            ``max_iters``
+``Escalate``          ``"escalate"``          ``2`` (2nd attempt on the strong
+                                              model — see ``strong_multiplier``)
+``Quorum``            ``"quorum"``            ``k``
+``Retry``             ``"retry"``             ``n``
+``recurse``           ``"recurse"``           ``b ** max_depth``
+====================  ======================  ==================================
+
+Use the classmethod constructors (:meth:`refine`, :meth:`escalate`,
+:meth:`quorum`, :meth:`retry`, :meth:`recurse`) rather than the raw fields —
+they encode each operator's multiplier law in exactly one place.
+
+``measured_rate`` (optional, in ``[0, 1]``) is the *measured fraction of calls
+that actually trigger the extra work* — e.g. an escalation rate of 0.2 means
+20% of calls escalate to the strong model. It comes from ``cw.calibrate`` or
+the ledger and is used by :func:`compose_cost` to build the **expected** band.
+With no rate the operator is priced at its worst case (never undercount).
+``rate_ci`` is the half-width of the rate's confidence interval (also in
+``[0, 1]``); it widens the expected band so the number is never falsely precise.
+
+``strong_multiplier`` (escalation only) re-prices the escalated attempt: the
+second attempt runs on the *strong* model, so its marginal cost is
+``strong_price / base_price`` rather than ``1``. :meth:`escalate` computes it
+from the two per-call prices.
+
+```python
+CostShape(kind: 'str', worst_case_multiplier: 'float', measured_rate: 'float | None' = None, rate_ci: 'float' = 0.0, strong_multiplier: 'float' = 1.0) -> None
+```
+
+**Methods**
+
+- `expected_factor(self, *, ci_sign: 'float' = 0.0) -> 'float'` — The multiplier this operator contributes to the **expected** band.
+- `worst_case_factor(self) -> 'float'` — The multiplier this operator contributes to ``worst_case``.
+
+### `compose_cost`
+
+*function*
+
+```python
+compose_cost(base: 'CostEstimate', shapes: 'Sequence[CostShape]') -> 'CostEstimate'
+```
+
+Fold a nesting of :class:`CostShape`s onto a base estimate (F-6 / OPT-2).
+
+``shapes`` is the operator nesting **outermost-first** (e.g.
+``[refine(3), quorum(5)]`` for ``Refine(max_iters=3)`` wrapping
+``Quorum(k=5)``). The composition law is **multiplicative along the
+nesting**::
+
+    worst_case = base.total_usd × Π shape.worst_case_factor()
+    expected   = base.total_usd × Π shape.expected_factor()   (measured-rate band)
+
+``total_usd`` is carried through untouched — it remains the lower bound. The
+returned estimate's ``expected_lo_usd`` / ``expected_hi_usd`` fold the
+per-operator ``rate_ci`` so ``expected`` is a band, never a point. With no
+shapes (or no measured rates) ``expected == worst_case`` — the estimator
+never undercounts.
+
+Pure function of its inputs: no model call, no ledger read, no mutation. The
+returned :class:`CostEstimate` is a fresh frozen value.
+
+### `resolve`
+
+*function*
+
+```python
+resolve(root: 'Candidate', source: 'CandidateSource', *, org_id: 'str' = 'local') -> 'Lockfile'
+```
+
+Resolve ``root``'s transitive summoned closure to a pinned :class:`Lockfile`.
+
+Pure and offline: ``source`` (an injected :class:`CandidateSource`) supplies every
+candidate; this function performs no IO, no model call, and no network access. For
+each ``DefinitionRef`` it parses the version constraint, selects the **highest**
+candidate version satisfying it, and recurses into that candidate's own dependencies.
+
+Determinism: dependencies are walked in sorted ``(id, version)`` order and the
+resulting pins are sorted in the lockfile, so identical inputs produce an identical
+``closure_sha`` across machines.
+
+Fail-closed conditions, all raising :class:`ResolutionError`:
+
+* an unknown unit (no candidates),
+* no candidate satisfying a constraint,
+* a **conflict** — the same unit already pinned at a different version by another
+  requirer (the message names both requirers),
+* a dependency **cycle**.
+
+### `Lockfile`
+
+*class*
+
+The pinned transitive closure of a resolve — reproducible and committable.
+
+``pins`` is the full solution (including the root). ``closure_sha()`` is one sha256
+over the sorted pin set: a run embeds *this reference*, so run identity stays small
+and a single hash detects any drift in the closure. ``org_id`` scopes the recorded
+closure per the tenancy spine; it does **not** enter the pins (which are
+content-addressed and org-agnostic) so the same closure resolves identically across
+tenants.
+
+```python
+Lockfile(root_id: 'str', pins: 'list[Pin]' = <factory>, org_id: 'str' = 'local') -> None
+```
+
+**Methods**
+
+- `closure_sha(self) -> 'str'` — One sha256 over the sorted pin set — the small reference a run records.
+- `sorted_pins(self) -> 'list[Pin]'`
+- `to_dict(self) -> 'dict[str, object]'`
+
+### `Pin`
+
+*class*
+
+One resolved unit in a lockfile: its id pinned to an exact version + integrity.
+
+``order=True`` (id, version, integrity) gives the deterministic closure ordering the
+``closure_sha`` hashes over. ``integrity`` is ``"sha256:<content-sha>"``.
+
+```python
+Pin(id: 'str', version: 'str', integrity: 'str') -> None
+```
+
+**Methods**
+
+- `to_dict(self) -> 'dict[str, str]'`
+
+### `CandidateSource`
+
+*class* — bases: `Protocol`
+
+Injected, offline source of resolvable candidates (the resolver never reads disk
+or the network itself — the registry/store is passed in).
+
+:meth:`candidates` returns every known version of ``unit_id``; the resolver picks the
+highest one satisfying the active constraint. An empty list means *unknown unit* and
+fails the resolve closed.
+
+```python
+CandidateSource(*args, **kwargs)
+```
+
+**Methods**
+
+- `candidates(self, unit_id: 'str') -> 'list[Candidate]'`
+
+### `InMemoryCandidateSource`
+
+*class*
+
+A plain in-memory :class:`CandidateSource` — the default, and what tests inject.
+
+Pass a mapping of ``unit_id -> [Candidate, ...]``. Deterministic: candidates are
+returned highest-version-first regardless of insertion order.
+
+```python
+InMemoryCandidateSource(by_id: 'dict[str, list[Candidate]]' = <factory>) -> None
+```
+
+**Methods**
+
+- `add(self, candidate: 'Candidate') -> 'None'`
+- `candidates(self, unit_id: 'str') -> 'list[Candidate]'`
+
+### `SemVer`
+
+*class*
+
+A ``MAJOR.MINOR.PATCH`` semantic version; the comparator the resolver orders by.
+
+Ordering is the dataclass field order (major, then minor, then patch) — exactly
+SemVer precedence for the v1 ``X.Y.Z`` subset. The optional content ``sha`` label is
+*not* part of identity or ordering (it is metadata on the rendered string); pin
+integrity lives in :class:`Pin`, not here.
+
+```python
+SemVer(major: 'int', minor: 'int', patch: 'int') -> None
+```
+
+### `ResolutionError`
+
+*class* — bases: `Exception`
+
+An unsatisfiable or conflicting constraint set. Fails closed.
+
+Carries the offending ``id`` and (for conflicts) the two requirers, so the message
+names both sides of the conflict per the acceptance criteria.
+
+### `read_lockfile`
+
+*function*
+
+```python
+read_lockfile(text: 'str') -> 'Lockfile'
+```
+
+Parse canonical lockfile JSON back into a :class:`Lockfile` — **data only**.
+
+Reading a lockfile never executes unit code; it only reconstructs the pin set and
+re-verifies the recorded ``closure_sha``.
+
+### `write_lockfile`
+
+*function*
+
+```python
+write_lockfile(lockfile: 'Lockfile') -> 'str'
+```
+
+Serialize a lockfile to its canonical JSON text (deterministic, committable).
+
+### `LOCKFILE_VERSION`
+
+*value* — `int`
+
+`LOCKFILE_VERSION = 1`
 

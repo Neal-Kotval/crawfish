@@ -42,13 +42,14 @@ crash-resume. What's in the box today:
   `craw build` → container; a MkDocs docs site; an API-stability contract (stable /
   experimental / deprecated tiers + semver).
 
-## The agent language — control plane, composition surface, tunable-ML library + tameness layer shipped (in progress)
+## The agent language — control plane, composition surface, tunable-ML library, tameness layer + operator surface shipped (in progress)
 
 Phase 2 includes a larger bet: an **agent language** where composition operators
 (Refine, Program, Quorum, Escalate) and a Tuner make agents self-improving over your
-data. The first four milestones — the **control plane**, the **composition surface**, the
-flagship **tunable-ML library**, and the **tameness layer** that bounds the one stochastic
-primitive — have now shipped on top of the foundational primitives:
+data. The first five milestones — the **control plane**, the **composition surface**, the
+flagship **tunable-ML library**, the **tameness layer** that bounds the one stochastic
+primitive, and the **operator surface** that makes the whole optimization plane drivable from
+the shell — have now shipped on top of the foundational primitives:
 
 - **`Refine` — a bounded, metered, durable iterate-until-goal loop.** Run a producing
   Definition, check each frozen Output against an *external* stop condition, and iterate
@@ -99,11 +100,28 @@ primitive — have now shipped on top of the foundational primitives:
   rather than a repaired one — a per-call, static/trusted property that keeps `repair_count` at
   0 and stays out of the agent's content hash. The house-guard is the keystone:
   *learn stochastically → distil to a pure predicate → earn enforcement.*
+- **The operator surface — the optimization plane, drivable from the shell.** The flagship slice
+  completes: the libraries above become drivable from `craw`, and two honesty primitives are
+  added. **Five subcommands** — `craw eval` (score + gate on a baseline; exits non-zero on a
+  regression), `tune` (search the knobs, cost-regularized, byte-identical under `--seed`),
+  `refine` (iterate to a Rubric goal), `learn` (self-version, or `--rollback` with *no* model
+  call), `guard` (distil a closed-grammar predicate into a `HouseGuard` at its *earned* stage) —
+  bind the already-shipped primitives, are deterministic by default, fire no Sink, and emit a
+  versioned `--json` schema. **The honest cost interval** turns the preview into a band
+  (`lower` / `expected` / `worst_case`) folded *multiplicatively* along the operator nesting, so
+  the **advertised `worst_case` is a true upper bound** a real run never exceeds. **Single-flight
+  caching** coalesces N concurrent identical calls onto one metered `inner.run` — exactly one
+  `CostBudget.charge` — replay-identical and tenant-safe. **A dependency resolver + lockfile**
+  pins a Definition's summoned transitive closure to exact `(version, sha256)`; reading a
+  lockfile is data-only and **fails closed** on drift or tampering (`craw lock --check` is the
+  CI gate), so an un-versioned mutation cannot enter a frozen closure.
 
 See the [Refine & verify guide](docs/guide/refine-and-verify.md), the
 [Compose guide](docs/guide/compose.md), the
 [Train, calibrate & promote guide](docs/guide/train-and-tune.md), the
 [Taming stochasticity guide](docs/guide/tameness.md), the
+[Drive the language from the CLI guide](docs/guide/optimize-from-the-cli.md), the
+[CLI reference](docs/guide/cli.md), the
 [control-plane reference](docs/reference/refine-and-verify.md), the
 [Tuner & learning reference](docs/reference/tuner-and-learning.md), and the
 [release notes](docs/guide/release-notes.md).

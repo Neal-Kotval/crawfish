@@ -64,6 +64,8 @@ nav:
       - Compose — branch, cycle, recurse: guide/compose.md
       - Train, calibrate & promote: guide/train-and-tune.md
       - Taming stochasticity: guide/tameness.md
+      - Drive the language from the CLI: guide/optimize-from-the-cli.md
+      - CLI reference: guide/cli.md
       - Cookbook: guide/cookbook.md
       - Contributing a connector: guide/contributing-a-connector.md
       - Connector ideas: guide/connector-ideas.md

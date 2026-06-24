@@ -5,10 +5,10 @@ Three cost levers that all stay deterministic and never make a live model call:
 or stronger model, and *cache* repeated calls so the second one costs nothing. They
 live in `crawfish.cost`, `crawfish.routing`, and `crawfish.cache`.
 
-`estimate_cost` · `CostEstimate` · `Budget` · `BudgetState` · `CostMeter` · `spent_today` ·
-`CostTier` · `RoutingRule` · `RoutingPolicy` · `RoutingDecision` · `agent_tier` ·
-`route_model` · `route_decision` · `routing_emission` · `cache_key` · `CacheStats` ·
-`CachingRuntime`
+`estimate_cost` · `CostEstimate` · `CostShape` · `compose_cost` · `Budget` · `BudgetState` ·
+`CostMeter` · `spent_today` · `CostTier` · `RoutingRule` · `RoutingPolicy` ·
+`RoutingDecision` · `agent_tier` · `route_model` · `route_decision` · `routing_emission` ·
+`cache_key` · `CacheStats` · `CachingRuntime`
 
 A **definition** is a compiled agent team — a package of one or more agents authored as
 a directory. Each agent names (or leaves unset) the **model** it runs on. Running a
@@ -16,11 +16,25 @@ definition over many input **items** costs money, so Crawfish gives you three to
 keep that spend visible and small.
 
 **Preview the bill.** `estimate_cost` is a dry run: hand it a definition, an item count,
-and a price table, and it predicts dollars before a single model call. The estimate is
+and a price table, and it predicts dollars before a single model call. The base estimate is
 deliberately coarse — charge one "run" (one agent answering once) per agent per item,
 priced from a flat per-model table. The answer comes back as a `CostEstimate`, a frozen
 record carrying the per-item cost, the total, and a per-model breakdown so you can see
 which model dominates the bill.
+
+The base `total_usd` is a **lower bound**: it counts one run per agent and is blind to the
+re-run multipliers that escalation (the strong-model tail), repair, retry, and `Refine` add.
+A point estimate that can only *undershoot* is a dishonest preview. So `CostEstimate` also
+carries an **honest interval** — `expected_usd` (with an `expected_lo_usd`/`expected_hi_usd`
+CI band) and `worst_case_usd`, satisfying
+`total ≤ expected_lo ≤ expected ≤ expected_hi ≤ worst`. The worst case is the **advertised
+band's upper bound**: a real run never exceeds it. `CostShape` + `compose_cost` build that
+interval by folding a nesting of operators *multiplicatively* — a `Quorum(5)` over an
+`Escalating(2×)` over a leaf previews `5 × 2 = 10×`, escalation re-priced on the strong
+model. With measured re-run rates the expected band sits strictly inside `(lower, worst)`;
+with **no** rates `expected == worst_case`, so the preview never undercounts. The fold is
+pure static analysis — it walks the assembled runtime's wrapper chain
+(`CostShape.from_runtime`) and reads declared bounds; no `run()`, no model call.
 
 **Cap the spend.** A `Budget` is a warn/stop policy: a `stop_usd` hard ceiling and a
 `warn_usd` soft line (defaulting to 80% of the stop). Ask it `check(spent)` and it
@@ -56,6 +70,20 @@ the key the replay layer uses — two requests share a key exactly when they wou
 recording. `CachingRuntime` wraps a [replay runtime](runtimes.md) and reports, per
 request, whether it **hit** (free) or **missed** (paid), tallying both the dollars saved
 and the dollars spent into a `CacheStats`.
+
+A disk cassette only helps the *second* run — two identical items in the *same* `Batch` both
+miss and both spend. **Single-flight** closes that window: `CachingRuntime` keeps an
+in-process per-key `asyncio.Future` map so that when N concurrent callers issue the *same*
+request, only the first (the leader) runs the real, metered `inner.run` and the rest await
+its result. Exactly **one** `inner.run` per key ⇒ exactly **one** `CostBudget.charge` — a
+strict strengthening of the gas meter; the coalesced waiters charge `$0` and tally the spend
+they avoided into `saved_usd`. The coalescing key is the replay layer's own deterministic
+cassette key salted with `org_id`, so coalescing can only change *how many times* a leaf runs,
+never *what* it returns (replay is bit-for-bit whether a call was coalesced or not), and two
+tenants issuing an identical call get **two** runs — org A's computation is never served to
+org B. On an in-flight exception the leader propagates the same exception instance to every
+awaiter, then clears the key in a `finally` so a retry recomputes (no poisoned future is ever
+cached); a cancelled caller raises before joining or starting any computation.
 
 ## The single resolution path (preview can't drift from the run)
 
@@ -174,7 +202,50 @@ item, priced by each agent's resolved model id from `model_prices` (defaults to
 | `items` | `int` | — (required, `ge=0`) | Item count the total scales by. |
 | `per_item_usd` | `float` | — (required, `ge=0.0`) | Predicted spend for one item across the whole team. |
 | `per_model` | `dict[str, float]` | `{}` | Total broken down by resolved model id. |
-| `total_usd` | `float` | — (required, `ge=0.0`) | `per_item_usd * items`. |
+| `total_usd` | `float` | — (required, `ge=0.0`) | `per_item_usd * items`. The interval's **lower bound** (one run per agent). |
+| `worst_case_usd` | `float` | `total_usd` | Upper bound after folding every re-run multiplier — the **advertised band's ceiling**, never exceeded. |
+| `expected_usd` | `float` | `total_usd` | Expected spend from measured re-run rates; `== worst_case_usd` when no rates are known. |
+| `expected_lo_usd` / `expected_hi_usd` | `float` | `expected_usd` | The expected band's CI. Invariant: `total ≤ expected_lo ≤ expected ≤ expected_hi ≤ worst`. |
+
+### `CostShape`
+
+`@dataclass(frozen=True) class CostShape` — one cost-bearing operator's multiplier over its
+inner spend: a `worst_case` factor and an optional measured rate for the expected band. The
+ordered list `compose_cost` folds.
+
+```python
+@classmethod
+def from_runtime(
+    cls, runtime: AgentRuntime, *, model_prices: dict[str, float] | None = None,
+    config: ModelsConfig | None = None,
+) -> list[CostShape]
+```
+
+Walk the assembled `_inner` wrapper chain and emit one shape per cost-bearing wrapper
+(`EscalatingRuntime`, `QuorumRuntime`), **outermost-first** — exactly the order `compose_cost`
+folds. Escalation is re-priced from `model_prices` (degrading to the count-based `2×` when no
+prices). Pure static analysis: no `run()`, no model call. `Refine` (a Node), `Retry` (a
+policy) and `recurse` (a control shape) are not runtime wrappers — fold those alongside the
+inferred list.
+
+```python
+@classmethod
+def repair(cls, *, failure_rate: float | None = None) -> CostShape
+```
+
+The `Run._repair` `+1` re-prompt as a `2×` worst case, with an optional measured failure rate
+for the expected band.
+
+### `compose_cost`
+
+```python
+def compose_cost(lower_usd: float, shapes: Sequence[CostShape]) -> CostEstimate
+```
+
+Fold a nesting of operator shapes multiplicatively onto a `lower_usd` base:
+`worst_case = lower × Π(per-operator factor)`. With measured rates the result's `expected`
+band sits strictly inside `(lower, worst)`; with none, `expected == worst_case`. Deterministic
+and pure.
 
 ### `Budget`
 
@@ -352,18 +423,22 @@ recording. Re-exports the replay layer's `_key`.
 | --- | --- | --- | --- |
 | `hits` | `int` | `0` | Requests served from the cassette (free). |
 | `misses` | `int` | `0` | Requests not in the cassette (paid). |
-| `saved_usd` | `float` | `0.0` | Spend each hit avoided. |
+| `coalesced` | `int` | `0` | Requests that awaited an in-flight peer rather than issuing their own `inner.run` (free). |
+| `saved_usd` | `float` | `0.0` | Spend each hit *and each coalesced waiter* avoided. |
 | `spent_usd` | `float` | `0.0` | Spend misses actually charged. |
 
-`total` → `hits + misses`. `hit_rate` → `hits / total`, or `0.0` when nothing has run.
+`total` → `hits + misses + coalesced`. `hit_rate` → `(hits + coalesced) / total` (both
+avoided a fresh spend), or `0.0` when nothing has run.
 
 ### `CachingRuntime`
 
 `class CachingRuntime(AgentRuntime)` — a cost-aware wrapper over `RecordReplayRuntime`.
 Constructor: `CachingRuntime(inner, *, cassette_dir=None, track_capacity=1024)`. Exposes a
 live `stats: CacheStats`. Each `async run(request, ctx)` checks the cassette: a hit charges
-nothing and adds to `saved_usd`; a miss records, spends, and adds to `spent_usd`. Performs
-no model call itself.
+nothing and adds to `saved_usd`; a miss records, spends, and adds to `spent_usd`. A **single-
+flight** layer in front of that coalesces concurrent identical in-flight calls onto one
+`inner.run` (an `org_id`-salted `_inflight` Future map); coalesced waiters charge `$0`,
+increment `coalesced`, and accrue their avoided spend. Performs no model call itself.
 
 ## Example
 
