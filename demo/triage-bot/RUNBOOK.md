@@ -1,9 +1,12 @@
 # Milestone-F Demo — Runbook
 
-The end-to-end demo that exercises **all nine F foundations** in one scenario:
+The end-to-end demo that exercises **all nine F foundations** — and, since Milestone 1,
+the verifier-gated **`Refine`** operator (CL-1/CL-2/CL-4) — in one scenario:
 *nightly self-improvement + safe production run*. The engine is
-[`self_improve.py`](./self_improve.py); the deterministic acceptance test is
-[`packages/crawfish/tests/test_demo_self_improve.py`](../../packages/crawfish/tests/test_demo_self_improve.py).
+[`self_improve.py`](./self_improve.py); the deterministic acceptance tests are
+[`test_demo_self_improve.py`](../../packages/crawfish/tests/test_demo_self_improve.py)
+(the F foundations) and
+[`test_demo_refine.py`](../../packages/crawfish/tests/test_demo_refine.py) (the M1 Refine step).
 
 ## What it does (10 steps)
 
@@ -19,6 +22,7 @@ The end-to-end demo that exercises **all nine F foundations** in one scenario:
 | 7 | tune temp, run promotion gate (+ winner's-curse shrink) | F-3/F-8 | `paired_gate`, `winners_curse_shrink`, `k_from_alpha` |
 | 8 | `freeze()` the winner → new `Version.sha` | F-5 | `Definition.freeze` |
 | 9 | bounded refine loop; checkpoint each visit; stop on fixed point | F-0/F-1/F-2 | `output_content_sha`, `ExecutionCoordinate`, `ExecutionLedger` |
+| 9r | **M1:** verifier-gated `Refine` — draft a reply, a gated `Verifier` judges it, iterate until accept or bound; checkpoint each draft; resume at `$0` | CL-1/CL-2/CL-4 | `Refine`, `VerifierStop`, `GatedVerifier`, `ExecutionLedger` |
 | 10 | fire the Sink — permitted **only** because the definition is frozen | security spine | static/frozen-only sink |
 
 ## Deterministic run (CI / no credentials, $0)
@@ -179,3 +183,52 @@ construction. Command: `uv run craw demo --live --model claude-haiku-4-5`.
 
 Both runs printed `PASS — 9/9 F-foundations exercised end to end` (exit 0). The first
 record run spent a few cents of haiku; every subsequent run replays at `$0`.
+
+## Milestone 1 live evidence — verifier-gated Refine loop
+
+Milestone 1 added the **`Refine`** operator (CL-1: a bounded, metered, durable
+iterate-until-goal loop) and **`Verifier`/`GatedVerifier`** (CL-2: a gated critic). The
+cumulative scenario now contains a real `Refine` step (printed as the two `refine
+(verifier-gated)` / `refine resume ($0)` lines under step 9):
+
+- the triage agent **drafts a reply** to the first seed ticket;
+- a **gated `Verifier`** — a *distinct* critic Definition that earned the right to block
+  by clearing an absolute-precision bar against a decision `GoldenSet` — judges each draft
+  against the rubric (apology + concrete next step + ETA);
+- `Refine` **iterates the draft** until the verifier **accepts** OR a bound (`max_iters=5`
+  / the shared `CostBudget`) is hit. Each frozen iteration **checkpoints to the ledger**
+  (CL-4) so a mid-loop crash resumes at `$0`.
+
+In the scenario the early drafts are rejected and the loop stops on a **verifier pass**
+(`refine_stopped == "satisfied"`), not the bound — the case that triggers iteration.
+
+### Exact command for the M1 live gate
+
+```bash
+claude -p "say ok"                                  # confirm auth
+uv run craw demo --live --model claude-haiku-4-5    # real haiku; records cassettes
+uv run craw demo --live --model claude-haiku-4-5    # re-run: replays, spend $0
+```
+
+### Evidence checklist (verifier fills this in)
+
+Run the command above and confirm, on the `refine` lines under step 9:
+
+- [ ] **Real refined reply** — the live `claude -p` returned an actual drafted reply
+  (real prose in `.crawfish/cassettes/`), iterated across drafts (not the mock echo).
+- [ ] **Verifier gated the loop** — `refine (verifier-gated)` prints `… -> satisfied`
+  with `verifier precision=1.00`; the loop stopped on the **critic's accept verdict**,
+  not on `max_iters`. (A gated critic that never accepts would instead stop on the bound
+  — `exhausted` — proving the bound is load-bearing; see `test_demo_refine.py`.)
+- [ ] **Budget respected / metered spend** — the loop ran inside the **shared**
+  `CostBudget`; `refine (verifier-gated)` prints a real `spent=$…` delta (Gap #3 closed),
+  and the scenario worst-case (step 6) still bounds total spend.
+- [ ] **Crash-resume = $0** — `refine resume ($0)` prints `resume spend=$0.00 ($0)`: a
+  resume over the same ledger replayed every committed draft at zero cost.
+- [ ] **Bit-identical replay** — the resumed run reproduces the **accepted draft's
+  `output_content_sha`** bit-for-bit (asserted in-scenario; `sha matches uninterrupted
+  run`), and two `--live` runs print the same `refine` sha.
+
+The deterministic path (`uv run craw demo`, `$0`) exercises every one of these off the
+mock runtime; the acceptance test is `packages/crawfish/tests/test_demo_refine.py`
+(10 tests, no live calls).

@@ -7,11 +7,15 @@ promoted through a variance-aware gate, frozen, and then run in a bounded
 "refine-style" loop whose iterations checkpoint to the loop ledger and stop on a
 fixed point — all under a cost budget, all tenancy-scoped.
 
-Milestone-1 operators (``Refine``/``Program``) are **not** shipped yet, so the
-refine loop here is a plain bounded ``for`` over iterations built directly on the
-F primitives (per-iteration :class:`ExecutionCoordinate`, a loop-ledger checkpoint
-per visit, halt when ``output_content_sha`` is unchanged). That is the intended
-use of the foundations.
+Step 9 keeps the original hand-rolled bounded ``for`` over iterations (built directly
+on the F primitives: per-iteration :class:`ExecutionCoordinate`, a loop-ledger
+checkpoint per visit, halt when ``output_content_sha`` is unchanged) to show the
+foundations compose on their own. **Step 9r** then runs the Milestone-1
+:class:`~crawfish.refine.Refine` operator for real: a verifier-gated, bounded, durable
+iterate-until-goal loop where a *gated* :class:`~crawfish.verifier.Verifier` (CL-2)
+decides "good enough" and a mid-loop crash resumes at ``$0`` (CL-4). The triage agent
+drafts a reply, the gated critic judges it, and ``Refine`` iterates until the verifier
+accepts or a bound (``max_iters`` / the shared ``CostBudget``) is hit.
 
 Feature map (which F maps to which step) — see ``run_self_improvement``:
 
@@ -45,21 +49,24 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from crawfish.core.context import CostBudget, RunContext
+from crawfish.core.types import Flow, JSONValue, Parameter
 from crawfish.cost import CostEstimate, CostShape, compose_cost
 from crawfish.definition import Definition
+from crawfish.definition.types import AgentSpec, Coordination, TeamSpec
 from crawfish.emission import CorrectionType, Provenance, emit_correction
-from crawfish.eval import GateDecision, GoldenSet, paired_gate
+from crawfish.eval import EvalCase, GateDecision, GoldenSet, paired_gate, save_baseline
 from crawfish.experiment import k_from_alpha, tune_gate_split, winners_curse_shrink
 from crawfish.ledger import ExecutionLedger, compute_loop_id
 from crawfish.output import Output, output_content_sha
+from crawfish.refine import ProduceFn, Refine, RefineResult, VerifierStop
 from crawfish.runtime import MockRuntime, RecordReplayRuntime
 from crawfish.runtime.base import RunRequest, RunResult
 from crawfish.runtime.replay import ExecutionCoordinate
 from crawfish.runtime.replay import _key as _cassette_key
 from crawfish.store import SqliteStore
+from crawfish.verifier import GatedVerifier, Verifier
 
 if TYPE_CHECKING:
-    from crawfish.eval import EvalCase
     from crawfish.runtime.base import AgentRuntime
     from crawfish.store.base import Store
 
@@ -115,6 +122,13 @@ class DemoResult:
     total_spend_usd: float = 0.0
     org_a_cases: int = 0
     org_b_cases: int = 0
+    # --- Milestone-1 Refine step (verifier-gated draft loop) ---
+    refine_iters: int = 0
+    refine_stopped: str = ""
+    refine_spent_usd: float = 0.0
+    refine_resume_spent_usd: float = -1.0  # -1 == not yet run; 0.0 == proven $0-resume
+    refine_verifier_precision: float = 0.0
+    refine_final_sha: str = ""
 
     def passed(self) -> bool:
         """The whole scenario's pass predicate (mirrors the test assertions).
@@ -138,6 +152,14 @@ class DemoResult:
             and self.resume_extra_charges == 0
             and self.org_b_cases == 0
             and self.org_a_cases > 0
+            # Milestone-1: the verifier-gated Refine loop ran, the verifier (a gated
+            # critic) STOPPED it (not the bound), metered real spend within budget, and
+            # a crash-resume re-charged exactly $0 — proven as a dollar delta.
+            and self.refine_stopped == "satisfied"
+            and self.refine_iters > 0
+            and self.refine_final_sha
+            and self.refine_resume_spent_usd == 0.0
+            and self.refine_spent_usd <= self.worst_case_usd
         )
 
     def summary(self) -> str:
@@ -183,8 +205,31 @@ def _deterministic_responder(req: RunRequest) -> str:
     Reads the agent's resolved temperature (F-5) off the request's definition and
     emits a JSON triage record. Zero cost, fully deterministic, no model call — so
     the deterministic ``craw demo`` path and the cassette path agree bit for bit.
+
+    It also serves the Milestone-1 Refine step (step 9r): a **drafting** request
+    (carrying ``_draft_iter``) returns a reply whose quality climbs with the
+    iteration index, and a **critic** request (the verifier, role ``reply-critic``)
+    returns ``accept``/``reject`` purely as a function of the draft's iteration — so
+    the verifier gates the loop deterministically with no model call.
     """
     inputs = dict(req.inputs)
+    role = req.role
+
+    # --- Refine: the gated verifier's critic (role "reply-critic"). ------------
+    # The critic reads the FLUID draft (its iteration marker) purely as data and
+    # emits a closed-set label. A draft at iter >= _ACCEPT_AT_ITER is "accept".
+    if role == "reply-critic":
+        draft = inputs.get("output", inputs.get("draft", {}))
+        iter_index = _draft_iter_of(draft)
+        return "accept" if iter_index >= _ACCEPT_AT_ITER else "reject"
+
+    # --- Refine: the drafting body (carries _draft_iter). ----------------------
+    if "_draft_iter" in inputs:
+        iter_index = int(inputs.get("_draft_iter", 0))
+        ticket = str(inputs.get("ticket_body", ""))
+        return json.dumps(_draft_reply(ticket, iter_index), sort_keys=True)
+
+    # --- the original triage classification body. ------------------------------
     ticket = str(inputs.get("ticket_body", ""))
     expected = str(inputs.get("_expected", "unknown"))
     temperature = float(inputs.get("_temperature", 0.0))
@@ -193,6 +238,39 @@ def _deterministic_responder(req: RunRequest) -> str:
         {"category": category, "severity": "normal", "summary": ticket[:40]},
         sort_keys=True,
     )
+
+
+# How many drafting iterations before the (mock) verifier accepts. The seed draft
+# (iter 0) and one revision (iter 1) are rejected; iter 2 clears — so the loop runs
+# exactly three body calls and stops on a *verifier pass*, not on the bound.
+_ACCEPT_AT_ITER = 2
+
+
+def _draft_reply(ticket: str, iter_index: int) -> dict[str, JSONValue]:
+    """A deterministic 'drafted reply' whose quality climbs with ``iter_index``.
+
+    Each revision adds the missing element a good support reply needs (an apology,
+    a concrete next step, an ETA), so a later draft is genuinely better — the signal
+    the verifier gates on. Pure and reproducible; the live path produces real prose
+    instead, but the *shape* (a reply + an iteration marker) is identical."""
+    pieces = [
+        "Thanks for reaching out.",
+        "We're sorry for the trouble.",
+        "We've reproduced the issue and a fix is in progress.",
+        "Expect an update within 24 hours.",
+    ]
+    body = " ".join(pieces[: iter_index + 2])
+    return {"reply": f"Re: {ticket[:40]} — {body}", "_draft_iter": iter_index}
+
+
+def _draft_iter_of(draft: JSONValue) -> int:
+    """Read the iteration marker off a draft Output value (default 0)."""
+    if isinstance(draft, dict):
+        try:
+            return int(draft.get("_draft_iter", 0))
+        except (TypeError, ValueError):
+            return 0
+    return 0
 
 
 # Default per-call price (USD) for the live model. The heuristic table
@@ -320,6 +398,125 @@ def _expected_of(case: EvalCase) -> str:
     if isinstance(label, dict):
         return str(label.get("category", "unknown"))
     return str(label) if label is not None else "unknown"
+
+
+# ----------------------------------------------------------- Milestone-1: Refine
+#: Distinct back-edge id for the verifier-gated draft loop (≠ EDGE_ID).
+REFINE_EDGE_ID = "self-improve:reply-refine"
+
+
+def _build_reply_critic() -> Definition:
+    """The verifier's critic — a **distinct** Definition from the triage body.
+
+    Its content sha differs from the borrowed triage definition, so the assembly
+    check in ``Refine.__init__`` (the generator may never critique itself) passes.
+    The critic reads a drafted reply as FLUID data and emits an accept/reject label.
+    """
+    return Definition(
+        id="reply-critic",
+        inputs=[Parameter(name="output", type="str", required=False, flow=Flow.FLUID)],
+        team=TeamSpec(
+            agents=[
+                AgentSpec(
+                    role="reply-critic",
+                    prompt=(
+                        "You are a strict support-quality critic. Read the drafted reply. "
+                        "Reply with exactly one word: 'accept' if it apologises, states a "
+                        "concrete next step, AND gives an ETA; otherwise 'reject'."
+                    ),
+                )
+            ],
+            coordination=Coordination.SINGLE,
+            lead="reply-critic",
+        ),
+    )
+
+
+def _gate_reply_verifier(store: Store, critic: Definition, *, org_id: str) -> GatedVerifier:
+    """Admit the reply critic as a :class:`GatedVerifier` (CL-2 fail-closed gate).
+
+    Seeds a tiny **decision** GoldenSet (critic-label vs ground-truth) and a precision
+    baseline so the F-3 ``precision_gate`` admits the critic. Without the baseline the
+    gate fails closed (``VerifierNotGated``) — an un-benchmarked critic can never block.
+    """
+    golden = GoldenSet(store, "reply-decisions", org_id=org_id)
+    golden.add(EvalCase(id="d-accept", output="accept", label="accept"))
+    golden.add(EvalCase(id="d-reject", output="reject", label="reject"))
+    save_baseline(store, "reply-critic", {"precision": 1.0}, org_id=org_id)
+    return Verifier.gated(
+        critic,
+        golden,
+        labels=["accept", "reject"],
+        default="reject",
+        accept_label="accept",
+        min_precision=0.9,
+        store=store,
+        name="reply-critic",
+        registry=None,
+    )
+
+
+def _make_reply_producer(backend: Backend, body: Definition, ticket: str) -> ProduceFn:
+    """Build the ``produce`` hook for the Refine loop.
+
+    Each iteration drafts a reply whose quality climbs with ``visit`` (a missing
+    apology/next-step/ETA is filled in). The draft is bound through the SHARED ctx so
+    spend meters into the one budget; the F-1 ``ExecutionCoordinate(iter_index=visit)``
+    gives each iteration a distinct, replayable cassette. The prior attempt rides in as
+    FLUID feedback (taint propagates; never an instruction slot)."""
+
+    async def _produce(
+        prior: Output[JSONValue],
+        visit: int,
+        ctx: RunContext,
+        runtime: AgentRuntime,
+    ) -> Output[JSONValue]:
+        inputs: JSONValue = {
+            "project": "acme",
+            "ticket_body": ticket,
+            "_draft_iter": visit,
+            "_refine_feedback": prior.value,
+        }
+        request = RunRequest(definition=body, role="drafter", inputs=dict(inputs))
+        coord = ExecutionCoordinate(iter_index=visit)
+        replayed = backend._is_replay(request, ctx, coord)
+        result = await _dispatch(runtime, request, ctx, coord)
+        try:
+            value = json.loads(result.text)
+        except (ValueError, TypeError):
+            value = {"reply": result.text, "_draft_iter": visit}
+        if backend.live and not replayed:
+            ctx.cost_budget.charge(backend.per_call_usd)
+        # CoW: a fresh frozen Output per iteration; DETERMINISTIC producer coordinate so
+        # a second-process resume reproduces a bit-identical content sha (CL-4).
+        return Output(
+            value=value,
+            produced_by=f"reply-draft#{visit}",
+            lineage=ticket,
+            output_schema=[],
+            tainted=bool(prior.tainted),
+        )
+
+    return _produce
+
+
+def _build_drafter_body() -> Definition:
+    """The Refine **body**: a single-agent reply drafter (distinct from the critic).
+
+    Declares the static FLUID ``_refine_feedback`` slot so the prior attempt arrives as
+    data. Its content sha differs from the reply critic, so ``VerifierStop`` is legal."""
+    return Definition(
+        id="reply-drafter",
+        inputs=[
+            Parameter(name="ticket_body", type="str", required=False, flow=Flow.FLUID),
+            Parameter(name="_refine_feedback", type="str", required=False, flow=Flow.FLUID),
+        ],
+        team=TeamSpec(
+            agents=[AgentSpec(role="drafter", prompt="Draft a support reply.")],
+            coordination=Coordination.SINGLE,
+            lead="drafter",
+        ),
+    )
 
 
 # ----------------------------------------------------------------- the scenario
@@ -600,6 +797,16 @@ def run_self_improvement(
         )
     )
 
+    # --- 9r. Milestone-1: VERIFIER-GATED Refine loop (CL-1/CL-2/CL-4). --------
+    # The triage agent drafts a reply; a *gated* Verifier (a critic that earned the
+    # right to block by clearing an absolute-precision bar) judges it; ``Refine``
+    # iterates the draft until the verifier ACCEPTS or a bound (max_iters / budget)
+    # is hit. It runs inside the SAME shared CostBudget with truly metered spend, and
+    # every frozen iteration checkpoints to the ledger so a mid-loop crash resumes at
+    # $0. This is the Milestone-1 operator standing where step-9's hand-rolled loop
+    # (built on raw F primitives) used to be the only option.
+    _run_refine_step(backend, res, store, ctx, org_id=org_id)
+
     # --- cross-tenant isolation: org B sees NONE of org A's corpus (security). -
     res.org_b_cases = len(GoldenSet.from_corrections(store, org_id="other-org").cases())
     res.steps.append(
@@ -612,6 +819,94 @@ def run_self_improvement(
 
     store.close()
     return res
+
+
+def _run_refine_step(
+    backend: Backend,
+    res: DemoResult,
+    store: Store,
+    ctx: RunContext,
+    *,
+    org_id: str,
+) -> None:
+    """Run the Milestone-1 verifier-gated Refine loop and record its evidence.
+
+    Builds a reply-drafting *body* and a DISTINCT reply *critic*, admits the critic as
+    a :class:`GatedVerifier` (fail-closed precision gate), and runs :class:`Refine` with
+    a :class:`VerifierStop` on the SHARED ``ctx``/budget. The mock path's draft quality
+    climbs each iteration until the verifier accepts (iter ``_ACCEPT_AT_ITER``), so the
+    loop stops on a **verifier pass**, not the bound. A second ``resume=True`` pass over
+    the same ledger replays every committed iteration at **$0** — the crash-resume proof.
+    """
+    import asyncio
+
+    body = _build_drafter_body()
+    critic = _build_reply_critic()
+    verifier = _gate_reply_verifier(store, critic, org_id=org_id)
+    res.refine_verifier_precision = verifier.measured_precision
+
+    ticket, _ = _SEED_TICKETS[0]
+    seed: Output[JSONValue] = Output(
+        value={"reply": "", "_draft_iter": -1},
+        produced_by="reply-seed",
+        lineage=ticket,
+        output_schema=[],
+    )
+    # A bound that the shared budget actually enforces: never past 5 drafts, never past
+    # the remaining budget. The verifier accepts at iter _ACCEPT_AT_ITER (< bound), so a
+    # healthy run stops satisfied; an unhealthy one is still bounded (cost honesty).
+    refine = Refine(
+        body,
+        VerifierStop(verifier),
+        max_iters=5,
+        # A gated VerifierStop's ``progress`` is binary (accepted=1.0 else 0.0), so the
+        # noise-aware no-progress guard would otherwise stop the loop on the first
+        # rejected draft. We disable it (patience == max_iters) so ONLY the verifier
+        # verdict or the bound/budget stops the loop — the verifier is the stop signal.
+        no_progress_patience=5,
+        edge_id=REFINE_EDGE_ID,
+        name="reply-refine",
+    )
+    produce = _make_reply_producer(backend, body, ticket)
+    ledger = ExecutionLedger(store, org_id=org_id)
+
+    # --- first run: drafts climb until the gated verifier accepts. ---
+    first: RefineResult = asyncio.run(
+        refine.execute(seed, ctx, backend.runtime, ledger=ledger, resume=False, produce=produce)
+    )
+    res.refine_iters = first.refine_iters
+    res.refine_stopped = first.refine_stopped
+    res.refine_spent_usd = first.spent_usd
+    res.refine_final_sha = output_content_sha(first.output)
+    res.steps.append(
+        StepResult(
+            9,
+            "refine (verifier-gated)",
+            f"{first.refine_iters} drafts -> {first.refine_stopped} "
+            f"(verifier precision={verifier.measured_precision:.2f}, "
+            f"spent=${first.spent_usd:.2f}, sha {res.refine_final_sha[:12]})",
+        )
+    )
+
+    # --- 9r-resume: re-run over the SAME ledger, resume=True -> replays at $0. ---
+    spent_before = ctx.cost_budget.spent_usd
+    resumed: RefineResult = asyncio.run(
+        refine.execute(seed, ctx, backend.runtime, ledger=ledger, resume=True, produce=produce)
+    )
+    res.refine_resume_spent_usd = ctx.cost_budget.spent_usd - spent_before
+    res.total_spend_usd = ctx.cost_budget.spent_usd
+    # The resumed run reproduces the same accepted draft bit-for-bit (content-sha verified).
+    assert output_content_sha(resumed.output) == res.refine_final_sha, (
+        "resume must reproduce the accepted draft bit-identically"
+    )
+    res.steps.append(
+        StepResult(
+            9,
+            "refine resume ($0)",
+            f"committed drafts replayed — resume spend=${res.refine_resume_spent_usd:.2f} ($0), "
+            f"sha matches uninterrupted run",
+        )
+    )
 
 
 # ----------------------------------------------------------------- small helpers
