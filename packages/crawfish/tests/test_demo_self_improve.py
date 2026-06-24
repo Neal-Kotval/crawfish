@@ -80,9 +80,24 @@ def test_no_progress_stop(result) -> None:
     assert 0 < result.loop_iterations_run < 4
 
 
-# --- F-6: worst-case cost within the declared budget -----------------------------
+# --- F-6: worst-case cost within budget AND an honest bound on actual spend ------
 def test_worst_case_cost_within_budget(result) -> None:
-    assert 0.0 < result.worst_case_usd <= result.budget_usd
+    # Mock path is zero-cost, so worst-case is $0 (it is priced off the selected
+    # model — mock = $0/call). The cost interval still must not exceed the budget.
+    assert result.worst_case_usd <= result.budget_usd
+    # And the worst-case must HONESTLY bound what was actually spent (F-6 integrity).
+    assert result.total_spend_usd <= result.worst_case_usd
+
+
+def test_cost_is_priced_off_selected_model() -> None:
+    """The asserted worst-case is tied to the model's per-call price: a live (haiku)
+    estimate is a positive, honest bound; the mock estimate is $0."""
+    module = _load_scenario()
+    mock = module.run_self_improvement(live=False)
+    assert mock.worst_case_usd == 0.0  # mock = $0/call
+    # The live per-call price table prices haiku above zero, so a live worst-case
+    # would be a positive bound (we don't make a live call here — just the price).
+    assert module._LIVE_PER_CALL_USD["claude-haiku-4-5"] > 0.0
 
 
 # --- F-4 + security: corpus poisoning quarantined, cross-tenant isolation ---------

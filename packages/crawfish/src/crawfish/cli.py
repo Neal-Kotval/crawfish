@@ -397,7 +397,9 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
 
-    result = module.run_self_improvement(live=args.live, record=args.live)
+    result = module.run_self_improvement(
+        live=args.live, record=args.live, budget=args.budget, model=args.model
+    )
     print(result.summary())
     return 0 if result.passed() else 1
 
@@ -434,6 +436,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--live",
         action="store_true",
         help="run against the real `claude -p` backend and record fresh cassettes",
+    )
+    p.add_argument(
+        "--model",
+        default=None,
+        help="model for the --live backend (default: claude-haiku-4-5, cheap)",
+    )
+    p.add_argument(
+        "--budget",
+        type=float,
+        default=None,
+        help="cost ceiling in USD (default: auto, sized to complete the flow cheaply)",
     )
     p.add_argument(
         "--dir",

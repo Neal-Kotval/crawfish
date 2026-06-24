@@ -42,7 +42,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from crawfish.core.context import CostBudget, RunContext
 from crawfish.cost import CostEstimate, CostShape, compose_cost
@@ -53,15 +53,22 @@ from crawfish.experiment import k_from_alpha, tune_gate_split, winners_curse_shr
 from crawfish.ledger import ExecutionLedger, compute_loop_id
 from crawfish.output import Output, output_content_sha
 from crawfish.runtime import MockRuntime, RecordReplayRuntime
+from crawfish.runtime.base import RunRequest, RunResult
+from crawfish.runtime.replay import ExecutionCoordinate
+from crawfish.runtime.replay import _key as _cassette_key
 from crawfish.store import SqliteStore
 
 if TYPE_CHECKING:
     from crawfish.eval import EvalCase
-    from crawfish.runtime.base import AgentRuntime, RunRequest
+    from crawfish.runtime.base import AgentRuntime
     from crawfish.store.base import Store
 
 HERE = Path(__file__).resolve().parent
-CASSETTE_DIR = HERE / "cassettes"
+# Cassettes live under ``.crawfish/`` — a directory the Definition compiler EXCLUDES
+# from its content hash (see ``compiler._HASH_EXCLUDE``). This is load-bearing:
+# recording cassettes inside the definition dir must NOT change the definition's
+# version sha, or the next run's cassette keys would shift and replay would miss.
+CASSETTE_DIR = HERE / ".crawfish" / "cassettes"
 
 # The deterministic "true" answers for our seed tickets. The triage agent's job is
 # to classify each ticket into one of these categories; the temperature knob
@@ -94,6 +101,7 @@ class DemoResult:
     """The full scenario's evidence — asserted by the deterministic test."""
 
     steps: list[StepResult] = field(default_factory=list)
+    live: bool = False
     gate: GateDecision | None = None
     baseline_temperature: float = 0.0
     promoted_temperature: float = 0.0
@@ -104,15 +112,27 @@ class DemoResult:
     loop_iterations_run: int = 0
     loop_fixed_point_sha: str = ""
     resume_extra_charges: int = 0
+    total_spend_usd: float = 0.0
     org_a_cases: int = 0
     org_b_cases: int = 0
 
     def passed(self) -> bool:
-        """The whole scenario's pass predicate (mirrors the test assertions)."""
+        """The whole scenario's pass predicate (mirrors the test assertions).
+
+        The gate must *fire with a verdict* either way. On the deterministic mock
+        path the candidate is rigged to win, so we require a **promotion**; on the
+        live path real model variance may yield a **justified reject** (a CI that
+        straddles 0 with a reason) — both are valid F-3 outcomes, so live only
+        requires a reasoned decision, not a promotion.
+        """
+        gate_fired = self.gate is not None and (
+            self.gate.promoted if not self.live else bool(self.gate.reason)
+        )
         return bool(
-            self.gate is not None
-            and self.gate.promoted
+            gate_fired
             and self.worst_case_usd <= self.budget_usd
+            # worst-case must HONESTLY bound the actual spend (F-6 integrity)
+            and self.total_spend_usd <= self.worst_case_usd
             and self.frozen_sha
             and self.loop_fixed_point_sha
             and self.resume_extra_charges == 0
@@ -175,37 +195,87 @@ def _deterministic_responder(req: RunRequest) -> str:
     )
 
 
-def _make_runtime(*, live: bool, record: bool) -> AgentRuntime:
+# Default per-call price (USD) for the live model. The heuristic table
+# (DEFAULT_MODEL_PRICES) lists $0.01 for haiku; we use a *generous* worst-case
+# per-call price so the asserted cost interval (step 6) actually BOUNDS real spend
+# — a multi-turn live call can cost more than the table's point estimate.
+_LIVE_PER_CALL_USD: dict[str, float] = {
+    "claude-haiku-4-5": 0.05,
+    "claude-sonnet-4-6": 0.20,
+    "claude-opus-4-8": 0.80,
+}
+DEFAULT_LIVE_MODEL = "claude-haiku-4-5"  # cheap by default for --live
+
+
+@dataclass
+class Backend:
+    """The runtime + the bookkeeping the demo needs to honour the $0-resume and
+    cost-bound guarantees on BOTH the mock and the live (cassette) paths.
+
+    On the live path the model call goes through a :class:`RecordReplayRuntime`:
+    a cassette HIT is a replay (no model call -> charge $0); a MISS is a real call
+    (charge the per-call price). ``charge`` consults the on-disk cassette so the
+    $0-resume covers *every* cost-bearing step, not just the step-9 loop.
+    """
+
+    runtime: AgentRuntime
+    live: bool
+    model: str | None = None
+    per_call_usd: float = 0.0
+
+    def _is_replay(self, request: RunRequest, ctx: RunContext, coord: ExecutionCoordinate) -> bool:
+        """True if a cassette already exists for this call (so it replays at $0)."""
+        if not self.live:
+            return False
+        key = _cassette_key(request, org_id=ctx.org_id, coordinate=coord)
+        return (CASSETTE_DIR / f"{key}.json").exists()
+
+
+def _make_backend(*, live: bool, record: bool, model: str | None) -> Backend:
     """Build the backend. Deterministic -> MockRuntime; live -> real ``claude -p``
-    wrapped in :class:`RecordReplayRuntime` so the live run records fresh cassettes
-    (F-1) and a re-run replays them at zero cost."""
+    on a CHEAP model, wrapped in :class:`RecordReplayRuntime` so the first live run
+    records fresh cassettes (F-1) and a re-run replays them bit-identically at $0."""
     if not live:
-        return MockRuntime(_deterministic_responder)
+        return Backend(runtime=MockRuntime(_deterministic_responder), live=False)
     from crawfish.runtime import CommandRuntime  # real ``claude -p`` backend
 
-    inner: AgentRuntime = CommandRuntime()
+    live_model = model or DEFAULT_LIVE_MODEL
+    inner: AgentRuntime = CommandRuntime(default_model=live_model)
     CASSETTE_DIR.mkdir(parents=True, exist_ok=True)
-    return RecordReplayRuntime(inner, CASSETTE_DIR, record=record)
+    return Backend(
+        runtime=RecordReplayRuntime(inner, CASSETTE_DIR, record=record),
+        live=True,
+        model=live_model,
+        per_call_usd=_LIVE_PER_CALL_USD.get(live_model, 0.05),
+    )
 
 
 # ----------------------------------------------------------------- scoring helpers
 def _triage(
-    runtime: AgentRuntime,
+    backend: Backend,
     defn: Definition,
     ctx: RunContext,
     ticket: str,
     expected: str,
     temperature: float,
-) -> Output[dict[str, object]]:
-    """Run the triage team on one ticket and wrap the result as a typed Output.
+    *,
+    iter_index: int = 0,
+) -> Output[object]:
+    """Run the triage **lead** agent on one ticket and wrap the result as an Output.
 
-    The decode knob is threaded both as the resolved spec value (F-5, what a real
-    backend reads) and, for the mock, as ``_temperature``/``_expected`` so the
-    deterministic responder can model temperature sensitivity without a model.
+    The lead is called *directly* (not via delegation): its inputs are fully
+    determined by the scenario (project/ticket/temperature), so the cassette key is
+    stable across runs and a re-run REPLAYS bit-identically (delegated subagent
+    inputs would vary with the model's output and break replay).
+
+    Each call carries an :class:`ExecutionCoordinate` (F-1) — ``iter_index`` tags
+    which loop iteration this is, so step-9 iterations get distinct cassettes while
+    repeated identical scoring calls coalesce onto one.
+
+    Budget: a cassette replay re-charges **$0** (no model call); a real call charges
+    the live per-call price. The mock path is always $0.
     """
     import asyncio
-
-    from crawfish.runtime import run_team
 
     inputs = {
         "project": "acme",
@@ -213,18 +283,35 @@ def _triage(
         "_expected": expected,
         "_temperature": temperature,
     }
-    result = asyncio.run(run_team(defn, inputs, ctx, runtime))
+    request = RunRequest(definition=defn, role=defn.team.lead or "lead", inputs=inputs)
+    coord = ExecutionCoordinate(iter_index=iter_index)
+    replayed = backend._is_replay(request, ctx, coord)
+    result = asyncio.run(_dispatch(backend.runtime, request, ctx, coord))
     try:
         value = json.loads(result.text)
     except (ValueError, TypeError):
         value = {"category": "unknown", "severity": "normal", "summary": result.text[:40]}
-    ctx.cost_budget.charge(result.cost_usd)
+    # $0-resume: a replayed (cassette) call did not hit the model -> charge nothing.
+    if backend.live and not replayed:
+        ctx.cost_budget.charge(backend.per_call_usd)
     return Output(value=value, produced_by="triage", lineage=ticket, output_schema=[])
 
 
-def _score(output: Output[dict[str, object]], expected: str) -> float:
+async def _dispatch(
+    runtime: AgentRuntime, request: RunRequest, ctx: RunContext, coord: ExecutionCoordinate
+) -> RunResult:
+    """Call the runtime, passing the F-1 coordinate to a replay wrapper that accepts
+    it (the mock runtime does not take a coordinate; both yield a RunResult)."""
+    if isinstance(runtime, RecordReplayRuntime):
+        return await runtime.run(request, ctx, coordinate=coord)
+    return await runtime.run(request, ctx)
+
+
+def _score(output: Output[object], expected: str) -> float:
     """1.0 if the predicted category matches the corrected (expected) one, else 0.0."""
-    return 1.0 if output.value.get("category") == expected else 0.0
+    value = output.value
+    category = value.get("category") if isinstance(value, dict) else None
+    return 1.0 if category == expected else 0.0
 
 
 def _expected_of(case: EvalCase) -> str:
@@ -258,14 +345,30 @@ def seed_corrections(store: Store, *, org_id: str) -> int:
     return len(_SEED_TICKETS)
 
 
-def run_self_improvement(*, live: bool = False, record: bool = False) -> DemoResult:
+def run_self_improvement(
+    *,
+    live: bool = False,
+    record: bool = False,
+    budget: float | None = None,
+    model: str | None = None,
+) -> DemoResult:
     """Run the all-9-features scenario and return structured evidence.
 
     Steps are numbered to match the epic's "Live end-to-end demo" 10-step flow.
+
+    ``budget`` is the cost ceiling (USD). ``model`` pins the live backend's model;
+    the live path defaults to the cheap ``claude-haiku-4-5`` so the full 10-step flow
+    completes for cents. The mock path is always $0 regardless of these.
     """
-    res = DemoResult()
+    res = DemoResult(live=live)
     org_id = "acme"
-    budget = 5.0  # keep it tiny; the live path must stay cheap
+
+    backend = _make_backend(live=live, record=record, model=model)
+    # A budget that actually completes the full flow on the chosen backend: ~14 live
+    # calls at the model's worst-case per-call price, with headroom. The mock path is
+    # free, so a small fixed budget is plenty.
+    if budget is None:
+        budget = 3.0 if not live else max(3.0, 20.0 * backend.per_call_usd)
     res.budget_usd = budget
 
     store = SqliteStore()  # in-memory; tenancy-scoped by org_id throughout
@@ -293,7 +396,6 @@ def run_self_improvement(*, live: bool = False, record: bool = False) -> DemoRes
     res.steps.append(StepResult(1, "RunContext", f"org={org_id!r} budget=${budget:.2f}"))
 
     defn = Definition.from_package(str(HERE))
-    runtime = _make_runtime(live=live, record=record)
 
     # --- 2. Borrow the definition exclusively for training (F-7, train mode). --
     with defn.mutable(store, org_id=org_id) as draft:
@@ -320,17 +422,24 @@ def run_self_improvement(*, live: bool = False, record: bool = False) -> DemoRes
         )
 
         # --- 5. Split into tune-set / gate-set (F-8). ------------------------
-        tune, gate_cases = tune_gate_split(cases, frac=0.5, seed=0)
+        tune_raw, gate_raw = tune_gate_split(cases, frac=0.5, seed=0)
+        tune = cast("list[EvalCase]", tune_raw)
+        gate_cases = cast("list[EvalCase]", gate_raw)
         res.steps.append(
             StepResult(5, "tune/gate split", f"tune={len(tune)} gate={len(gate_cases)} (disjoint)")
         )
 
-        # --- 6. Cost: worst-case (F-6) must be <= budget. --------------------
+        # --- 6. Cost: worst-case (F-6) must be <= budget AND bound real spend. -
+        # Price per call is tied to the SELECTED model (mock=$0, else its worst-case
+        # per-call price), so the interval honestly bounds what a live run can spend.
+        per_call = backend.per_call_usd if live else 0.0
+        # One call per agent per item is the lower bound; the cost interval below
+        # folds in the refine multiplier for the worst case.
         base = CostEstimate(
             team_size=len(defn.team.agents),
             items=len(cases),
-            per_item_usd=0.05,
-            total_usd=0.05 * len(cases),
+            per_item_usd=per_call,
+            total_usd=per_call * len(cases),
         )
         # The refine loop is the cost-bearing operator: worst case = max_iters runs.
         est = compose_cost(base, [CostShape.refine(max_iters=4)])
@@ -340,7 +449,10 @@ def run_self_improvement(*, live: bool = False, record: bool = False) -> DemoRes
         )
         res.steps.append(
             StepResult(
-                6, "cost interval", f"worst=${est.worst_case_usd:.3f} <= budget=${budget:.2f}"
+                6,
+                "cost interval",
+                f"worst=${est.worst_case_usd:.3f} <= budget=${budget:.2f} "
+                f"(model={backend.model or 'mock'} @ ${per_call:.2f}/call)",
             )
         )
 
@@ -351,7 +463,7 @@ def run_self_improvement(*, live: bool = False, record: bool = False) -> DemoRes
             for c in case_list:
                 ticket = str(c.inputs.get("ticket_body", ""))
                 exp = _expected_of(c)
-                out.append(_score(_triage(runtime, defn, ctx, ticket, exp, temp), exp))
+                out.append(_score(_triage(backend, defn, ctx, ticket, exp, temp), exp))
             return out
 
         # Tune: pick the candidate temperature with the best mean score on the tune-set.
@@ -414,9 +526,9 @@ def run_self_improvement(*, live: bool = False, record: bool = False) -> DemoRes
     def _converged_at(lid: str) -> int | None:
         """The visit a prior run halted on (fixed point), if recorded — else None."""
         rec = store.get_record("ledger_loop_converged", lid, org_id=org_id)
-        return None if rec is None else int(rec["visit"])  # type: ignore[arg-type]
+        return None if rec is None else int(cast("int", rec["visit"]))
 
-    def _run_loop() -> tuple[int, str, int]:
+    def _run_loop() -> tuple[int, str, float]:
         """Run the bounded refine-style loop; return (iters_run, fixed_point_sha, model_charges).
 
         Each iteration:
@@ -427,34 +539,29 @@ def run_self_improvement(*, live: bool = False, record: bool = False) -> DemoRes
           * halts when the content sha is unchanged from the previous visit — the
             no-progress fixed point — and records convergence so a resume halts too.
         """
-        from crawfish.runtime.replay import ExecutionCoordinate  # F-1 per-iter coordinate
-
-        _ = ExecutionCoordinate  # documented: tags each iteration in a fan-out
         model_charges = 0
+        spent_before = ctx.cost_budget.spent_usd
         converged = _converged_at(loop_id)
         done = ledger.completed_visits(loop_id, loop_ticket, EDGE_ID)
         last_sha = ""
-        last_visit = -1
         for i in range(4):  # bounded; ExecutionCoordinate(iter_index=i) tags each iteration
             if converged is not None and i > converged:
                 break  # a prior run already reached the fixed point — nothing to do
             if i in done:
                 # replay the frozen visit from the ledger (zero cost / $0 re-charge)
                 last_sha = ledger.iteration_output_ref(loop_id, loop_ticket, EDGE_ID, i) or last_sha
-                last_visit = i
                 continue
-            out = _triage(runtime, defn, ctx, loop_ticket, loop_expected, final_temp)
+            out = _triage(backend, defn, ctx, loop_ticket, loop_expected, final_temp, iter_index=i)
             sha = output_content_sha(out)
             ledger.checkpoint_iteration(loop_id, loop_ticket, EDGE_ID, visit=i, output_ref=sha)
             model_charges += 1
-            last_visit = i
             if sha == last_sha:  # F-0 fixed point: no progress -> stop
                 store.put_record("ledger_loop_converged", loop_id, {"visit": i}, org_id=org_id)
                 last_sha = sha
                 break
             last_sha = sha
-        _ = last_visit
-        return model_charges, last_sha, model_charges
+        dollars = ctx.cost_budget.spent_usd - spent_before
+        return model_charges, last_sha, dollars
 
     iters_run, fixed_sha, _ = _run_loop()
     res.loop_iterations_run = iters_run
@@ -469,11 +576,17 @@ def run_self_improvement(*, live: bool = False, record: bool = False) -> DemoRes
 
     # --- 9b. Crash-resume proof: re-run the SAME loop re-charges $0 (F-2). -----
     # Every visit up to the recorded fixed point is already checkpointed, so the
-    # resume runs (and charges) ZERO new model calls — the $0-resume guarantee.
-    extra, _, _ = _run_loop()
+    # resume runs ZERO new model calls and charges $0 — the $0-resume guarantee,
+    # proved both as an iteration count and as a dollar delta.
+    extra, _, extra_dollars = _run_loop()
     res.resume_extra_charges = extra
+    res.total_spend_usd = ctx.cost_budget.spent_usd
     res.steps.append(
-        StepResult(9, "resume re-run", f"completed visits skipped — extra charges={extra} ($0)")
+        StepResult(
+            9,
+            "resume re-run",
+            f"completed visits skipped — extra calls={extra}, spend=${extra_dollars:.2f} ($0)",
+        )
     )
 
     # --- cross-tenant isolation: org B sees NONE of org A's corpus (security). -
