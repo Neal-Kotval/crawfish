@@ -185,6 +185,86 @@ receiver-untouched + idempotence, save/recall sha-identity, modify new-version +
 reset checkout, the `save`/`reset`/`modify`/tenancy negative guards, and the Wiki consult-as-
 tainted-data boundary).
 
+## Milestone 7 live evidence — revolutionary (diff/merge / replay --swap / prove)
+
+Milestone 7 shipped the three **git-for-agents** flagship capabilities (CRA-228/229/230):
+structural `diff`/`merge` of Definitions (`crawfish.agentdiff`), `craw replay --swap`
+counterfactual time-travel (`crawfish.replay_swap`), and `craw prove --no-injection` — the
+**ALG-3 conservative, fail-closed** injection proof (`crawfish.prove`). The cumulative scenario
+now contains a real revolutionary step (printed as the three `diff + merge` / `replay --swap` /
+`prove --no-injection` lines under step 9):
+
+- **Diff + merge (9x-1, CRA-228).** Two promoted triage variants are composed off the frozen base
+  by copy-on-write (distinct skill pins → distinct shas). `diff(a, b)` surfaces the field-level
+  changes that distinguish them (e.g. `dependencies.skill:bug-specialist.id`); the three-way
+  `merge(base, a, b)` reconciles the two **one-sided** edits into a **new frozen Definition** whose
+  content sha differs from base/a/b. A **two-sided** divergence (both edit the same field to
+  different values) instead returns a typed `MergeConflict` naming the contested paths — never
+  silently auto-applied, and a divergent fluid/static `flow` move is **always** surfaced as a
+  conflict (the security pin).
+- **replay --swap (9x-2, CRA-230).** A small recorded triage history (two clean leaves on the
+  strong model + one dirtied leaf recorded on `claude-haiku-4-5`) is re-run with one model
+  swapped (`claude-haiku-4-5=claude-opus-4-8`). `run_swap` sources the dirtied counterfactual from
+  an **alternate recorded dir**, so the whole thing is **offline and $0**: every CLEAN leaf
+  replays **bit-identically** (`counterfactual_text == original_text`, `cost_usd == 0.0`) and
+  **ONLY** the dirtied leaf's counterfactual text differs. An over-budget cascade
+  (`dirtied × live_cost > budget`) is **refused** — `over_budget=True`, no spend, no
+  counterfactuals computed.
+- **prove --no-injection (9x-3, CRA-229).** `prove_no_injection` discharges, by type, every
+  obligation that a FLUID input could reach a consequential static-only slot. It **PROVES** a
+  well-typed variant (consequential egress declared `Flow.STATIC`) and **FAIL-CLOSED-REJECTS** a
+  deliberately mis-wired variant (a `Flow.FLUID` *output* it cannot prove non-consequential),
+  flagging the suspected slot `output:reply`. The guarantee name is
+  `alg3-conservative-static-rejection`.
+
+> **Honesty note (load-bearing).** The demo's own triage Definition declares its `triage` **output**
+> as `Flow.FLUID` (a free-form triage record is fluid content), so ALG-3 — being conservative —
+> **cannot** prove it injection-free and (correctly) rejects it. The step does **not** paper over
+> that: it proves a separate **well-typed** variant and shows the mis-wired rejection, so the two
+> outcomes together demonstrate the gate ADMITS exactly the provably-safe wiring and REJECTS what
+> it cannot prove safe. Claiming the live demo Definition "passes" would be dishonest; we don't.
+
+**Determinism / cost honesty (load-bearing).** `diff`/`merge`/`prove` are pure structural folds
+and `run_swap` is replay-based (sourced from an alternate recorded dir), so **no model call**
+fires — the step is bit-identical on the mock and live path and contributes **zero** metered
+calls. The F-6 structural worst case is therefore **unchanged** (`craw demo` still prints
+`worst=150 calls` on haiku); `test_demo_revolutionary.py::test_m7_step_adds_nothing_to_cost_worst_case`
+guards it. There is no live-vs-mock semantic gap to certify here (unlike Quorum/Refine): the
+operators are deterministic, so the same assertions hold on both paths.
+
+### Exact command for the M7 live gate
+
+```bash
+claude -p "say ok"                                  # confirm auth
+uv run craw demo --live --model claude-haiku-4-5    # real haiku; records cassettes
+uv run craw demo --live --model claude-haiku-4-5    # re-run: replays, spend $0
+```
+
+### Evidence checklist (verifier fills this in)
+
+Run the command above and confirm, on the three M7 lines under step 9:
+
+- [ ] **Diff + merge** — `diff + merge (git for agents)` prints `diff surfaced N path(s) (e.g.
+  <path>); clean merge -> new frozen sha <sha>` (or `CONFLICT on N path(s): [...]` for a two-sided
+  divergence) — the merged sha differs from base/a/b.
+- [ ] **replay --swap counterfactual** — `replay --swap (counterfactual)` prints `1/3 leaf swapped
+  claude-haiku-4-5->claude-opus-4-8 @ $0.00; clean leaves replay $0, dirtied '<orig>'->'<cf>'`:
+  exactly the dirtied leaf's text changed, clean leaves replayed at $0, total swap spend $0.00.
+- [ ] **prove fail-closed** — `prove --no-injection (ALG-3)` prints `well-typed variant PROVED
+  injection-free (alg3-conservative-static-rejection); mis-wired variant FAIL-CLOSED-rejected on
+  slot 'output:reply' (...)`: the well-typed variant proves and the mis-wired one is rejected.
+- [ ] **Budget respected** — the M7 step makes NO model call; step 6 still prints `worst=150 calls`
+  (M7 added zero metered calls), and the run did not hit `BudgetExceeded`.
+- [ ] **Bit-identical replay** — two `--live` runs print the same diff paths, the same merged sha,
+  the same swap counterfactual deltas, and the same prove verdict/slot; the second run replays $0.
+
+The deterministic path (`uv run craw demo`, `$0`) exercises every one of these (M7 is model-free,
+so the mock and live paths coincide bit-for-bit); the acceptance test is
+`packages/crawfish/tests/test_demo_revolutionary.py` (8 tests, no live calls — scenario 9/9 + M7
+certifier, zero-cost-worst-case guard, diff surfaces the skill-pin change, clean three-way merge
+mints a new frozen sha, two-sided divergence is a typed conflict, swap clean-replay-$0 +
+only-dirtied-differs, swap over-budget refusal, and prove admits-well-typed / rejects-miswired).
+
 ## Milestone 4 live evidence — taming stochasticity (Quorum / abstain / house-guard / grammar)
 
 Milestone 4 stood up the **tameness layer** (CRA-215..218): typed self-consistency

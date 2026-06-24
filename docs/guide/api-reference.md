@@ -4,7 +4,7 @@
 > Do not edit by hand — regenerate on each release:
 > `uv run python docs/guide/gen_api_reference.py > docs/guide/api-reference.md`.
 
-`crawfish` version: `0.2.0` — 443 public symbols.
+`crawfish` version: `0.2.0` — 452 public symbols.
 
 Everything documented here is importable directly from the top-level package:
 
@@ -459,6 +459,15 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `UnfrozenDefinitionError` | class | ``save`` was handed a Definition that is not frozen (eval-mode). |
 | `UnknownNameError` | class | ``recall`` / ``log`` / ``modify`` / ``reset`` referenced a name with no pointer. |
 | `UnreachableShaError` | class | ``reset`` was asked to move a name to a sha that is not in that name's log. |
+| `diff` | function | A typed, field-level structural diff from ``a`` to ``b``. Pure, deterministic. |
+| `merge` | function | Three-way merge of ``a`` and ``b`` over their common ancestor ``base``. Pure. |
+| `DefinitionDiff` | class | A typed structural diff between two content-addressed Definitions. |
+| `MergeConflict` | class | The typed failure of a three-way merge: one or more fields diverged on both sides. |
+| `prove_no_injection` | function | Discharge the fluid→static-slot non-interference obligations for ``definition``. |
+| `ProofResult` | class | The certificate ``craw prove --no-injection`` emits. |
+| `run_swap` | function | Replay ``cassette_dir`` with one model swapped, counterfactual vs. original. |
+| `parse_swap` | function | Parse ``--swap <from>=<to>``. Fails closed on a malformed spec. |
+| `SwapReport` | class | The counterfactual-vs-original report a swapped replay emits. |
 
 ### `JSONValue`
 
@@ -677,7 +686,7 @@ TypeRegistry() -> 'None'
 
 *value* — `TypeRegistry`
 
-`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x1092b4f50>`
+`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x108b7a150>`
 
 ### `Version`
 
@@ -2442,7 +2451,7 @@ Stop then re-deploy ``name`` with its recorded dir + schedule. Returns success.
 Watch one pipeline: run rules (and an optional LLM judge) on a poll interval.
 
 ```python
-Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x109632660>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
+Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x108f40400>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
 ```
 
 **Methods**
@@ -4689,7 +4698,7 @@ clean unprivileged primitive and is deferred (ADR 0009) → :class:`UnsupportedP
 *function*
 
 ```python
-registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x1092b4f50>) -> 'list[dict[str, object]]'
+registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x108b7a150>) -> 'list[dict[str, object]]'
 ```
 
 Serialize a registry's records to JSON descriptors for the child.
@@ -7136,4 +7145,175 @@ saved in another org is invisible (cross-tenant isolation).
 
 ``reset`` is a git checkout: it may only rewind to a version actually recorded for the
 name (so the pointer never lands on content the lineage never produced).
+
+### `diff`
+
+*function*
+
+```python
+diff(a: 'Definition', b: 'Definition') -> 'DefinitionDiff'
+```
+
+A typed, field-level structural diff from ``a`` to ``b``. Pure, deterministic.
+
+Compares the two Definitions over their canonical content payloads (what the sha sees), so
+the result is non-empty **iff** ``a.content_sha() != b.content_sha()``. Each differing
+field becomes a :class:`FieldChange` — an ``ADDED`` / ``REMOVED`` keyed presence change
+(an agent role, a parameter, a pinned dependency) or a ``CHANGED`` value move — addressed
+by a stable dotted ``path``. Changes are returned path-sorted (deterministic). Neither
+input is mutated; ``a`` / ``b`` need not be frozen (the diff reads content only).
+
+### `merge`
+
+*function*
+
+```python
+merge(base: 'Definition', a: 'Definition', b: 'Definition') -> 'Definition | MergeConflict'
+```
+
+Three-way merge of ``a`` and ``b`` over their common ancestor ``base``. Pure.
+
+Per leaf path across the three canonical payloads:
+
+* unchanged on a side ⇒ that side defers to the other;
+* changed on exactly one side ⇒ that side's value wins;
+* changed to the **same** value on both sides ⇒ harmless agreement (that value wins);
+* changed to **different** values on both sides ⇒ a :class:`FieldConflict` — never
+  silently resolved.
+
+Any conflict (including a divergent fluid/static ``flow`` move, which is *always* surfaced)
+makes the whole merge a :class:`MergeConflict` carrying the full, path-sorted conflict set.
+A clean merge reconstructs the merged payload and re-seals it through the content-hash CoW
+law (:func:`crawfish.derive.refreeze` off ``base``), so the result is a **new frozen**
+Definition with a deterministic content sha — the same three inputs always merge to the
+same sha. ``base`` / ``a`` / ``b`` are untouched.
+
+### `DefinitionDiff`
+
+*class*
+
+A typed structural diff between two content-addressed Definitions.
+
+``changes`` is the ordered (path-sorted, deterministic) list of field-level
+:class:`FieldChange`s. ``sha_before`` / ``sha_after`` pin the two endpoints so the diff is
+self-describing (the diff is non-empty iff the shas differ). Pure value object.
+
+```python
+DefinitionDiff(sha_before: 'str', sha_after: 'str', changes: 'tuple[FieldChange, ...]' = ()) -> None
+```
+
+**Methods**
+
+- `paths(self) -> 'tuple[str, ...]'` — The set of changed paths, in deterministic order (handy for assertions).
+
+### `MergeConflict`
+
+*class*
+
+The typed failure of a three-way merge: one or more fields diverged on both sides.
+
+Returned (not raised) by :func:`merge` so the caller branches on the result type rather
+than catching. ``conflicts`` is the deterministic, path-sorted list of every contested
+field — the whole conflict set, not just the first, so a reviewer sees all of it at once.
+
+```python
+MergeConflict(conflicts: 'tuple[FieldConflict, ...]') -> None
+```
+
+### `prove_no_injection`
+
+*function*
+
+```python
+prove_no_injection(definition: 'object') -> 'ProofResult'
+```
+
+Discharge the fluid→static-slot non-interference obligations for ``definition``.
+
+Conservative + fail-closed (ALG-3): every consequential static-only slot must be
+provably *not* reachable from a FLUID input. Because the Definition's static slots
+are declared ``Flow.STATIC`` and the spine forbids binding a fluid value to a static
+slot at wire time (``TargetMustBeStaticError``), a *well-typed* Definition discharges
+every obligation: a static slot cannot, by type, carry a fluid value.
+
+The check fails closed in two ways:
+  * A slot whose declared flow is *not* STATIC where the spine requires STATIC is a
+    suspected path (it could carry a fluid-derived value) — reported, non-zero.
+  * Any output parameter that is mis-declared ``Flow.FLUID`` but sits on a
+    consequential target position is surfaced as a violation rather than assumed
+    safe.
+
+Returns a :class:`ProofResult`; ``proven`` is True iff every obligation discharged.
+
+### `ProofResult`
+
+*class*
+
+The certificate ``craw prove --no-injection`` emits.
+
+``proven`` is True only when *every* obligation discharged — i.e. no FLUID input
+can reach any consequential static-only slot. ``guarantee`` records WHICH guarantee
+was checked (the conservative ALG-3 rejection, not a sound full-graph proof), so the
+claim is never overstated. ``fluid_inputs`` / ``static_slots`` are the surfaces the
+check ranged over (for the human/JSON report).
+
+```python
+ProofResult(proven: 'bool', guarantee: 'str', obligations: 'tuple[ProofObligation, ...]' = (), fluid_inputs: 'tuple[str, ...]' = (), static_slots: 'tuple[str, ...]' = (), violations: 'tuple[ProofObligation, ...]' = <factory>) -> None
+```
+
+**Methods**
+
+- `summary(self) -> 'str'`
+
+### `run_swap`
+
+*function*
+
+```python
+run_swap(cassette_dir: 'str | Path', swap: 'SwapSpec', *, alt_cassette_dir: 'str | Path | None' = None, budget_usd: 'float | None' = None, live_cost_usd: 'float' = 0.0) -> 'SwapReport'
+```
+
+Replay ``cassette_dir`` with one model swapped, counterfactual vs. original.
+
+Clean leaves replay bit-for-bit from ``cassette_dir`` at $0. Each dirtied leaf's
+counterfactual is sourced **deterministically** from ``alt_cassette_dir`` — a
+previously recorded ``to`` run keyed identically (same F-1 coordinate stem) — so the
+swap takes NO live model call (the test path). When a dirtied leaf has no alternate
+cassette, its counterfactual is synthesized deterministically by re-stamping the
+recorded result's model to ``swap.to`` (a no-op-cost placeholder), charged
+``live_cost_usd`` so the budget accounting is honest.
+
+Cost bound: ``dirtied_fraction`` is computed first; if ``budget_usd`` is set and the
+projected live spend (``dirtied * live_cost_usd``) exceeds it, the swap is **refused**
+(``over_budget=True``, no counterfactuals computed), keeping an upstream-change
+cascade cost-bounded.
+
+### `parse_swap`
+
+*function*
+
+```python
+parse_swap(expr: 'str') -> 'SwapSpec'
+```
+
+Parse ``--swap <from>=<to>``. Fails closed on a malformed spec.
+
+### `SwapReport`
+
+*class*
+
+The counterfactual-vs-original report a swapped replay emits.
+
+``dirtied_fraction`` is the cost-bound signal (reported *before* spending). ``spent_usd``
+is the actual counterfactual spend (0.0 for an alternate-cassette swap). ``over_budget``
+is True when the dirtied live re-execution would exceed the caller's CostBudget — in
+which case the swap is refused (no live call), keeping the cascade bounded.
+
+```python
+SwapReport(swap: 'SwapSpec', total_leaves: 'int', dirtied_leaves: 'int', deltas: 'tuple[LeafDelta, ...]', spent_usd: 'float' = 0.0, over_budget: 'bool' = False) -> None
+```
+
+**Methods**
+
+- `summary(self) -> 'str'`
 

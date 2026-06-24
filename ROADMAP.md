@@ -42,16 +42,17 @@ crash-resume. What's in the box today:
   `craw build` → container; a MkDocs docs site; an API-stability contract (stable /
   experimental / deprecated tiers + semver).
 
-## The agent language — control plane, composition surface, tunable-ML library, tameness layer, operator surface + variables-and-knowledge shipped (in progress)
+## The agent language — control plane, composition surface, tunable-ML library, tameness layer, operator surface, variables-and-knowledge + revolutionary capabilities shipped (in progress)
 
 Phase 2 includes a larger bet: an **agent language** where composition operators
 (Refine, Program, Quorum, Escalate) and a Tuner make agents self-improving over your
-data. The first six milestones — the **control plane**, the **composition surface**, the
+data. The first seven milestones — the **control plane**, the **composition surface**, the
 flagship **tunable-ML library**, the **tameness layer** that bounds the one stochastic
 primitive, the **operator surface** that makes the whole optimization plane drivable from
-the shell, and the **variables-and-knowledge** layer that makes an agent a content-addressed,
-composable, named **variable** (git for agents) with knowledge **summoned** by reference —
-have now shipped on top of the foundational primitives:
+the shell, the **variables-and-knowledge** layer that makes an agent a content-addressed,
+composable, named **variable** (git for agents) with knowledge **summoned** by reference, and
+the **revolutionary capabilities** that make that content-addressed agent diffable, mergeable,
+certifiable, and time-travellable — have now shipped on top of the foundational primitives:
 
 - **`Refine` — a bounded, metered, durable iterate-until-goal loop.** Run a producing
   Definition, check each frozen Output against an *external* stop condition, and iterate
@@ -133,6 +134,22 @@ have now shipped on top of the foundational primitives:
   scrubbed embeddings and tainted, trust-tier-carrying hits. Only sealed, eval-mode values
   touch the world: `save` requires a frozen Definition, and `Wiki.mutable()` is rejected in
   eval mode.
+- **Revolutionary capabilities — the content-addressed agent, diffable and certifiable.** A
+  frozen Definition was already *git's immutable side* (a content sha); this milestone adds the
+  verbs. **`diff` / `merge`** lift "two shas equal / not equal" into a typed, field-level diff
+  and a three-way merge — `diff` is non-empty **iff** the shas differ, keyed lists are re-keyed
+  to identity (a re-order is not a spurious change), and `merge` resolves one-sided changes,
+  surfaces a both-sided divergence as a typed `FieldConflict` (**never silently**), and re-seals
+  a clean merge into a **new frozen** Definition with a **deterministic** sha — the fluid/static
+  boundary is a diffable leaf a merge can never silently widen. **`craw prove --no-injection`**
+  is a pre-flight, **fail-closed** certificate that no `Flow.FLUID` input reaches a consequential
+  static-only Sink / idempotency slot — shipping the **ALG-3 conservative static-rejection**
+  guarantee (sound for the fluid→static-slot fragment, incomplete, defense-in-depth atop the
+  runtime gates; *the sound full-graph proof and formal conformance suite are deferred —
+  bet R2*). **`craw replay --swap`** re-runs a historical recorded run against a candidate
+  model/decode change for near-$0 — every unaffected leaf replays bit-for-bit, only the dirtied
+  fraction re-executes, and an over-budget dirtied live cascade is **refused** so the blast
+  radius stays bounded.
 
 See the [Refine & verify guide](docs/guide/refine-and-verify.md), the
 [Compose guide](docs/guide/compose.md), the
@@ -140,6 +157,7 @@ See the [Refine & verify guide](docs/guide/refine-and-verify.md), the
 [Taming stochasticity guide](docs/guide/tameness.md), the
 [Drive the language from the CLI guide](docs/guide/optimize-from-the-cli.md), the
 [Agents as variables guide](docs/guide/variables-and-knowledge.md), the
+[Diff, prove & replay guide](docs/guide/diff-prove-replay.md), the
 [CLI reference](docs/guide/cli.md), the
 [control-plane reference](docs/reference/refine-and-verify.md), the
 [Tuner & learning reference](docs/reference/tuner-and-learning.md), and the

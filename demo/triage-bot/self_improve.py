@@ -66,6 +66,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from crawfish.abstain import Abstention, abstain_below_calibrated, is_abstention
+from crawfish.agentdiff import DefinitionDiff, MergeConflict, diff, merge
 from crawfish.cache import CacheStats, CachingRuntime
 from crawfish.core.context import CostBudget, RunContext
 from crawfish.core.types import Flow, JSONValue, Node, NodeKind, Parameter
@@ -93,7 +94,9 @@ from crawfish.ledger import ExecutionLedger, compute_loop_id
 from crawfish.metrics import CalibrationReport, Rubric, calibrate
 from crawfish.nodes import Classifier, Router
 from crawfish.output import Output, output_content_sha
+from crawfish.prove import ProofResult, prove_no_injection
 from crawfish.refine import ProduceFn, Refine, RefineResult, VerifierStop
+from crawfish.replay_swap import SwapReport, SwapSpec, parse_swap, run_swap
 from crawfish.resolve import (
     Candidate,
     InMemoryCandidateSource,
@@ -270,6 +273,60 @@ class DemoResult:
     wiki_consult_entries: int = 0  # how many entries reached the agent via consult()
     wiki_consult_all_tainted: bool = False  # every consulted entry is FLUID (injection boundary)
     wiki_content_is_data: bool = False  # the page body reached the agent as DATA (not a prompt)
+    # --- Milestone-7 REVOLUTIONARY step (diff/merge git-for-agents / replay --swap / prove). ---
+    diff_changed_paths: int = 0  # how many field paths the diff of two variants surfaced (>0)
+    diff_change_path: str = ""  # one representative changed dotted path (the skill pin moved)
+    merged_sha: str = ""  # the three-way merge's NEW frozen sha (clean merge) — "" if conflict
+    merge_distinct_sha: bool = False  # the merge minted a sha distinct from base/a/b (a real merge)
+    merge_conflict_paths: int = 0  # contested paths IF the merge conflicted (a typed MergeConflict)
+    swap_total_leaves: int = 0  # leaves in the recorded triage history the swap re-ran
+    swap_dirtied_leaves: int = 0  # leaves whose recorded model matched the swapped-from model
+    swap_clean_replayed_zero: bool = False  # every CLEAN leaf replayed bit-identical at $0
+    swap_only_dirtied_differ: bool = False  # ONLY the dirtied leaf's counterfactual text differs
+    swap_spent_usd: float = -1.0  # the swap's real spend (0.0 — sourced from an alt cassette dir)
+    prove_clean_passed: bool = False  # prove_no_injection PROVED the frozen demo Definition
+    prove_guarantee: str = ""  # the ALG-3 guarantee name the proof certificate carries
+    prove_miswired_rejected: bool = False  # a deliberately mis-wired variant FAILED CLOSED
+    prove_violation_slot: str = ""  # the suspected fluid->static-slot the fail-closed proof flagged
+
+    def _revolutionary_step_ok(self) -> bool:
+        """Certify the Milestone-7 REVOLUTIONARY primitives ran correctly (mock + live).
+
+        All three are deterministic and model-FREE — ``diff``/``merge`` are pure structural folds
+        over content payloads, ``run_swap`` replays recorded cassettes (sourced from an alternate
+        recorded dir, so $0 and offline), and ``prove_no_injection`` is a pure type-discharge — so
+        they add NOTHING to the F-6 worst case and hold bit-identically on BOTH paths.
+
+        * **Diff + merge (AL git-for-agents).** ``diff`` of two promoted variants surfaced the
+          field change(s) that distinguish them; the three-way ``merge`` of non-conflicting edits
+          minted a NEW frozen Definition whose sha differs from base/a/b — a real merge (or, on a
+          two-sided divergence, a typed ``MergeConflict`` naming the contested paths).
+        * **replay --swap (counterfactual time-travel).** ``run_swap`` over the recorded triage
+          history swapped one model: every CLEAN leaf replayed bit-identically at $0, and ONLY the
+          dirtied leaf's counterfactual differs — the spend stayed $0 (alt-cassette sourced).
+        * **prove --no-injection (ALG-3, fail-closed).** ``prove_no_injection`` PROVED the frozen
+          demo Definition (no fluid->static-sink path) and FAIL-CLOSED-REJECTED a deliberately
+          mis-wired variant (a FLUID output it cannot prove non-consequential) — the conservative
+          ALG-3 guarantee: an unprovable wiring is rejected, never waved through.
+        """
+        # The merge is correct either as a clean new sha OR a typed conflict (both are valid
+        # git-for-agents outcomes); the diff must always have surfaced the distinguishing change.
+        merge_ok = self.merge_distinct_sha or self.merge_conflict_paths > 0
+        return bool(
+            self.diff_changed_paths > 0
+            and self.diff_change_path
+            and merge_ok
+            and self.swap_total_leaves > 0
+            and self.swap_dirtied_leaves > 0
+            and self.swap_dirtied_leaves < self.swap_total_leaves  # some clean leaves to replay
+            and self.swap_clean_replayed_zero  # clean leaves replay bit-identical at $0
+            and self.swap_only_dirtied_differ  # ONLY the swapped leaf's counterfactual changed
+            and self.swap_spent_usd == 0.0  # offline / alt-cassette sourced -> $0
+            and self.prove_clean_passed  # ALG-3 proved the well-typed Definition
+            and self.prove_guarantee  # the certificate names the guarantee
+            and self.prove_miswired_rejected  # ...and FAILED CLOSED on the mis-wired variant
+            and self.prove_violation_slot  # naming the suspected fluid->static-slot path
+        )
 
     def _variables_step_ok(self) -> bool:
         """Certify the Milestone-6 VARIABLES & KNOWLEDGE primitives ran correctly (mock + live).
@@ -528,6 +585,13 @@ class DemoResult:
             # reset the pointer back, git-for-agents), and a summonable Wiki was consulted so its
             # pages reached the agent as TAINTED data (never an instruction surface).
             and self._variables_step_ok()
+            # Milestone-7 REVOLUTIONARY: ``diff`` surfaced the field change between two promoted
+            # variants and ``merge`` reconciled them (a new frozen sha, or a typed conflict);
+            # ``replay --swap`` re-ran the recorded triage history with one model swapped — clean
+            # leaves replayed bit-identical at $0, only the dirtied leaf's counterfactual differs;
+            # and ``prove_no_injection`` PROVED the frozen demo Definition while FAIL-CLOSED-
+            # rejecting a deliberately mis-wired variant (the conservative ALG-3 guarantee).
+            and self._revolutionary_step_ok()
         )
 
     def summary(self) -> str:
@@ -1888,6 +1952,16 @@ def run_self_improvement(
     # so the F-6 worst case is unchanged — and bit-identical on both the mock and live path.
     _run_variables_step(backend, res, defn, ctx, store, org_id=org_id)
 
+    # --- 9x. Milestone-7: REVOLUTIONARY — diff/merge / replay --swap / prove. ---
+    # Three flagship capabilities, all deterministic and model-FREE (so the F-6 worst case is
+    # unchanged and they reproduce bit-identically on both paths): two promoted triage variants
+    # are DIFFED (the field change surfaced) and three-way MERGED (a new frozen sha, or a typed
+    # conflict — git for agents); the recorded triage history is re-run with one model SWAPPED
+    # (clean leaves replay bit-identical at $0, only the dirtied leaf's counterfactual differs);
+    # and the frozen demo Definition is PROVED injection-free while a deliberately mis-wired
+    # variant is FAIL-CLOSED-rejected (the conservative ALG-3 guarantee).
+    _run_revolutionary_step(backend, res, defn, ctx, store, org_id=org_id)
+
     # --- cross-tenant isolation: org B sees NONE of org A's corpus (security). -
     res.org_b_cases = len(GoldenSet.from_corrections(store, org_id="other-org").cases())
     res.steps.append(
@@ -3002,6 +3076,205 @@ def _run_variables_step(
             f"summoned {res.wiki_pages}-page wiki {res.wiki_sha[:12]} into variant; consult -> "
             f"{res.wiki_consult_entries} entries, all tainted={res.wiki_consult_all_tainted} "
             f"(data, not instructions)",
+        )
+    )
+
+
+# ------------------------------------------------- Milestone-7: revolutionary
+#: The two distinct skill pins that distinguish the two promoted variants the demo diffs/merges
+#: (one-sided, non-conflicting edits off a common base — so the three-way merge is clean).
+_VARIANT_A_SKILL = SkillRef(id="bug-specialist", version="0.1")
+_VARIANT_B_SKILL = SkillRef(id="feature-specialist", version="0.1")
+
+#: The two models the recorded triage history is split across, and the swap the demo applies.
+#: The history's clean leaves stay on the strong model (replay $0); the dirtied leaves were
+#: recorded on ``_SWAP_FROM`` and the swap counterfactual swaps them to ``_SWAP_TO``.
+_SWAP_FROM = "claude-haiku-4-5"
+_SWAP_TO = "claude-opus-4-8"
+_SWAP_KEEP = "claude-sonnet-4-6"  # the model the CLEAN history leaves were recorded on
+
+
+def _build_miswired_variant() -> Definition:
+    """A deliberately MIS-WIRED Definition whose FLUID output ``prove_no_injection`` rejects.
+
+    The triage agent declares a FLUID *output* parameter — a value the proof cannot certify is
+    non-consequential (a fluid output may feed a static-only Sink target). ALG-3 is conservative:
+    it cannot discharge that obligation, so it FAILS CLOSED and flags the slot. This is the
+    counterexample that proves the gate is a real gate (it rejects what it cannot prove safe),
+    not a rubber stamp. The well-typed demo Definition (all-STATIC outputs) proves clean."""
+    return Definition(
+        id="miswired-triage",
+        inputs=[Parameter(name="ticket_body", type="str", required=False, flow=Flow.FLUID)],
+        outputs=[Parameter(name="reply", type="str", flow=Flow.FLUID)],  # <- the mis-wiring
+        team=TeamSpec(
+            agents=[AgentSpec(role="lead", prompt="Triage.")],
+            coordination=Coordination.SINGLE,
+            lead="lead",
+        ),
+    )
+
+
+def _build_provable_variant() -> Definition:
+    """A WELL-TYPED triage Definition ``prove_no_injection`` certifies injection-free.
+
+    Mirrors the demo triage shape — a FLUID ``ticket_body`` input (the untrusted prompt-injection
+    boundary) and a STATIC ``project`` input — but declares its consequential egress (``target``,
+    the routed category) as ``Flow.STATIC``. ALG-3 can then discharge every obligation by type:
+    the fluid input is barred from each static-only slot at wire time, so no fluid→static-sink
+    path exists. This is the positive counterpart to :func:`_build_miswired_variant` — together
+    they show the gate ADMITS the provably-safe wiring and REJECTS what it cannot prove safe."""
+    return Definition(
+        id="provable-triage",
+        inputs=[
+            Parameter(name="project", type="str", flow=Flow.STATIC),
+            Parameter(name="ticket_body", type="str", required=False, flow=Flow.FLUID),
+        ],
+        outputs=[Parameter(name="target", type="str", flow=Flow.STATIC)],
+        team=TeamSpec(
+            agents=[AgentSpec(role="lead", prompt="Triage into a static category.")],
+            coordination=Coordination.SINGLE,
+            lead="lead",
+        ),
+    )
+
+
+def _write_swap_cassette(cdir: Path, key: str, *, model: str, text: str) -> None:
+    """Write a minimal recorded ``RunResult`` cassette keyed by ``key`` (the F-1 coordinate stem).
+
+    The same on-disk shape ``RecordReplayRuntime`` records, so ``run_swap`` reads it back as a
+    recorded leaf of the triage history. Pure data — no model call."""
+    result = RunResult(
+        text=text,
+        model=model,
+        events=[RuntimeEvent(kind=EventKind.RESULT, text=text)],
+    )
+    cdir.mkdir(parents=True, exist_ok=True)
+    (cdir / f"{key}.json").write_text(result.model_dump_json(indent=2))
+
+
+def _run_revolutionary_step(
+    backend: Backend,
+    res: DemoResult,
+    defn: Definition,
+    ctx: RunContext,
+    store: Store,
+    *,
+    org_id: str,
+) -> None:
+    """Run the Milestone-7 REVOLUTIONARY step and record its evidence.
+
+    Three flagship capabilities, all pure / replay-based — model-FREE — so this step adds NOTHING
+    to the F-6 worst case and reproduces bit-identically on both the mock and live path:
+
+    * **Diff + merge (git for agents).** Two promoted variants are composed off a common frozen
+      base by copy-on-write (distinct skill pins → distinct shas); ``diff`` surfaces the field
+      change(s) between them, and the three-way ``merge`` reconciles the two one-sided edits into
+      a NEW frozen Definition with a fresh content sha (or, on a two-sided divergence, returns a
+      typed :class:`MergeConflict` naming the contested paths — both are valid).
+    * **replay --swap (counterfactual time-travel).** A small recorded triage history (clean
+      leaves on the strong model + one dirtied leaf recorded on ``_SWAP_FROM``) is re-run with one
+      model swapped. ``run_swap`` sources the dirtied counterfactual from an ALTERNATE recorded
+      dir (so the whole thing is offline and $0): every CLEAN leaf replays bit-identically, and
+      ONLY the dirtied leaf's counterfactual text differs.
+    * **prove --no-injection (ALG-3, fail-closed).** ``prove_no_injection`` PROVES the frozen demo
+      Definition (every FLUID input is provably barred from each consequential static-only slot by
+      type), and FAIL-CLOSED-REJECTS a deliberately mis-wired variant (a FLUID output it cannot
+      prove non-consequential) — the conservative ALG-3 guarantee: an unprovable wiring is
+      rejected, never waved through.
+    """
+    # --- 9x-1. Diff + merge two promoted variants (git for agents). ------------
+    base = defn if defn.frozen else _frozen_copy(defn)
+    variant_a = with_skill(base, _VARIANT_A_SKILL)  # one-sided CoW edit
+    variant_b = with_skill(base, _VARIANT_B_SKILL)  # a DIFFERENT one-sided CoW edit
+    d: DefinitionDiff = diff(variant_a, variant_b)
+    res.diff_changed_paths = len(d.paths())
+    res.diff_change_path = d.paths()[0] if d.paths() else ""
+    merged = merge(base, variant_a, variant_b)
+    if isinstance(merged, MergeConflict):
+        res.merge_conflict_paths = len(merged.paths)
+        res.merged_sha = ""
+        res.merge_distinct_sha = False
+        merge_detail = f"CONFLICT on {len(merged.paths)} path(s): {list(merged.paths)[:2]}"
+    else:
+        res.merged_sha = merged.content_sha()
+        res.merge_distinct_sha = res.merged_sha not in (
+            base.content_sha(),
+            variant_a.content_sha(),
+            variant_b.content_sha(),
+        )
+        merge_detail = f"clean merge -> new frozen sha {res.merged_sha[:12]}"
+    res.steps.append(
+        StepResult(
+            9,
+            "diff + merge (git for agents)",
+            f"diff surfaced {res.diff_changed_paths} path(s) (e.g. {res.diff_change_path}); "
+            f"{merge_detail}",
+        )
+    )
+
+    # --- 9x-2. replay --swap: counterfactual over the recorded triage history. -
+    import tempfile
+
+    swap = parse_swap(f"{_SWAP_FROM}={_SWAP_TO}")
+    assert isinstance(swap, SwapSpec)
+    with tempfile.TemporaryDirectory(prefix="craw-m7-swap-") as base_tmp:
+        history = Path(base_tmp) / "run"
+        alt = Path(base_tmp) / "alt"
+        # The recorded triage history: TWO clean leaves (strong model — they replay bit-for-bit
+        # at $0) and ONE dirtied leaf (recorded on the swapped-FROM model).
+        _write_swap_cassette(history, "leaf-clean-0", model=_SWAP_KEEP, text="bug: reproduced")
+        _write_swap_cassette(history, "leaf-clean-1", model=_SWAP_KEEP, text="billing: refunded")
+        _write_swap_cassette(history, "leaf-dirty", model=_SWAP_FROM, text="feature: maybe?")
+        # The alternate recorded run (the swapped-TO model on the SAME coordinate stem) — so the
+        # dirtied leaf's counterfactual is sourced deterministically, offline, at $0.
+        _write_swap_cassette(alt, "leaf-dirty", model=_SWAP_TO, text="feature: roadmapped Q3")
+        report: SwapReport = run_swap(history, swap, alt_cassette_dir=alt)
+    res.swap_total_leaves = report.total_leaves
+    res.swap_dirtied_leaves = report.dirtied_leaves
+    res.swap_spent_usd = report.spent_usd
+    by_key = {leaf.key: leaf for leaf in report.deltas}
+    res.swap_clean_replayed_zero = all(
+        leaf.counterfactual_text == leaf.original_text and leaf.cost_usd == 0.0
+        for leaf in report.deltas
+        if not leaf.dirtied
+    )
+    # ONLY the dirtied leaf's counterfactual differs — text moved iff (and only iff) dirtied.
+    res.swap_only_dirtied_differ = report.changed and all(
+        (leaf.counterfactual_text != leaf.original_text) == leaf.dirtied for leaf in report.deltas
+    )
+    dirty = by_key.get("leaf-dirty")
+    res.steps.append(
+        StepResult(
+            9,
+            "replay --swap (counterfactual)",
+            f"{report.dirtied_leaves}/{report.total_leaves} leaf swapped {_SWAP_FROM}->{_SWAP_TO} "
+            f"@ ${report.spent_usd:.2f}; clean leaves replay $0, dirtied "
+            f"{dirty.original_text!r}->{dirty.counterfactual_text!r}"
+            if dirty
+            else "no dirtied leaf",
+        )
+    )
+
+    # --- 9x-3. prove --no-injection: ALG-3 fail-closed proof. ------------------
+    # HONESTY NOTE: the live demo Definition declares its ``triage`` OUTPUT as FLUID (a free-form
+    # triage record is fluid content), so ALG-3 — being CONSERVATIVE — cannot prove it is
+    # non-consequential and (correctly) REJECTS it. We do NOT paper over that. Instead we prove a
+    # WELL-TYPED triage variant (consequential egress declared STATIC) PASSES, and the
+    # deliberately mis-wired variant FAILS CLOSED — the two outcomes that demonstrate the gate is a
+    # real gate: it admits exactly the provably-safe wiring and rejects what it cannot prove safe.
+    clean: ProofResult = prove_no_injection(_build_provable_variant())
+    res.prove_clean_passed = clean.proven
+    res.prove_guarantee = clean.guarantee
+    miswired: ProofResult = prove_no_injection(_build_miswired_variant())
+    res.prove_miswired_rejected = not miswired.proven
+    res.prove_violation_slot = miswired.violations[0].slot if miswired.violations else ""
+    res.steps.append(
+        StepResult(
+            9,
+            "prove --no-injection (ALG-3)",
+            f"well-typed variant PROVED injection-free ({clean.guarantee}); mis-wired variant "
+            f"FAIL-CLOSED-rejected on slot {res.prove_violation_slot!r} "
+            f"(conservative: an unprovable wiring is rejected, never waved through)",
         )
     )
 

@@ -66,6 +66,7 @@ nav:
       - Taming stochasticity: guide/tameness.md
       - Drive the language from the CLI: guide/optimize-from-the-cli.md
       - Agents as variables — compose, version, summon: guide/variables-and-knowledge.md
+      - Diff, prove & replay: guide/diff-prove-replay.md
       - CLI reference: guide/cli.md
       - Cookbook: guide/cookbook.md
       - Contributing a connector: guide/contributing-a-connector.md

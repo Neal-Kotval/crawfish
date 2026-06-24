@@ -3,6 +3,57 @@
 Notable, user-facing changes. For the exact public-symbol surface of any release, see the
 [API reference](api-reference.md); for the longer arc, see the [Roadmap](../roadmap/README.md).
 
+## Agent language — Milestone 7: revolutionary capabilities
+
+The content-addressed agent M6 shipped becomes **reviewable, certifiable, and
+time-travellable**. Three verbs, all importable from the top-level `crawfish` package (plus two
+new `craw` subcommands), all deterministic under `MockRuntime`:
+
+- **Git for agents — `diff` / `merge` (CRA-228).** Lifts the content-addressed unit from "two
+  shas are equal / not equal" to a typed, field-level diff and a three-way merge. **`diff(a, b)`**
+  takes a structural diff over the *canonical content payload* (the fields that fold into the
+  sha), so it is non-empty **iff** the shas differ; each `FieldChange(path, kind, before, after)`
+  carries a stable dotted path and an `ADDED`/`REMOVED`/`CHANGED` `ChangeKind`, keyed lists
+  (agents by role, params by name, pins by id) are re-keyed to identity (a re-order is not a
+  spurious change), and changes come back path-sorted. **`merge(base, a, b)`** is a three-way
+  merge: a one-sided change wins, agreement is harmless, a both-sided change to **different**
+  values is a typed `FieldConflict` — never silently resolved. A clean merge re-validates the
+  payload into a `Definition`, keeps base's identity, and re-seals through the content-hash CoW
+  law, so it is a **new frozen** artifact with a **deterministic** sha. The fluid/static boundary
+  is a diffable leaf: a `flow` move applies only one-sided and surfaces on collision — a merge can
+  never **silently** widen it. New symbols: `diff`, `merge`, `DefinitionDiff`, `MergeConflict`
+  (also `ChangeKind`, `FieldChange`, `FieldConflict` from `crawfish.agentdiff`). *Deferred:*
+  token/line-level merge over a prompt **body** (today a prompt is a whole-field leaf).
+- **Prove no injection — `craw prove --no-injection` (CRA-229).** A pre-flight, fail-closed
+  certificate that no `Flow.FLUID` input can reach a consequential static-only Sink target /
+  idempotency slot. **Be honest about which guarantee ships:** a *sound* full-graph
+  non-interference proof is **not** buildable today (it needs a serialized dataflow graph the
+  Definition doesn't yet expose), so this ships the **ALG-3 conservative static-rejection**
+  fallback (`alg3-conservative-static-rejection`) — **sound for the fluid→static-slot fragment**
+  it covers (it never passes a wiring the runtime gates would reject), **incomplete** (not the
+  absence of *every* injection path), and **fail-closed** (a consequential output mis-declared
+  `Flow.FLUID` is reported, never assumed safe). It is defense-in-depth — an additional
+  assembly-time gate that **never replaces** the runtime `StaticOnlyError` /
+  `TargetMustBeStaticError`. The CLI exits non-zero on a suspected path; `--json` emits
+  `craw.prove.v1`. **The sound proof + formal conformance suite remain a deferred research
+  follow-on.** New symbols: `prove_no_injection`, `ProofResult` (also `ProofObligation`,
+  `GUARANTEE` from `crawfish.prove`); CLI `craw prove`.
+- **Counterfactual replay — `craw replay --swap` (CRA-230).** Re-run a *historical* recorded run
+  against a *candidate* model/decode change for near-$0. A leaf (one cassette = one model call,
+  keyed by the execution coordinate) is **dirtied** iff its recorded `RunResult.model == from`;
+  every other leaf is **clean** and replays bit-for-bit ($0, no model call). The dirtied
+  counterfactual is sourced from an `--alt-cassettes` dir (a previously recorded `to` run,
+  deterministic) or a deterministic re-stamp placeholder charged `--cost-per-leaf`. The dirtied
+  fraction is reported *before* spending; with `--budget` a dirtied live cascade over budget is
+  **refused** (non-zero exit), so an upstream change's blast radius stays bounded. `--org` carries
+  `org_id` (a counterfactual never reads another org's leaves); `--json` emits `craw.replay.v1`.
+  New symbols: `run_swap`, `parse_swap`, `SwapReport` (also `SwapSpec`, `LeafDelta`, `plan_swap`
+  from `crawfish.replay_swap`); CLI `craw replay`.
+
+Learn it: the [Diff, prove & replay guide](diff-prove-replay.md) (runnable, mirrors the triage
+demo — diff/merge two variants, prove fail-closed, replay a counterfactual) and the
+[Concepts → revolutionary capabilities](concepts.md#revolutionary-capabilities-diff-prove-replay).
+
 ## Agent language — Milestone 6: variables & knowledge
 
 An agent stops being a fixed artifact and becomes a **variable**: a content-addressed value

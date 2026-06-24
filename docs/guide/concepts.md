@@ -14,6 +14,7 @@ On this page:
 - [The composition surface](#the-composition-surface-branch-cycle-recurse) — branch, cycle, recurse
 - [The PyTorch-for-LLMs half](#the-pytorch-for-llms-half-train-eval-and-the-tunable-knob) — train/eval mode, calibration, variance-aware promotion
 - [The agents-as-variables half](#the-agents-as-variables-half-compose-version-summon) — compose, version (git for agents), and summon knowledge
+- [Revolutionary capabilities](#revolutionary-capabilities-diff-prove-replay) — diff/merge, prove no injection, counterfactual replay
 
 ## The directory model
 
@@ -558,6 +559,54 @@ eval-mode values touch the world, and summoned knowledge is data, not instructio
 end to end in the [Agents as variables guide](variables-and-knowledge.md) (runnable, mirrors
 the triage demo — compose a variant, save/recall it by name, modify/reset across the version
 log, summon a Wiki).
+
+## Revolutionary capabilities — diff, prove, replay
+
+The agents-as-variables half made a frozen `Definition` *git's immutable side* — a value with a
+content sha. This section is what that content-addressed substrate unlocks: the verbs that make
+an agent program **reviewable**, **certifiable**, and **time-travellable**. Three moves, all
+deterministic under `MockRuntime`.
+
+**Content-addressed agents are diffable and mergeable — git for agents, the verbs.** `diff(a, b)`
+takes a typed, field-level structural diff over the *canonical content payload* — exactly the
+fields that fold into the content sha — so the diff is non-empty **iff** the two shas differ.
+Keyed lists (agents by role, parameters by name, dependency pins by id) are re-keyed to identity,
+so a re-order without an edit is **not** a spurious change. `merge(base, a, b)` is a three-way
+merge over the lineage: a one-sided change wins, agreement is harmless, and a both-sided change to
+**different** values is a typed `FieldConflict` — **never silently resolved**. A clean merge
+re-validates the merged payload into a `Definition` (type-checked, not hand-assembled) and
+re-seals it through the same content-hash law, so the result is a **new frozen** artifact with a
+**deterministic** sha. The injection boundary is just another diffable leaf: a `Parameter`'s
+`flow` move applies only when **exactly one** side made it, and a collision surfaces as a conflict
+for review — a merge can never **silently** widen the boundary. (Token/line-level merge over a
+prompt **body** is deferred; today a prompt is a whole-field leaf.)
+
+**Injection is rejected by construction.** `craw prove --no-injection` is a pre-flight,
+fail-closed certificate that no `Flow.FLUID` input can reach a consequential static-only Sink
+target or idempotency slot. Be precise about what ships: a **sound** full-graph non-interference
+proof is *not* buildable today (it needs a serialized dataflow graph the Definition doesn't yet
+expose), so this ships the **ALG-3 conservative static-rejection** fallback
+(`alg3-conservative-static-rejection`) — sound for the fluid→static-slot fragment it covers
+(it never passes a wiring the runtime gates would reject), incomplete (it doesn't certify the
+absence of *every* injection path), and fail-closed (a consequential output mis-declared
+`Flow.FLUID` is reported, never assumed safe). It is defense-in-depth: an *additional*
+assembly-time gate that **never replaces** the runtime `StaticOnlyError` /
+`TargetMustBeStaticError`. The sound proof and the formal conformance suite are a deferred
+research follow-on.
+
+**Counterfactual replay is near-free.** `craw replay --swap <from>=<to>` re-runs a *historical*
+recorded run against a *candidate* model/decode change. A leaf is one cassette — one model call,
+keyed by the execution coordinate — and a leaf is **dirtied** iff its recorded `RunResult.model
+== from`; every other leaf is **clean** and replays bit-for-bit ($0, no model call). The dirtied
+fraction is reported *before* spending, and with `--budget` a dirtied live cascade whose projected
+spend exceeds the budget is **refused** — so an upstream change's blast radius stays bounded and
+visible. `--org` carries `org_id`, and the cassette key already folds it in, so a counterfactual
+never reads another org's leaves. This is the visceral payoff of content-addressing every leaf:
+swapping one model re-executes only what the change actually dirtied; the rest is determinism, not
+spend.
+
+Learn it end to end in the [Diff, prove & replay guide](diff-prove-replay.md) (runnable, mirrors
+the triage demo — diff and merge two variants, prove fail-closed, replay a counterfactual).
 
 ## Next steps
 
