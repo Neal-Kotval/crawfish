@@ -42,12 +42,13 @@ crash-resume. What's in the box today:
   `craw build` → container; a MkDocs docs site; an API-stability contract (stable /
   experimental / deprecated tiers + semver).
 
-## The agent language — control plane, composition surface + tunable-ML library shipped (in progress)
+## The agent language — control plane, composition surface, tunable-ML library + tameness layer shipped (in progress)
 
 Phase 2 includes a larger bet: an **agent language** where composition operators
 (Refine, Program, Quorum, Escalate) and a Tuner make agents self-improving over your
-data. The first three milestones — the **control plane**, the **composition surface**, and
-the flagship **tunable-ML library** — have now shipped on top of the foundational primitives:
+data. The first four milestones — the **control plane**, the **composition surface**, the
+flagship **tunable-ML library**, and the **tameness layer** that bounds the one stochastic
+primitive — have now shipped on top of the foundational primitives:
 
 - **`Refine` — a bounded, metered, durable iterate-until-goal loop.** Run a producing
   Definition, check each frozen Output against an *external* stop condition, and iterate
@@ -81,10 +82,28 @@ the flagship **tunable-ML library** — have now shipped on top of the foundatio
   (*Hugging-Face-for-agent-weights*), and `ServingLoop` is the budget-bounded, no-peeking,
   deterministic-under-replay explore dial. **Only static knobs are ever promoted** — the whole
   loop stays inside the security spine.
+- **The tameness layer — bounding the one stochastic primitive.** A model `Run` is the only
+  stochastic atom; this milestone bounds it *itself*, four ways, without touching the
+  deterministic spine. **`QuorumRuntime`** is self-consistency as a typed operator — sample the
+  same request `k` times (each a seeded, replayable leaf charging the shared budget) and reduce
+  by a **pure** consensus vote (`majority_vote`, the modal-output estimand); an ill-defined
+  plurality abstains to a *declared* default, `k` defaults to the tunable `sample_k` knob, a
+  sequential proportion test stops early with no peeking, and a vote **never launders taint**.
+  **Abstention** (`abstain_below` / `abstain_below_calibrated`) lets a step *decline* rather
+  than hallucinate, as a typed, routable Output **value** (`is_abstention`) with its threshold
+  read off the calibration reliability curve. **The house-guard** (`HouseGuard`) accretes the
+  program's own invariants — quality is **learned stochastically**, **distilled** to a pure
+  closed-grammar predicate (no `eval`/`exec`, the proposal can only select within the grammar),
+  and only **earns** enforcement after a **joint** precision-and-coverage gate that fails closed.
+  **Constrained decoding** (`Grammar`) makes a malformed output shape an *impossible* state
+  rather than a repaired one — a per-call, static/trusted property that keeps `repair_count` at
+  0 and stays out of the agent's content hash. The house-guard is the keystone:
+  *learn stochastically → distil to a pure predicate → earn enforcement.*
 
 See the [Refine & verify guide](docs/guide/refine-and-verify.md), the
 [Compose guide](docs/guide/compose.md), the
 [Train, calibrate & promote guide](docs/guide/train-and-tune.md), the
+[Taming stochasticity guide](docs/guide/tameness.md), the
 [control-plane reference](docs/reference/refine-and-verify.md), the
 [Tuner & learning reference](docs/reference/tuner-and-learning.md), and the
 [release notes](docs/guide/release-notes.md).

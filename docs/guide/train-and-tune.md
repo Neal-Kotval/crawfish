@@ -285,3 +285,4 @@ through the eval gate on the `LearningLoop`.
 - [Metrics reference](../reference/metrics.md) — the `Rubric` and `calibrate` measurement layer.
 - [Evals reference](../reference/evals.md) — golden sets and the promotion baseline.
 - [Refine & verify](refine-and-verify.md) — the control-plane sibling of this loop.
+- [Taming stochasticity](tameness.md) — `abstain_below_calibrated` reads its threshold off the `calibrate` reliability curve documented here.

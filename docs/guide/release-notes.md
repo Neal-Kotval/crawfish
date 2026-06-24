@@ -3,6 +3,62 @@
 Notable, user-facing changes. For the exact public-symbol surface of any release, see the
 [API reference](api-reference.md); for the longer arc, see the [Roadmap](../roadmap/README.md).
 
+## Agent language — Milestone 4: taming stochasticity
+
+The one stochastic primitive — a model `Run` — gets bounded *itself*. Four disciplines layer
+onto any producing step while keeping every determinism, typing, and taint guarantee: vote it
+down, let it decline, distil its invariants into a pure guard, constrain its surface. New, all
+importable from the top-level `crawfish` package:
+
+- **`QuorumRuntime` — self-consistency as a typed operator.** Wraps any inner `AgentRuntime`,
+  samples the same `RunRequest` `k` times (each a distinct seeded leaf charging the shared
+  budget, replayable under its own cassette via the execution coordinate), and reduces by a
+  **pure** consensus vote. `run(...)` is the plain runtime seam (winner text); `run_quorum(...)`
+  returns a `QuorumResult` — winner, **aggregate taint**, the `ConsensusResult` tally, and the
+  `Sample`s. `majority_vote(field=...)` is the modal-output estimand with mandatory
+  canonicalization; an ill-defined plurality abstains to a *declared* `default_text` or raises
+  `QuorumAbstention` — never a silent pick. `k` defaults to the tunable `sample_k` knob, and a
+  sequential proportion test (Wilson lower bound on the leader's share > 0.5) stops early with
+  no peeking penalty. `quorum_output(...)` wraps the winner into a typed Output; a vote **never
+  launders taint** (winner tainted iff any sample was). Also: `ConsensusFn`, `MajorityVote`.
+- **`abstain_below` / `abstain_below_calibrated` — abstention as a typed Output value.** A
+  first-class "I decline to answer" that is a routable **value**, not an exception or a magic
+  string. `abstain_below(threshold)` measures the run's self-reported confidence (fluid data,
+  never an instruction) and either passes a confident Output through unchanged or returns a
+  fresh Output (via `Output.derive`, so taint + lineage propagate) carrying an `Abstention`
+  tagged `ABSTENTION_MARKER` *in the JSON*. `is_abstention(value)` is a pure, total predicate —
+  hand it to a `Classifier` so a `Router` branches a decline to review. Fail-safe (a missing
+  confidence declines) and idempotent. `abstain_below_calibrated(report)` reads the threshold
+  off the `calibrate` reliability curve instead of guessing a constant — the sound default.
+- **`HouseGuard` — learned-then-distilled deterministic guards.** A program accretes its own
+  invariants: quality is learned stochastically (`propose_rule` emits a FLUID candidate from
+  one model `Run`), distilled to a pure predicate (`distill` parses it *as data* into a closed
+  grammar — `Comparison | SetMembership | NumericBound | BoolCombination | Always`, no
+  `eval`/`exec`; the proposal can only *select within* the grammar, raising `GuardGrammarError`
+  on an attempt to widen it), and only **earns** enforcement after a **joint** precision/coverage
+  gate. `HouseGuard.synthesize(...)` mints a `GuardCertificate` reporting a Wilson precision
+  *lower* bound **and** coverage with a CI; graduation needs both to clear their floors over a
+  non-empty corpus, so a 99%-precision / 2%-coverage rule cannot block. Fails closed
+  (`GuardNotEarned`), runs a `shadow → warn → block` lifecycle (`GuardStage`), is content-hashed
+  and reversible, and exposes the distilled rule as a pure `Metric` (`PredicateMetric`, 0/1, $0).
+  Stats helper `wilson_lower_bound`; range type `Interval`.
+- **`Grammar` — constrained / grammar-guided decoding as a per-call property.** Strictly
+  stronger than validate-and-repair: tell the runtime the output shape up front and a malformed
+  value is an *impossible* state, not a repaired one. Build via `Grammar.enum` /
+  `Grammar.regex` / `Grammar.json_object` / `Grammar.from_output_schema` (frozen, declarative,
+  one field); `enforce(text)` is a **pure** projection onto the constraint surface (snap to an
+  enum member / first regex match / recover a balanced object), raising `GrammarError` only when
+  no candidate exists at all — never a silent coercion. Attaching a grammar to a `Run` keeps
+  `repair_count` at **0**. The grammar is **static / trusted** (no constructor reads a fluid
+  value) and rides on the per-call request, kept out of the Definition content hash — the
+  prompt-injection boundary holds. `GrammarKind`; `parse_grammar` is the inverse of
+  `to_request_grammar`.
+
+Learn it: the [Taming stochasticity guide](tameness.md) (runnable, mirrors the triage demo —
+ambiguous ticket voted on, low-confidence declined to review, house-guard blocks a disallowed
+label, structured field under a grammar) and the
+[Concepts → taming the stochastic primitive](concepts.md#taming-the-stochastic-primitive-vote-decline-distil-constrain).
+
 ## Agent language — Milestone 3: the tunable-ML library
 
 The **flagship** half lands: an agent is now a *model with tunable weights*, and `mutable` is

@@ -404,6 +404,70 @@ knobs are ever promoted**, so the learning loop stays inside the
 Learn it end to end: the [Train, calibrate & promote guide](train-and-tune.md) (runnable,
 mirrors the triage demo) and the [Tuner & learning reference](../reference/tuner-and-learning.md).
 
+## Taming the stochastic primitive — vote, decline, distil, constrain
+
+The control plane wraps the one stochastic primitive — a model `Run` — in a loop; the
+composition surface gives that loop shape; the tunable-ML half searches its knobs. The
+**tameness layer** is the fourth move: it bounds the stochastic leaf *itself*, with four
+disciplines that compose onto any producing step while keeping every determinism, typing,
+and taint guarantee intact. Each does one thing to the leaf — vote it down, let it decline,
+distil its invariants, constrain its surface.
+
+**Quorum votes the variance down.** Self-consistency — sample `N`, take the consensus — is
+the cheapest, best-attested variance reducer and the purest expression of the thesis: **N
+stochastic leaves reduced by a deterministic vote**. `QuorumRuntime` wraps any inner
+runtime, samples the same request `k` times (each a distinct seeded leaf charging the shared
+budget, replayable under its own cassette via the execution coordinate), and reduces by a
+typed, **pure** consensus vote. `majority_vote` is the modal-output estimand with mandatory
+canonicalization (`{"a":1,"b":2}` ≡ `{"b":2,"a":1}`); on an ill-defined plurality it
+abstains to a *declared* default, never a silent pick. `k` defaults to the tunable `sample_k`
+knob, and a sequential proportion test stops early once a Wilson lower bound on the leader's
+share clears `0.5` — no peeking penalty. A vote **never launders taint**: the winner is
+tainted iff any sample was (ALG-7).
+
+**Abstention lets a step decline instead of hallucinate.** Selective prediction is the
+formal frame for a reliable agent, and the tameness layer could escalate but never *give
+up*. `abstain_below(threshold)` measures the run's self-reported confidence (a fluid
+self-report is **data**, never an instruction) and either passes a confident Output through
+unchanged or returns a fresh Output carrying a typed `Abstention`. The abstention is a
+**value**, tagged `_abstention` *in the JSON* (no Python type survives a replayed Output),
+so `is_abstention` is a pure routable predicate a `Router` branches to review. It is
+fail-safe (a missing confidence declines), idempotent, and threshold-calibrated:
+`abstain_below_calibrated` reads the confidence off the `calibrate` reliability curve rather
+than guessing a constant. Taint propagates into the `Abstention`, so a declined fluid output
+can never become a Sink target.
+
+**The house-guard distils a learned rule into a pure invariant.** This is the deepest
+expression of the thesis: a program *accretes its own deterministic invariants*. Quality is
+**learned stochastically** (`propose_rule` emits a FLUID candidate from one model `Run`),
+**distilled** to a pure predicate (`distill` parses it *as data* into a closed grammar —
+`Comparison | SetMembership | NumericBound | BoolCombination | Always` — evaluated by an
+interpreter that never uses `eval`/`exec`; the proposal can only *select within* the grammar,
+never widen it), and only **earns** enforcement after a **joint** precision-and-coverage gate
+(`HouseGuard.synthesize`): a Wilson precision *lower* bound clears `precision_floor` **and**
+coverage clears `min_coverage` **and** the corpus is non-empty, so a 99%-precision /
+2%-coverage rule cannot block. It fails closed (no corpus ⇒ stays in `warn`), runs a
+`shadow → warn → block` lifecycle, and is content-hashed and reversible. This is the same
+earn-the-right-to-gate discipline as the `Verifier`, applied to a *learned* rule.
+
+**Constrained decoding makes a malformed shape impossible.** Decode-time constraint is
+*strictly stronger* than the post-hoc validate-and-repair loop: instead of detecting a
+malformed output and paying a metered repair re-prompt, the runtime is told the output
+**shape** up front, so a malformed value is an *impossible* state, not a repaired one. A
+`Grammar` (enum / regex / json_object, derivable from a Definition's declared output schema)
+is a frozen, declarative constraint on one field; `enforce` is a **pure** projection onto the
+constraint surface, raising only when no candidate exists at all — never a silent coercion. A
+grammar-honouring constrained `Run` keeps `repair_count` at `0`. The grammar is **static /
+trusted** — it has no constructor that reads a fluid value — and rides on the *per-call*
+request, kept out of the Definition content hash (it constrains the decode surface, it does
+not version the agent), so the prompt-injection boundary holds: the constraint is config, not
+session data.
+
+The house-guard is the keystone — **learn stochastically → distil to a pure predicate → earn
+enforcement** — and it is the same shape as everything else in the language: the stochastic
+part stays contained, and the program keeps accreting determinism around it. Learn it end to
+end in the [Taming stochasticity guide](tameness.md) (runnable, mirrors the triage demo).
+
 ## Next steps
 
 - [Cookbook](cookbook.md) — copy-paste recipes, including eval-as-test.

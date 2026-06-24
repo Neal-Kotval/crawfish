@@ -4,7 +4,7 @@
 > Do not edit by hand — regenerate on each release:
 > `uv run python docs/guide/gen_api_reference.py > docs/guide/api-reference.md`.
 
-`crawfish` version: `0.2.0` — 343 public symbols.
+`crawfish` version: `0.2.0` — 411 public symbols.
 
 Everything documented here is importable directly from the top-level package:
 
@@ -224,7 +224,7 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `LLMJudge` | class | A Definition-backed grader: an agent scores an output against criteria. |
 | `capture_case` | function | Capture a real run (inputs + output [+ transcript]) as an eval case. |
 | `grade_output` | function | Combine coded-metric scores and LLM-judge grades into one score dict. |
-| `save_baseline` | function |  |
+| `save_baseline` | function | Persist a regression baseline's per-metric ``scores`` (and optional ``std``). |
 | `load_baseline` | function |  |
 | `gate_against_baseline` | function | True if ``candidate`` passes (no regression vs the stored baseline). |
 | `upconvert_case` | function | Up-convert a stored EvalCase row from the string era to typed values. |
@@ -359,15 +359,74 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `PredicateStop` | class | Stop on a typed predicate over the frozen ``Output``. |
 | `VerifierStop` | class | Stop when a **gated** :class:`~crawfish.verifier.Verifier` accepts the Output (CL-2). |
 | `feature_loop` | function | Convenience alias matching the vision vocabulary: a feature-improvement loop. |
-| `branch` | function | Construct a runnable :class:`Router` composition step (classify each item, dispatch down the matching branch). |
-| `Program` | class | A :class:`Workflow` whose edges may cycle — a typed directed graph walked per item. |
-| `Edge` | class | A directed edge in a :class:`Program`; a back-edge (target ≤ source) may cycle, bounded by ``max_visits``. |
+| `branch` | function | Construct a runnable :class:`Router` composition step (C1). |
+| `Program` | class | A typed directed graph whose edges may cycle (CRA-206 C2a). |
+| `Edge` | class | A directed edge in a :class:`Program` graph; a *back*-edge may cycle. |
 | `ProgramResult` | class | The typed outcome of one item's traversal through a :class:`Program`. |
-| `UnboundedCycleError` | class | Raised at assembly when a back-edge has no ``max_visits`` termination bound. |
+| `UnboundedCycleError` | class | Raised at assembly when a back-edge has no termination bound. |
 | `recurse` | function | Construct a bounded, self-referential :class:`Recurse` over a frozen Definition. |
-| `Recurse` | class | A depth-guarded back-edge re-entering the same frozen Definition, folding the descent children. |
+| `Recurse` | class | A depth-guarded back-edge re-entering the same FROZEN ``Definition`` (C3). |
 | `RecurseResult` | class | The typed outcome of one item's bounded recursion. |
 | `UnboundedRecursionError` | class | Raised at assembly when :func:`recurse` is built without a ``max_depth`` bound. |
+| `KnobDomain` | class | One tunable knob: where it lives (``path``), its candidate ``values``, and whether |
+| `TuneSpec` | class | Axis 1 as data: the set of knobs a Tuner may search, content-hashable + authorable. |
+| `tune_spec_sha` | function | Deterministic 12-char content hash of a :class:`TuneSpec`. |
+| `train` | function | Enter **train mode**: return an *unfrozen* copy whose knobs may change (CRA-209). |
+| `eval` | function | Enter **eval mode**: return the frozen, reproducible artifact (CRA-209). |
+| `guard_consequential` | function | Raise unless ``definition`` is in eval mode (frozen) — the load-bearing rule. |
+| `Objective` | class | Cost-regularized loss the Tuner maximizes among gate-passing candidates (CRA-213). |
+| `ObjectiveForm` | enum | How the :class:`Objective` scalarizes quality against cost. |
+| `ObjectiveScore` | class | The scalar an :class:`Objective` assigns a candidate, with its decomposition. |
+| `calibrate` | function | Run each golden case ``runs`` times under distinct derived seeds → a report. |
+| `CalibrationReport` | class | The frozen, ``org_id``-tagged measurement of a Definition's noise + calibration. |
+| `extract_confidence` | function | Read a ``[0,1]`` self-reported confidence from ``output``, or ``None`` if absent. |
+| `abstention_threshold` | function | Derive the confidence below which acting is unsafe, from a reliability curve. |
+| `promote_against_baseline` | function | Variance-aware promotion gate (AL-T5) — promote only past the noise band. |
+| `PromotionVerdict` | class | The outcome of :func:`promote_against_baseline` — promote-or-not + the why. |
+| `load_baseline_std` | function | Load the per-metric std recorded alongside a baseline, or ``None`` if absent. |
+| `save_baseline_from_report` | function | Persist a baseline from a :class:`~crawfish.metrics.CalibrationReport`. |
+| `state_dict` | function | Extract a Definition's tunable knobs as a references-by-version :class:`StateDict`. |
+| `load_state` | function | Transfer learned knob VALUES from ``state`` onto ``definition`` (copy-on-write). |
+| `StateDict` | class | The tunable knobs of a Definition as references-by-version — the 'weights' (CRA-210). |
+| `RoleKnobs` | class | The tunable knobs for one role — the per-role 'weights' (CRA-210). |
+| `IncompatibleStateError` | class | ``load_state(strict=True)`` was asked to load a state onto an incompatible shape. |
+| `ServingLoop` | class | A serving-time explore/exploit overlay over a promoted best + a trial candidate. |
+| `ServingDecision` | class | The routing verdict for one live item (the audit record). |
+| `ExploreSchedule` | class | The ε dial + its decay — a decaying-ε schedule (CRA-214). |
+| `ExploreStrategy` | enum | How a :class:`ServingLoop` chooses *which* items explore. |
+| `GraduationVerdict` | class | The pre-registered-N graduation decision for a trial arm (no-peeking, CRA-214). |
+| `QuorumRuntime` | class | Sample the same request ``k`` times and reduce by a typed, pure consensus vote. |
+| `QuorumResult` | class | The full quorum outcome: the winner ``RunResult``, its aggregate taint, and tally. |
+| `QuorumAbstention` | class | The vote was ill-defined (no plurality / high-cardinality) — abstain (TS-4). |
+| `Sample` | class | One stochastic leaf in the quorum: its recorded result and derived taint. |
+| `ConsensusResult` | class | The pure outcome of a vote over a list of :class:`Sample`. |
+| `ConsensusFn` | class | A pure reduction of the recorded samples to one consensus outcome. |
+| `MajorityVote` | class | Modal-output consensus: the most-frequent canonicalised candidate wins. |
+| `majority_vote` | function | Construct a :class:`MajorityVote` consensus (the modal-output estimand). |
+| `quorum_output` | function | Wrap a quorum :class:`RunResult` as a typed :class:`Output`, carrying aggregate taint. |
+| `Abstention` | class | A typed "I decline to answer" — a first-class Output value, frozen. |
+| `ABSTENTION_MARKER` | value | str(object='') -> str |
+| `is_abstention` | function | ``True`` iff ``value`` is a tagged :class:`Abstention` dict (a routable predicate). |
+| `abstain_below` | function | A discipline that turns a low-confidence Output into an :class:`Abstention`. |
+| `abstain_below_calibrated` | function | :func:`abstain_below` wired to a calibration-derived threshold (the sound default). |
+| `HouseGuard` | class | A learned-then-distilled deterministic guard — versioned, eval-gated, reversible. |
+| `GuardCertificate` | class | The honest measurement that decides whether a guard may block (frozen). |
+| `GuardStage` | enum | The shadow→warn→block lifecycle of a guard's enforcement authority. |
+| `GuardNotEarned` | class | A guard was asked to enforce without clearing the joint precision/coverage bar. |
+| `GuardGrammarError` | class | A proposal could not be distilled into the closed predicate grammar. |
+| `Predicate` | value | Represent a PEP 604 union type |
+| `Comparison` | class | ``field OP literal`` over a typed Output field (canonical equality). |
+| `SetMembership` | class | ``field IN members`` (or ``NOT IN`` when ``negate``) — order-free membership. |
+| `NumericBound` | class | ``lo <= field <= hi`` numeric range (either bound optional, inclusive). |
+| `BoolCombination` | class | ``AND``/``OR`` of sub-predicates (``NOT`` is a one-term combination). |
+| `Always` | class | The constant predicate (``value`` is its fixed truth). The grammar's unit. |
+| `PredicateMetric` | class | A distilled :class:`Predicate` exposed as a pure :class:`~crawfish.metrics.Metric`. |
+| `Interval` | class | A point estimate with a two-sided confidence interval ``[lo, hi]`` (frozen). |
+| `wilson_lower_bound` | function | Wilson score **lower** bound for a binomial proportion ``successes / n``. |
+| `Grammar` | class | A frozen, declarative constraint on a single decoded field. |
+| `GrammarKind` | enum | The dialect of a :class:`Grammar`. ``(str, Enum)`` per ADR 0004. |
+| `GrammarError` | class | Raised when text cannot be projected onto a constraint surface at all. |
+| `parse_grammar` | function | Read a per-call ``RunRequest.grammar`` dialect string back into a :class:`Grammar`. |
 
 ### `JSONValue`
 
@@ -586,7 +645,7 @@ TypeRegistry() -> 'None'
 
 *value* — `TypeRegistry`
 
-`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x1075a90d0>`
+`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x10b32c990>`
 
 ### `Version`
 
@@ -1645,7 +1704,7 @@ Memory(store: 'Store', namespace: 'str', *, org_id: 'str' = 'local') -> 'None'
 An agent team performing a single task.
 
 ```python
-Run(definition: 'Definition', inputs: 'dict[str, JSONValue] | None' = None, *, runtime: 'AgentRuntime | None' = None, requires_approval: 'bool' = False, on_invalid: 'ValidationAction' = <ValidationAction.DEAD_LETTER: 'dead_letter'>, retry_policy: 'RetryPolicy | None' = None, registry: 'TypeRegistry | None' = None, validate_input_types: 'bool' = True, validate_output_schema: 'bool' = True, id: 'str | None' = None) -> 'None'
+Run(definition: 'Definition', inputs: 'dict[str, JSONValue] | None' = None, *, runtime: 'AgentRuntime | None' = None, requires_approval: 'bool' = False, on_invalid: 'ValidationAction' = <ValidationAction.DEAD_LETTER: 'dead_letter'>, retry_policy: 'RetryPolicy | None' = None, registry: 'TypeRegistry | None' = None, validate_input_types: 'bool' = True, validate_output_schema: 'bool' = True, grammar: 'Grammar | None' = None, decode_seed: 'int | None' = None, id: 'str | None' = None) -> 'None'
 ```
 
 **Methods**
@@ -2351,7 +2410,7 @@ Stop then re-deploy ``name`` with its recorded dir + schedule. Returns success.
 Watch one pipeline: run rules (and an optional LLM judge) on a poll interval.
 
 ```python
-Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x1078d7ce0>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
+Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x10b7051c0>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
 ```
 
 **Methods**
@@ -3470,8 +3529,17 @@ Combine coded-metric scores and LLM-judge grades into one score dict.
 *function*
 
 ```python
-save_baseline(store: 'Store', name: 'str', scores: 'dict[str, float]', *, org_id: 'str' = 'local') -> 'None'
+save_baseline(store: 'Store', name: 'str', scores: 'dict[str, float]', *, std: 'dict[str, float] | None' = None, org_id: 'str' = 'local') -> 'None'
 ```
+
+Persist a regression baseline's per-metric ``scores`` (and optional ``std``).
+
+The ``scores`` record format is unchanged (CRA-212 back-compat): old baselines and
+callers that pass no ``std`` write exactly the record they always did. When ``std``
+is given (e.g. from :attr:`~crawfish.metrics.CalibrationReport.rubric_std`) it is
+written to a parallel ``eval_baseline_std`` record so the variance-aware promotion
+gate can read the noise band. Passing ``std=None`` leaves any existing std record in
+place (it does not erase a previously-recorded band).
 
 ### `load_baseline`
 
@@ -4577,7 +4645,7 @@ clean unprivileged primitive and is deferred (ADR 0009) → :class:`UnsupportedP
 *function*
 
 ```python
-registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x1075a90d0>) -> 'list[dict[str, object]]'
+registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x10b32c990>) -> 'list[dict[str, object]]'
 ```
 
 Serialize a registry's records to JSON descriptors for the child.
@@ -5178,7 +5246,7 @@ order, because proposal order is pure and each candidate's cassette key is disti
 (distinct re-frozen version sha).
 
 ```python
-Tuner(benchmark: 'Benchmark', mutator: 'PromptMutator', *, strategy: 'SearchStrategy' = <SearchStrategy.GRID: 'grid'>, max_trials: 'int' = 64, sample_size: 'int | None' = None, tolerance: 'float' = 0.0, cost_per_trial_usd: 'float' = 0.0, emit_progress: 'bool' = False, pipeline: 'str | None' = None) -> 'None'
+Tuner(benchmark: 'Benchmark', mutator: 'PromptMutator', *, strategy: 'SearchStrategy' = <SearchStrategy.GRID: 'grid'>, max_trials: 'int' = 64, sample_size: 'int | None' = None, tolerance: 'float' = 0.0, cost_per_trial_usd: 'float' = 0.0, objective: 'Objective | None' = None, pareto: 'bool' = False, objective_items: 'int' = 1, emit_progress: 'bool' = False, pipeline: 'str | None' = None) -> 'None'
 ```
 
 **Methods**
@@ -5303,22 +5371,6 @@ critiques itself (see :class:`VerifierStop`'s assembly check).
 - `progress(self, output: 'Output[JSONValue]') -> 'float'` — A pure ranking score in ``[0, 1]`` — higher is closer to the goal.
 - `satisfied(self, output: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime') -> 'bool'` — Whether ``output`` clears the goal. May run a leaf (``VerifierStop``).
 
-### `branch`
-
-*function*
-
-Construct a runnable :class:`Router` composition step (C1).
-
-Classify each item with ``classifier`` and dispatch it down the matching ``branches``
-node — through the same step machinery as the branch, so a branch may be a
-``Sink``/``Batch``/``Filter``/``Aggregator``. Totality is enforced at construction (an
-uncovered label raises ``UnroutableLabelError``); the Workflow's ``check_types`` then
-verifies every branch accepts the upstream output.
-
-```python
-branch(classifier: 'Classifier', branches: 'dict[str, Node]', *, name: 'str' = 'router') -> 'Router'
-```
-
 ### `RubricThreshold`
 
 *class* — bases: `StopCondition`
@@ -5382,18 +5434,50 @@ VerifierStop(verifier: 'GatedVerifier') -> 'None'
 - `progress(self, output: 'Output[JSONValue]') -> 'float'` — A pure ranking score in ``[0, 1]`` — higher is closer to the goal.
 - `satisfied(self, output: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime') -> 'bool'` — Whether ``output`` clears the goal. May run a leaf (``VerifierStop``).
 
+### `feature_loop`
+
+*function*
+
+```python
+feature_loop(body: 'Definition', *, until: 'StopCondition', max_iters: 'int', **kwargs: 'object') -> 'Refine'
+```
+
+Convenience alias matching the vision vocabulary: a feature-improvement loop.
+
+Identical to constructing :class:`Refine` directly; the keyword-only form reads as
+"loop this feature body until ``until``, but never past ``max_iters``".
+
+### `branch`
+
+*function*
+
+```python
+branch(classifier: 'Classifier', branches: 'dict[str, Node]', *, name: 'str' = 'router') -> 'Router'
+```
+
+Construct a runnable :class:`Router` composition step (C1).
+
+A thin, readable constructor: classify each item with ``classifier`` and dispatch it
+down the matching ``branches`` node. Totality is enforced at construction (an
+uncovered label raises :class:`~crawfish.nodes.router.UnroutableLabelError`); the
+Workflow's ``check_types`` then verifies every branch accepts the upstream output.
+
 ### `Program`
 
 *class* — bases: `Workflow`
 
-A typed directed graph whose edges may cycle (C2a).
+A typed directed graph whose edges may cycle (CRA-206 C2a).
 
 Reuses the :class:`Workflow` kernel (``_run_step``, ``check_types`` adjacency, the F-2
-ledger); the difference is the *driver* — it walks edges per item rather than running
+ledger) — the difference is the *driver*: it walks edges per item rather than running
 ``for step in steps`` once. Every back-edge is a content-addressed version transition
 (``Output.derive`` mints a fresh sha; no in-place mutation) guarded by a deterministic
-predicate + bound. Cycles are bounded by iteration / shared budget / cancel / calibrated
-no-progress — never wall-clock.
+predicate + bound. Cycles are bounded by iteration / shared budget / cancel /
+calibrated no-progress — never wall-clock.
+
+C2a is the spine (driver + assembly checks). Per-iteration ledger versioning + durable
+resume is layered on by C2b (``run(..., resume=True)`` over the F-2 composite-key
+ledger); recurse (C3) reuses this kernel with a depth bound.
 
 ```python
 Program(*, name: 'str' = 'program', runtime: 'AgentRuntime | None' = None, version: 'str' = '0.1') -> 'None'
@@ -5401,9 +5485,10 @@ Program(*, name: 'str' = 'program', runtime: 'AgentRuntime | None' = None, versi
 
 **Methods**
 
+- `check_types(self) -> 'None'` — Validate a (possibly cyclic) graph: forward adjacency + every back-edge.
+- `edge(self, source: 'Node', target: 'Node', *, when: 'EdgeWhen | None' = None, max_visits: 'int | None' = None, on_stuck: "Literal['dead_letter', 'return_last']" = 'return_last', progress: 'Callable[[Output[JSONValue]], float] | None' = None, rubric_std: 'float' = 0.0, no_progress_patience: 'int' = 1, edge_id: 'str | None' = None) -> 'Edge'` — Wire a directed edge ``source -> target``; a back-edge (target earlier than
+- `run(self, prompt: 'str | None' = None, *, ctx: 'RunContext | None' = None, runtime: 'AgentRuntime | None' = None, resume: 'bool' = False) -> 'list[Output[JSONValue]]'` — Run the program graph per item, walking forward and taking back-edges.
 - `step(self, node: 'Node') -> 'Node'` — Register a step (a graph node) and return it for edge wiring.
-- `edge(self, source: 'Node', target: 'Node', *, when: 'EdgeWhen | None' = None, max_visits: 'int | None' = None, on_stuck: "Literal['dead_letter', 'return_last']" = 'return_last', progress: 'Callable[[Output[JSONValue]], float] | None' = None, rubric_std: 'float' = 0.0, no_progress_patience: 'int' = 1, edge_id: 'str | None' = None) -> 'Edge'` — Wire a directed edge; a back-edge (target earlier than source) may cycle and **requires** ``max_visits`` (else ``UnboundedCycleError``).
-- `run(self, prompt: 'str | None' = None, *, ctx: 'RunContext | None' = None, runtime: 'AgentRuntime | None' = None, resume: 'bool' = False) -> 'list[Output[JSONValue]]'` — Run the program graph per item, walking forward and taking back-edges; ``resume=True`` replays committed iterations from the F-2 ledger at $0.
 
 ### `Edge`
 
@@ -5411,19 +5496,15 @@ Program(*, name: 'str' = 'program', runtime: 'AgentRuntime | None' = None, versi
 
 A directed edge in a :class:`Program` graph; a *back*-edge may cycle.
 
-``source``/``target`` are step indices. A back-edge (``target <= source``) re-enters the
-region ``[target .. source]`` while ``when`` holds, bounded by ``max_visits`` (a hard
-ceiling, assembly-required for a back-edge), a shared ``CostBudget``, cooperative cancel,
-and a calibrated no-progress detector. ``on_stuck`` names the terminal action when the
-bound trips without ``when`` going false.
+``source``/``target`` are step indices. A back-edge (``target <= source``) re-enters
+the region ``[target .. source]`` while ``when`` holds, bounded by ``max_visits`` (a
+hard ceiling, assembly-required for a back-edge), a shared ``CostBudget``, cooperative
+cancel, and a calibrated no-progress detector. ``on_stuck`` names the terminal action
+when the bound trips without ``when`` going false.
 
 ```python
-Edge(source: 'int', target: 'int', when: 'EdgeWhen | None' = None, max_visits: 'int | None' = None, edge_id: 'str' = ..., on_stuck: "Literal['dead_letter', 'return_last']" = 'return_last', progress: 'Callable[[Output[JSONValue]], float] | None' = None, rubric_std: 'float' = 0.0, no_progress_patience: 'int' = 1) -> None
+Edge(source: 'int', target: 'int', when: 'EdgeWhen | None' = None, max_visits: 'int | None' = None, edge_id: 'str' = <factory>, on_stuck: "Literal['dead_letter', 'return_last']" = 'return_last', progress: 'Callable[[Output[JSONValue]], float] | None' = None, rubric_std: 'float' = 0.0, no_progress_patience: 'int' = 1) -> None
 ```
-
-**Properties**
-
-- `is_back_edge` — `True` when ``target <= source`` (the edge re-enters an earlier region).
 
 ### `ProgramResult`
 
@@ -5439,24 +5520,28 @@ ProgramResult(output: 'Output[JSONValue]', visits: 'dict[str, int]', stopped: "L
 
 *class* — bases: `ValueError`
 
-Raised at assembly when a back-edge has no termination bound. A cycle that can iterate
-without a ``max_visits`` ceiling could loop forever, so an unbounded back-edge is rejected
-before it can run.
+Raised at assembly when a back-edge has no termination bound.
+
+A cycle that can iterate without a ``max_visits`` ceiling could loop forever; the
+``Program`` driver bounds cycles by iteration / budget / cancel / no-progress —
+**never wall-clock** — so an unbounded back-edge is rejected before it can run.
 
 ### `recurse`
 
 *function*
 
-Construct a bounded, self-referential :class:`Recurse` over a frozen Definition (C3).
-
-``max_depth`` is mandatory (``None`` ⇒ :class:`UnboundedRecursionError` at construction);
-``base_case`` is a pure predicate that stops descent; ``combine`` folds the descent-order
-children (an existing reducer like ``cw.collect`` works). The descent is whole-tree
-budget-bounded and content-addressed (each level mints a fresh sha).
-
 ```python
 recurse(body: 'Definition', *, base_case: 'BaseCase', max_depth: 'int | None', combine: 'Combine', on_stuck: "Literal['dead_letter', 'return_last']" = 'return_last', **kwargs: 'object') -> 'Recurse'
 ```
+
+Construct a bounded, self-referential :class:`Recurse` over a frozen Definition.
+
+``max_depth`` is mandatory (``None`` ⇒ :class:`UnboundedRecursionError` at construction
+/ assembly); ``base_case(output, depth) -> bool`` is a pure predicate that stops descent,
+where ``depth`` is the **engine-authoritative** 0-based index of the level that produced
+``output`` (never inferred from the stochastic Output); ``combine`` folds the descent-
+order children (an existing reducer like ``cw.collect`` works). The descent is whole-tree
+budget-bounded and content-addressed (each level mints a fresh sha).
 
 ### `Recurse`
 
@@ -5464,17 +5549,32 @@ recurse(body: 'Definition', *, base_case: 'BaseCase', max_depth: 'int | None', c
 
 A depth-guarded back-edge re-entering the same FROZEN ``Definition`` (C3).
 
-Recursion is a :class:`Program` back-edge into the *same* Definition, pushing a frozen
-version onto a per-item depth stack. Reuses the C2 kernel; the deltas are a **depth bound**
-(``max_depth``, assembly-required) and a pure **base-case predicate**. Each descent
-``derive()``s a fresh content sha; ``combine`` folds the children in descent (depth-first)
-order. The reduced Output is **tainted if ANY child input was tainted** (taint = union; a
-fold never launders taint). Halts on ``base_case`` / ``depth >= max_depth`` / budget /
-cancel / calibrated no-progress — never wall-clock.
+Resolves the vision §5 open question: recursion is a :class:`Program` back-edge into
+the *same* Definition, pushing a frozen version onto a per-item depth stack. Reuses the
+C2 kernel; the only deltas are a **depth bound** (``max_depth``, assembly-required) and
+a pure **base-case predicate** ``base_case(output, depth) -> bool``. Each descent
+``derive()``s a fresh content sha (no in-place mutation); the base case stops descent;
+``combine`` folds the children in descent (depth-first) order. The reduced Output is
+**tainted if ANY child input was tainted** (taint = union; a vote/fold never launders
+taint).
+
+**Safety: depth is engine-authoritative.** ``base_case`` receives the trusted, 0-based
+descent ``depth`` the engine owns (the index of the level that just produced
+``output``) — never a depth inferred from the stochastic model Output. A body need not
+echo any depth marker, so a "how deep am I / am I done" decision read from fluid output
+is unsound; termination decisions therefore run off trusted engine state.
+
+Halts on ``base_case`` / ``depth >= max_depth`` / budget / cancel / calibrated
+no-progress — never wall-clock. Each level checkpoints into the F-2 depth-variant
+ledger, so resume at depth *k* replays ``1..k-1`` at $0.
+
+```python
+Recurse(body: 'Definition', *, base_case: 'BaseCase', max_depth: 'int | None', combine: 'Combine', on_stuck: "Literal['dead_letter', 'return_last']" = 'return_last', edge_id: 'str' = 'recurse', progress: 'Callable[[Output[JSONValue]], float] | None' = None, rubric_std: 'float' = 0.0, no_progress_patience: 'int' = 1, name: 'str' = 'recurse') -> 'None'
+```
 
 **Methods**
 
-- `execute(self, seed: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime', *, ledger: 'ExecutionLedger | None' = None, resume: 'bool' = False) -> 'RecurseResult'` — Descend the frozen body until the base case / a bound, then fold; ``resume`` replays committed depths at $0.
+- `execute(self, seed: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime', *, ledger: 'ExecutionLedger | None' = None, resume: 'bool' = False) -> 'RecurseResult'` — Descend the frozen body on ``seed`` until the base case / a bound, then fold.
 
 ### `RecurseResult`
 
@@ -5491,19 +5591,982 @@ RecurseResult(output: 'Output[JSONValue]', depth_reached: 'int', stopped: "Liter
 *class* — bases: `ValueError`
 
 Raised at assembly when :func:`recurse` is built without a ``max_depth`` bound.
-``max_depth`` is the termination argument (distinct from a loop's ``max_visits``); the
-whole-tree shared budget is the second guard against ``O(b^d)`` fan-out.
 
-### `feature_loop`
+``max_depth`` is the termination argument (distinct from a loop's ``max_visits``):
+a recursion with no depth ceiling could descend forever, so it is rejected before it
+can run. The whole-tree shared budget is the second guard against ``O(b^d)`` fan-out.
+
+### `KnobDomain`
+
+*class* — bases: `BaseModel`
+
+One tunable knob: where it lives (``path``), its candidate ``values``, and whether
+the Tuner is *allowed* to move it (``tunable``).
+
+``path`` is a dotted address into the Definition's knob space — the authoring vocabulary
+the mutators already speak: ``agent.<role>.prompt`` / ``.model`` / ``.temperature`` /
+``.sample_k`` / ``.context_strategy`` / ``.policies``, ``team.coordination``,
+``injected_prompts``. ``tunable=False`` pins the knob: it is declared (so its domain is
+documented and hashed) but :meth:`TuneSpec.named_knobs` will not yield it and a
+TuneSpec-driven mutator must refuse to move it.
+
+### `TuneSpec`
+
+*class* — bases: `BaseModel`
+
+Axis 1 as data: the set of knobs a Tuner may search, content-hashable + authorable.
+
+This is the typed form of ``tune.toml``. It is *static config* — it enters the
+Definition's content identity via :func:`tune_spec_sha` (folded into ``Definition.tune``;
+see docs/_changelog/CRA-209-tune-wiring.md) so editing the search space changes the sha,
+exactly like editing any other knob. It carries **no** free model text and never reads a
+fluid value: the security boundary is upheld because a knob *domain* is author config, not
+session data.
+
+**Methods**
+
+- `is_tunable(self, path: 'str') -> 'bool'` — True iff ``path`` is declared **and** tunable. Unknown paths are not tunable.
+- `named_knobs(self) -> 'Iterator[tuple[str, KnobDomain]]'` — Yield ``(path, domain)`` for every **tunable** knob, sorted by path.
+- `to_dict(self) -> 'dict[str, object]'` — The canonical, JSON-ready payload (path-sorted) for export + hashing.
+
+### `tune_spec_sha`
 
 *function*
 
 ```python
-feature_loop(body: 'Definition', *, until: 'StopCondition', max_iters: 'int', **kwargs: 'object') -> 'Refine'
+tune_spec_sha(spec: 'TuneSpec') -> 'str'
 ```
 
-Convenience alias matching the vision vocabulary: a feature-improvement loop.
+Deterministic 12-char content hash of a :class:`TuneSpec`.
 
-Identical to constructing :class:`Refine` directly; the keyword-only form reads as
-"loop this feature body until ``until``, but never past ``max_iters``".
+The seam for folding the tune-spec into a Definition's content identity:
+``Definition.content_dict()`` folds this in (only when the spec is non-empty) so editing the
+search space changes the sha. An empty spec hashes to a stable constant — but a tune-less
+Definition OMITS the key entirely (see ``Definition.content_dict``), so adding an *empty*
+``tune.toml`` is hash-neutral.
+
+### `train`
+
+*function*
+
+```python
+train(definition: 'Definition') -> 'Definition'
+```
+
+Enter **train mode**: return an *unfrozen* copy whose knobs may change (CRA-209).
+
+Mirrors PyTorch's ``.train()``. The returned Definition is mutable (``frozen is False``)
+with a **fresh** ``Version`` — so a training mutation is a copy-on-write that mints a new
+``version.sha`` when re-frozen, never an in-place edit of the original frozen artifact.
+Consequential side effects are forbidden in this mode (:func:`guard_consequential`).
+
+Idempotent in spirit: ``eval(train(d))`` re-hashes to ``d``'s eval sha (see :func:`eval`).
+
+### `eval`
+
+*function*
+
+```python
+eval(definition: 'Definition') -> 'Definition'
+```
+
+Enter **eval mode**: return the frozen, reproducible artifact (CRA-209).
+
+Mirrors PyTorch's ``.eval()`` and is the default for a loaded Definition. Re-freezes via
+the content-hash path: the returned Definition is frozen with ``version.sha`` set to its
+canonical :meth:`Definition.content_sha`, so ``eval(train(d))`` is idempotent — it hashes
+back to the same eval sha whenever the knobs are unchanged. Only in this mode may a
+consequential Sink fire or a run be recorded.
+
+### `guard_consequential`
+
+*function*
+
+```python
+guard_consequential(definition: 'Definition') -> 'None'
+```
+
+Raise unless ``definition`` is in eval mode (frozen) — the load-bearing rule.
+
+The single gate every consequential boundary calls before committing an irreversible
+side effect (a Sink write, a recorded run): a side effect against an unfrozen
+(train-mode) Definition is forbidden, because a training artifact has no stable content
+identity to key idempotency or attribute the effect to. Raises :class:`FrozenError`
+(the established "wrong mutability state" signal); against an eval-mode Definition it is
+a no-op.
+
+### `Objective`
+
+*class* — bases: `BaseModel`
+
+Cost-regularized loss the Tuner maximizes among gate-passing candidates (CRA-213).
+
+``value(scores, cost_usd=…, ece=…) = Σ wᵢ·scoreᵢ − λ·cost_term − μ·ece``. Pure arithmetic
+over **passed-in values**: ``cost_usd`` (from the deterministic :func:`estimate_cost`) and
+``ece`` (from AL-T4's calibration metric — passed as a value; this module never imports
+``calibrate``, keeping the two decoupled). Same inputs ⇒ same scalar.
+
+The cost term is **normalized** so ``λ`` is unit-free and portable: each candidate's cost
+is divided by ``cost_baseline_usd`` (set this to the cheapest candidate's cost, so the
+cheapest contributes a penalty of 1.0 and ``λ`` reads as "quality points I will trade for
+one cheapest-candidate's worth of spend"). With no baseline the raw dollar cost is used.
+
+The hard regression gate stays in the Tuner: this objective only **re-ranks** among
+candidates that already pass it, so it can never promote a quality regression.
+
+``ObjectiveForm.EPSILON`` switches to the ε-constraint form — minimize cost subject to
+``quality >= quality_floor`` — surfaced through ``feasible`` on the score.
+
+**Methods**
+
+- `quality(self, scores: 'Mapping[str, float]') -> 'float'` — The weighted quality sum ``Σ wᵢ·scoreᵢ``.
+- `score(self, scores: 'Mapping[str, float]', *, cost_usd: 'float', ece: 'float' = 0.0) -> 'ObjectiveScore'` — The full decomposed objective for one candidate (deterministic + pure).
+- `value(self, scores: 'Mapping[str, float]', *, cost_usd: 'float', ece: 'float' = 0.0) -> 'float'` — The scalar objective ``Σ wᵢ·scoreᵢ − λ·cost − μ·ece`` (the ranking key).
+
+### `ObjectiveForm`
+
+*class* — bases: `str`, `Enum`
+
+How the :class:`Objective` scalarizes quality against cost.
+
+Members: `LINEAR` = `'linear'`, `EPSILON` = `'epsilon'`
+
+### `ObjectiveScore`
+
+*class* — bases: `BaseModel`
+
+The scalar an :class:`Objective` assigns a candidate, with its decomposition.
+
+``value`` is what the Tuner ranks on (higher is better). The component fields make the
+decision explainable in the trial log: ``quality`` is the weighted score sum,
+``cost_penalty`` is ``λ·cost`` (normalized), ``ece_penalty`` is ``μ·ece``. ``feasible``
+is the ε-constraint gate (always True in linear form).
+
+### `calibrate`
+
+*function*
+
+```python
+calibrate(definition: 'Definition', golden: 'GoldenSet | Sequence[EvalCase]', *, runs: 'int' = 5, ctx: 'RunContext', runtime: 'AgentRuntime', rubric: 'Rubric | None' = None, confidence_field: 'str' = 'confidence', cost_per_run_usd: 'float' = 0.0, target_accuracy: 'float' = 0.9, n_bins: 'int' = 10, alpha: 'float' = 0.05, n_resamples: 'int' = 1000, base_seed: 'int' = 0, inputs_for: 'Callable[[EvalCase], dict[str, JSONValue]] | None' = None) -> 'CalibrationReport'
+```
+
+Run each golden case ``runs`` times under distinct derived seeds → a report.
+
+For each case (sorted by id), execute the Definition ``runs`` times against ``runtime``,
+each run carrying a per-run ``decode_seed`` derived purely from ``base_seed`` (so the
+same ``(base_seed, runs)`` reproduces the seed schedule, and a seed-honouring runtime
+varies its decode per run). The rubric scores every output; per-metric mean/std is the
+noise band; structural disagreement across a case's re-runs is the ``output_variance``.
+When cases carry labels, confidence (via :func:`crawfish.escalate.extract_confidence`)
+is calibrated against correctness — Brier (primary), ECE + bootstrap CI (diagnostic), a
+reliability curve, and an evidence-derived abstention threshold/rate.
+
+**Refuses a ``RecordReplayRuntime``** (raises :class:`CalibrationError`): replay zeroes
+variance, so calibrating over it would be a fabricated zero-noise report.
+
+**Bounded** by ``runs × len(golden)`` and the autonomy ceiling: each run charges
+``cost_per_run_usd`` against ``ctx.cost_budget`` and checks ``ctx.cancel_token``; a
+ceiling breach returns a **partial** report over what was measured (``partial=True``),
+the Tuner's ceiling-returns-base analogue — calibrate never spends unbounded cost.
+
+Deterministic everywhere except the model call: seed derivation, aggregation, std,
+Brier, ECE and its bootstrap CI are pure arithmetic over a seeded local RNG.
+
+### `CalibrationReport`
+
+*class* — bases: `BaseModel`
+
+The frozen, ``org_id``-tagged measurement of a Definition's noise + calibration.
+
+Consumed by the variance-aware promotion gate (AL-T5) and the cost-regularized
+objective (AL-T3): both read ``rubric_std`` (the per-metric noise band) and the
+calibration fields. Field contract (stable for those consumers):
+
+* ``rubric_mean`` / ``rubric_std`` — per-metric mean and *population* std across the
+  ``runs × len(golden)`` scored outputs (``std`` is the noise band a ``*_std`` gate
+  keys off; ``0.0`` for a single observation or a fully deterministic runtime).
+* ``output_variance`` — mean fraction of structurally-differing fields across the
+  re-runs of each case (via :func:`~crawfish.validation.structural_diff`); ``0.0`` iff
+  every re-run of every case agreed byte-for-byte (the deterministic-runtime case).
+* ``brier`` — primary calibration metric (mean squared error of confidence vs.
+  correctness); ``None`` when no case carried a label (correctness undefined).
+* ``ece`` / ``ece_ci`` — Expected Calibration Error diagnostic and its
+  ``(lo, hi)`` bootstrap CI; both ``None`` without labels. ``ece`` is in ``[0,1]``.
+* ``reliability`` — the equal-mass reliability curve the abstention threshold is read
+  off (empty without labels).
+* ``abstention_threshold`` — the confidence below which acting is unsafe (derived from
+  ``reliability``; ``1.0`` — abstain on everything — without labels or evidence).
+* ``abstention_rate`` — the share of scored outputs whose confidence fell below
+  ``abstention_threshold`` (what an ``abstain_below`` policy would abstain on).
+* ``determinism_tier`` — the runtime's advertised determinism capability (F-5); when it
+  is not ``honors-seed`` a non-zero ``infra_variance_floor`` is attributed to infra so
+  model stochasticity is not conflated with backend nondeterminism.
+* ``base_seed`` / ``runs`` / ``cases`` — the reproducibility coordinates: the same
+  ``(base_seed, runs)`` over the same golden yields an identical per-run seed schedule.
+* ``partial`` — ``True`` when a budget/cancel ceiling cut the measurement short (the
+  Tuner's ceiling-returns-base analogue); the report still reflects what was measured.
+
+**Methods**
+
+- `gate_safe(self, margin: 'float') -> 'bool'` — True if a calibration gate may rely on ``ece`` at this ``margin`` (F-8).
+
+### `extract_confidence`
+
+*function*
+
+```python
+extract_confidence(output: 'Output[JSONValue]', *, field: 'str' = 'confidence') -> 'float | None'
+```
+
+Read a ``[0,1]`` self-reported confidence from ``output``, or ``None`` if absent.
+
+Resolution order (deterministic, no model call):
+
+1. If the typed value is a mapping carrying ``field``, coerce that to ``[0,1]``.
+2. Otherwise, if the whole value is itself numeric, use it.
+3. Otherwise ``None`` — the run reported no confidence (the caller decides whether a
+   missing confidence abstains or proceeds).
+
+The value is *measured*, never trusted as an instruction: a fluid Output's
+self-reported confidence is just a number to be calibrated against ground truth.
+
+### `abstention_threshold`
+
+*function*
+
+```python
+abstention_threshold(bin_confidence: 'list[float]', bin_accuracy: 'list[float]', bin_count: 'list[int]', *, target: 'float' = 0.9, default: 'float' = 1.0) -> 'float'
+```
+
+Derive the confidence below which acting is unsafe, from a reliability curve.
+
+Given a calibration curve as parallel per-bin lists — mean predicted ``confidence``,
+observed ``accuracy``, and population ``count`` — return the **lowest bin confidence
+at which observed accuracy still clears ``target``**, treating every lower-confidence
+bin as the abstain region. This is the evidence-derived replacement for the old
+guessed escalation constant: the threshold is *read off measurements*, not chosen.
+
+Semantics:
+
+* Bins are considered in ascending confidence order (sorted here, so caller order
+  doesn't matter).
+* The threshold is the smallest bin confidence ``c`` such that *every* bin with
+  confidence ``>= c`` meets ``accuracy >= target`` — i.e. the boundary above which the
+  model is reliable. Acting is permitted at ``confidence >= threshold``.
+* Empty bins (``count == 0``) carry no evidence and are skipped.
+* If no confidence level is reliable (or there is no evidence), return ``default``
+  (``1.0`` — abstain on everything; fail safe).
+
+Pure and deterministic: a function of the recorded curve only.
+
+### `promote_against_baseline`
+
+*function*
+
+```python
+promote_against_baseline(store: 'Store', name: 'str', candidate: 'dict[str, float]', *, primary: 'str', alpha: 'float' = 0.05, tolerance: 'float' = 0.0, org_id: 'str' = 'local', fresh_sample: 'dict[str, float] | None' = None, shrink_weight: 'float' = 1.0) -> 'PromotionVerdict'
+```
+
+Variance-aware promotion gate (AL-T5) — promote only past the noise band.
+
+Reads the stored baseline scores **and** the parallel per-metric ``std`` record
+(:func:`load_baseline_std`). The candidate is promoted iff BOTH hold:
+
+* **Hard gate (unchanged F-3 invariant).** It does not regress on *any* metric —
+  :func:`~crawfish.metrics.is_regression_variance_aware` with the recorded ``std``
+  (so a within-noise dip is tolerated, but a real drop on a non-primary metric still
+  vetoes promotion). A candidate that maxes ``primary`` while regressing another
+  metric is rejected.
+* **Improvement clears the band.** The ``primary`` metric's gain over baseline
+  exceeds its noise band ``k·std`` (``k`` derived from ``alpha`` via
+  :func:`~crawfish.metrics.noise_band`). A within-noise "improvement" does NOT
+  promote.
+
+**Back-compat (std=0 ⇒ k·std=0).** With no std record (pre-CRA-212 baseline) or a
+zero std, the band is zero-width: the hard gate reduces byte-for-byte to
+:func:`is_regression` and the improvement test reduces to "primary gain > 0" — i.e.
+today's single-point behaviour. With no baseline at all, promotion is allowed
+(nothing to regress against), mirroring :func:`gate_against_baseline`.
+
+**Winner's-curse correction (F-8).** When ``fresh_sample`` is given, the promoted
+metrics are shrunk toward that fresh, independent estimate
+(:func:`~crawfish.experiment.winners_curse_shrink`) before being stored as the new
+baseline, so the bar cannot ratchet up on selection noise. The stored baseline keeps
+the recorded ``std`` band. (A rejected candidate writes nothing.)
+
+Deterministic and pure given the recorded scores + std: same inputs ⇒ same verdict.
+
+### `PromotionVerdict`
+
+*class*
+
+The outcome of :func:`promote_against_baseline` — promote-or-not + the why.
+
+``promoted`` is the decision; ``regressed`` is the hard-gate result (any metric fell
+past its noise band — vetoes promotion regardless of gains); ``cleared_band`` is the
+improvement result (the primary metric's gain exceeded ``k·std``). A candidate is
+promoted iff it did **not** regress **and** it cleared the band.
+
+```python
+PromotionVerdict(promoted: 'bool', regressed: 'bool', cleared_band: 'bool', primary: 'str', primary_gain: 'float', primary_band: 'float', reason: 'str') -> None
+```
+
+### `load_baseline_std`
+
+*function*
+
+```python
+load_baseline_std(store: 'Store', name: 'str', *, org_id: 'str' = 'local') -> 'dict[str, float] | None'
+```
+
+Load the per-metric std recorded alongside a baseline, or ``None`` if absent.
+
+``None`` (no std record — every baseline saved before CRA-212, or any saved without
+a ``std``) is the signal that the variance-aware gate must fall back to a zero-width
+noise band, reducing to :func:`gate_against_baseline`.
+
+### `save_baseline_from_report`
+
+*function*
+
+```python
+save_baseline_from_report(store: 'Store', name: 'str', report: 'CalibrationReport', *, org_id: 'str' = 'local') -> 'None'
+```
+
+Persist a baseline from a :class:`~crawfish.metrics.CalibrationReport`.
+
+Convenience over :func:`save_baseline`: stores the report's ``rubric_mean`` as the
+baseline scores and its ``rubric_std`` as the noise band the variance-aware
+promotion gate keys off. The report's ``org_id`` is respected when ``org_id`` is left
+at its default, so the baseline lands in the report's tenancy.
+
+### `state_dict`
+
+*function*
+
+```python
+state_dict(definition: 'Definition') -> 'StateDict'
+```
+
+Extract a Definition's tunable knobs as a references-by-version :class:`StateDict`.
+
+Excludes architecture keys (team topology, IO schema, dependencies) by construction —
+only the per-role tunable knobs, the coordination choice, ``injected_prompts``, and the
+dependency *references* (as summoned-unit ``DefinitionRef``\ s) are carried. Deterministic
+and JSON-only. ``d.load_state(d.state_dict())`` re-mints the same content sha
+(sha-identity), since the same knobs re-freeze to the same hash.
+
+### `load_state`
+
+*function*
+
+```python
+load_state(definition: 'Definition', state: 'StateDict', *, strict: 'bool' = True, only: 'list[str] | None' = None) -> 'Definition'
+```
+
+Transfer learned knob VALUES from ``state`` onto ``definition`` (copy-on-write).
+
+Returns a NEW, re-frozen Definition (fresh content sha via the Tuner's ``_refreeze``) —
+the target is never mutated in place. Only STATIC knobs move; no fluid value can cross.
+
+* ``strict=True`` (default): raise :class:`IncompatibleStateError` if the architectures
+  differ (``state.structure_sha != _structure_sha(definition)``).
+* ``strict=False``: load the structural **intersection** — apply knobs only for the
+  roles present in BOTH shapes, skipping the rest.
+* ``only``: restrict which knob groups transfer. Members of
+  ``{"prompt", "model", "context_strategy", "policies", "decode", "fewshots",
+  "coordination"}``; e.g. ``only=["fewshots"]`` transfers only the injected few-shot
+  prompts. ``None`` transfers everything.
+
+### `StateDict`
+
+*class* — bases: `BaseModel`
+
+The tunable knobs of a Definition as references-by-version — the 'weights' (CRA-210).
+
+Carries ONLY what the Tuner/LearningLoop may move: per-role knobs (:class:`RoleKnobs`),
+the team ``coordination`` topology choice, ``injected_prompts``, and summoned units as
+``DefinitionRef`` (``{id, version}``) references-by-version. It carries **no**
+architecture (team topology beyond the coordination choice, IO schema, dependency
+structure) and **no** executable nested Definition — JSON only.
+
+:attr:`structure_sha` is the content hash of the architecture the knobs were extracted
+from (sorted role set, IO parameter names/types/flows, dependency ids, coordination
+kind). Two Definitions with the same ``structure_sha`` are transfer-compatible.
+:attr:`sha` is the content hash of the knob VALUES — editing any knob changes it
+(the AC: "editing a knob changes ``StateDict.sha``").
+
+### `RoleKnobs`
+
+*class* — bases: `BaseModel`
+
+The tunable knobs for one role — the per-role 'weights' (CRA-210).
+
+Every field is a STATIC, author-supplied knob the Tuner is allowed to search; none is
+fluid/session-derived. Decode knobs are carried only when pinned (``None`` ⇒ absent),
+mirroring the hash-neutral-when-None law on :class:`AgentSpec`.
+
+### `IncompatibleStateError`
+
+*class* — bases: `TypeError`
+
+``load_state(strict=True)`` was asked to load a state onto an incompatible shape.
+
+Architecture (team topology / IO schema / dependencies) is identified by
+:attr:`StateDict.structure_sha`; a mismatch means the knobs would land on a different
+architecture. ``strict=True`` raises this; ``strict=False`` loads the structural
+intersection instead (only the roles/knobs both shapes share).
+
+### `ServingLoop`
+
+*class*
+
+A serving-time explore/exploit overlay over a promoted best + a trial candidate.
+
+Routes ``(1-ε)`` of live items to ``promoted`` and ``ε`` to ``trial``, choosing the
+explored items by a seeded hash of each recorded ``item_id`` (deterministic under
+replay). ε follows a decaying schedule and is bounded by the shared ``CostBudget``: once
+the budget is exhausted, every item routes to the promoted best (no exploration).
+
+The trial graduates ONLY through the eval gate — this loop decides *whether enough
+evidence has accrued* (pre-registered N), not whether to promote; promotion stays with
+the :class:`LearningLoop` (eval-gated + reversible). Both arms are frozen, eval-mode
+Definitions; only STATIC knobs are ever promoted.
+
+```python
+ServingLoop(promoted: 'Definition', trial: 'Definition', schedule: 'ExploreSchedule', *, seed: 'int' = 0, sample_size: 'int' = 100, min_lift: 'float' = 0.0, org_id: 'str' = 'local') -> 'None'
+```
+
+**Methods**
+
+- `explored_items(self, item_ids: 'list[str]', ctx: 'RunContext') -> 'list[str]'` — The deterministic subset of ``item_ids`` routed to the trial (the explored set).
+- `graduate(self, trial_rewards: 'list[float]', baseline_rewards: 'list[float]') -> 'GraduationVerdict'` — Decide whether the trial has accrued enough evidence to graduate (no-peeking).
+- `route(self, item_id: 'str', ctx: 'RunContext') -> 'ServingDecision'` — Route one live item to the promoted best or the trial candidate.
+
+### `ServingDecision`
+
+*class* — bases: `BaseModel`
+
+The routing verdict for one live item (the audit record).
+
+``explore`` is True iff the item was routed to the trial candidate. ``version`` is the
+routed Definition's ``str(version)``. The decision is a pure function of
+``(item_id, seed, schedule, served, budget)`` — deterministic under replay.
+
+### `ExploreSchedule`
+
+*class* — bases: `BaseModel`
+
+The ε dial + its decay — a decaying-ε schedule (CRA-214).
+
+``epsilon`` is the base explore rate in ``[0, 1]``; ``decay`` shrinks it as served items
+accumulate: the effective rate after ``n`` served items is
+``epsilon / (1 + decay * n)`` (so ``decay=0`` is a flat fixed-ε). ``epsilon=0`` disables
+exploration entirely (the no-op overlay AC).
+
+**Methods**
+
+- `rate_at(self, served: 'int') -> 'float'` — The effective explore rate after ``served`` items (decaying-ε).
+
+### `ExploreStrategy`
+
+*class* — bases: `str`, `Enum`
+
+How a :class:`ServingLoop` chooses *which* items explore.
+
+``HASH`` (the shipped, deterministic-under-replay router) routes by a seeded hash of the
+recorded ``item_id``. ``UCB1``/``THOMPSON`` are reserved hooks: they need only per-arm
+reward mean + count (already in the emission ledger) and are out-of-scope here as a
+*router*, declared so a future strategy plugs in without an API change.
+
+Members: `HASH` = `'hash'`, `UCB1` = `'ucb1'`, `THOMPSON` = `'thompson'`
+
+### `GraduationVerdict`
+
+*class* — bases: `BaseModel`
+
+The pre-registered-N graduation decision for a trial arm (no-peeking, CRA-214).
+
+``decided`` is False until ``n_outcomes >= sample_size`` — the gate refuses a verdict
+before the pre-registered sample size is reached, so continuous peeking cannot inflate
+the false-promotion rate. Once decided, ``graduate`` is True iff the trial's mean reward
+strictly beats the baseline's by at least ``min_lift`` (the eval gate still applies on
+promotion via the :class:`LearningLoop`).
+
+### `QuorumRuntime`
+
+*class* — bases: `AgentRuntime`
+
+Sample the same request ``k`` times and reduce by a typed, pure consensus vote.
+
+``k`` defaults to the Definition's tunable ``sample_k`` knob (AL-T1, read via
+``request.resolved_decode()``) so the Tuner can search the cheapest ``k`` that hits a
+reliability target; an explicit ``k`` overrides it, and ``3`` is the floor when neither
+is pinned. ``consensus`` is any :class:`ConsensusFn` (default :func:`majority_vote`).
+
+``default_text`` is the **declared** fallback (Router dead-letter parity): on abstention
+or no-majority the runtime resolves to this result text instead of a silent pick. With
+no declared default, an abstention raises :class:`QuorumAbstention` — never a silent
+arbitrary winner.
+
+```python
+QuorumRuntime(inner: 'AgentRuntime', *, k: 'int | None' = None, consensus: 'ConsensusFn | None' = None, default_text: 'str | None' = None, base_seed: 'int' = 0, early_stop: 'bool' = True, alpha: 'float' = 0.05, min_k: 'int' = 3) -> 'None'
+```
+
+**Methods**
+
+- `run(self, request: 'RunRequest', ctx: 'RunContext') -> 'RunResult'` — Run the quorum and project to the plain ``RunResult`` (aggregate taint dropped).
+- `run_quorum(self, request: 'RunRequest', ctx: 'RunContext') -> 'QuorumResult'` — Sample k times, vote, and return the winner + aggregate taint + tally.
+
+### `QuorumResult`
+
+*class*
+
+The full quorum outcome: the winner ``RunResult``, its aggregate taint, and tally.
+
+The :class:`~crawfish.runtime.base.AgentRuntime` contract returns only the
+``RunResult``, but ``RunResult`` has no taint field (taint lives on
+:class:`~crawfish.output.Output`). :meth:`QuorumRuntime.run_quorum` returns this richer
+shape so a caller can wrap the winner into a correctly-tainted Output via
+:func:`quorum_output` without re-deriving taint; :meth:`QuorumRuntime.run` projects it
+down to ``result`` for the plain seam.
+
+```python
+QuorumResult(result: 'RunResult', tainted: 'bool', consensus: 'ConsensusResult', samples: 'list[Sample]') -> None
+```
+
+### `QuorumAbstention`
+
+*class* — bases: `RuntimeError`
+
+The vote was ill-defined (no plurality / high-cardinality) — abstain (TS-4).
+
+Raised by :meth:`QuorumRuntime.run` only when the consensus function abstains AND no
+declared ``default`` text is configured to stand in. With a configured default, the
+runtime resolves to the default winner instead of raising (Router dead-letter parity).
+
+### `Sample`
+
+*class*
+
+One stochastic leaf in the quorum: its recorded result and derived taint.
+
+``tainted`` is computed from the request's *fluid* inputs (matching
+``team._result_output``), so the consensus winner can union taint across samples
+without re-deriving it. ``key`` is the consensus function's canonicalised vote key for
+this sample (see :class:`MajorityVote`) — the sampler keys each sample through the same
+function the vote uses, so the running-leader early-stop and the final tally agree.
+
+```python
+Sample(index: 'int', result: 'RunResult', tainted: 'bool', key: 'str') -> None
+```
+
+### `ConsensusResult`
+
+*class*
+
+The pure outcome of a vote over a list of :class:`Sample`.
+
+``winner_text`` is the elected representative result text (``None`` on abstention);
+``abstained`` is True when the plurality is ill-defined. ``tally`` is the per-key vote
+count, and ``runner_up_gap`` is the lead of the winner over the second place (votes),
+surfaced for winner's-curse reporting on rubric-argmax consensus.
+
+```python
+ConsensusResult(winner_text: 'str | None', abstained: 'bool', tally: 'dict[str, int]', winner_key: 'str | None' = None, runner_up_gap: 'int' = 0) -> None
+```
+
+### `ConsensusFn`
+
+*class* — bases: `ABC`
+
+A pure reduction of the recorded samples to one consensus outcome.
+
+Two responsibilities, kept on one object so they cannot drift: :meth:`key_of` maps a
+recorded :class:`RunResult` to the canonical *vote key* (its equivalence class), and
+:meth:`consensus` tallies a list of :class:`Sample` (already keyed via :meth:`key_of`)
+into a :class:`ConsensusResult`. Both are PURE — deterministic over their inputs, no
+model call, no I/O. The sampler keys every sample through :meth:`key_of`, so the
+running-leader early-stop and the final vote share one notion of equality.
+
+**Methods**
+
+- `consensus(self, samples: 'list[Sample]') -> 'ConsensusResult'` — Tally the (ordered, pre-keyed) ``samples`` into one outcome.
+- `key_of(self, result: 'RunResult') -> 'str'` — The canonical vote key (equivalence class) for ``result``.
+
+### `MajorityVote`
+
+*class* — bases: `ConsensusFn`
+
+Modal-output consensus: the most-frequent canonicalised candidate wins.
+
+The estimand is the **modal output** — ``argmax`` of the empirical vote distribution
+over canonicalised keys (sorted-key JSON of the value, or of ``field`` when given), so
+semantically-equal outputs are collapsed before tallying. Mandatory canonicalization
+means ``{"a":1,"b":2}`` and ``{"b":2,"a":1}`` map to one candidate. Ties break
+deterministically toward the **first-seen** key (sample order is preserved); the
+caller's declared ``default`` (in :class:`QuorumRuntime`) stands in on abstention.
+
+Ill-defined plurality ⇒ **abstain** (TS-4): when the candidates are too spread out
+(more distinct candidates than ``floor(k * max_cardinality_ratio)``, or every sample
+distinct when ``k > 1``), no plurality exists, so it abstains rather than crown an
+arbitrary singleton.
+
+```python
+MajorityVote(*, field: 'str | None' = None, max_cardinality_ratio: 'float' = 1.0) -> 'None'
+```
+
+**Methods**
+
+- `consensus(self, samples: 'list[Sample]') -> 'ConsensusResult'` — Tally the (ordered, pre-keyed) ``samples`` into one outcome.
+- `key_of(self, result: 'RunResult') -> 'str'` — Canonicalise the result text (or its ``field``) to a stable vote key.
+
+### `majority_vote`
+
+*function*
+
+```python
+majority_vote(*, field: 'str | None' = None, max_cardinality_ratio: 'float' = 1.0) -> 'ConsensusFn'
+```
+
+Construct a :class:`MajorityVote` consensus (the modal-output estimand).
+
+### `quorum_output`
+
+*function*
+
+```python
+quorum_output(result: 'RunResult', *, produced_by: 'str', tainted: 'bool', output_schema: 'list[Parameter] | None' = None) -> 'Output[JSONValue]'
+```
+
+Wrap a quorum :class:`RunResult` as a typed :class:`Output`, carrying aggregate taint.
+
+The consensus winner's :class:`Output` is tainted iff *any* sample was tainted (the
+union computed by :meth:`QuorumRuntime.run`) — a vote does not launder taint (ALG-7).
+
+### `Abstention`
+
+*class* — bases: `BaseModel`
+
+A typed "I decline to answer" — a first-class Output value, frozen.
+
+Carries the *measured* ``confidence`` (``None`` when the run reported none), the
+``threshold`` it fell under, a human ``reason``, and the producing run's ``tainted``
+bit so taint propagates into the decline. Serialises (via :meth:`as_value`) to a JSON
+dict tagged with :data:`ABSTENTION_MARKER`, which is what makes an abstaining Output
+routable by an :func:`is_abstention` predicate.
+
+**Methods**
+
+- `as_value(self) -> 'dict[str, JSONValue]'` — The JSON dict an abstaining ``Output`` carries as its ``value``.
+
+### `ABSTENTION_MARKER`
+
+*value* — `str`
+
+`ABSTENTION_MARKER = '_abstention'`
+
+### `is_abstention`
+
+*function*
+
+```python
+is_abstention(value: 'JSONValue') -> 'bool'
+```
+
+``True`` iff ``value`` is a tagged :class:`Abstention` dict (a routable predicate).
+
+Pure and total over any JSON value — safe to hand to
+:meth:`crawfish.nodes.router.Classifier.from_predicates` so a ``Router`` can branch
+``Abstention → review_sink``.
+
+### `abstain_below`
+
+*function*
+
+```python
+abstain_below(threshold: 'float', *, field: 'str' = 'confidence', reason: 'str | None' = None) -> 'AbstainDiscipline'
+```
+
+A discipline that turns a low-confidence Output into an :class:`Abstention`.
+
+Mirrors :func:`crawfish.runtime.escalate.confidence_below`, but it acts on a frozen
+:class:`~crawfish.output.Output` (not a raw ``RunResult``) and *declines* rather than
+escalating. The returned callable:
+
+* **measures** the confidence from the Output via
+  :func:`crawfish.escalate.extract_confidence` — a fluid/untrusted self-report is
+  just data, never an instruction;
+* returns a fresh Output carrying an :class:`Abstention` (via
+  :meth:`Output.derive`, so **taint and lineage propagate**) when the confidence is
+  below ``threshold`` **or absent** — a missing confidence abstains, because
+  declining is the fail-safe action and is always allowed;
+* otherwise returns the input Output **unchanged** (confident enough to act).
+
+Deterministic: a pure threshold over a recorded number. Idempotent on an Output that
+already carries an Abstention (it has no readable confidence in ``field``, so it stays
+abstained rather than being re-wrapped).
+
+### `abstain_below_calibrated`
+
+*function*
+
+```python
+abstain_below_calibrated(report: 'CalibrationReport', *, field: 'str' = 'confidence', reason: 'str | None' = None) -> 'AbstainDiscipline'
+```
+
+:func:`abstain_below` wired to a calibration-derived threshold (the sound default).
+
+Reads :attr:`crawfish.metrics.CalibrationReport.abstention_threshold` — the confidence
+where observed accuracy crosses target, read off the reliability curve — instead of a
+guessed constant. On a mis-calibrated fixture this differs from any naive constant,
+which is the whole point (the issue's "raw constant is unsound" risk).
+
+### `HouseGuard`
+
+*class*
+
+A learned-then-distilled deterministic guard — versioned, eval-gated, reversible.
+
+Holds the distilled :class:`Predicate`, the :class:`GuardCertificate` that earned
+(or did not earn) its enforcement authority, and a :class:`GuardStage`. A guard is
+built only through :meth:`synthesize` (which runs the joint precision/coverage gate)
+— a guard cannot self-promote to ``BLOCK``.
+
+Once earned, :meth:`blocks` is a pure deterministic predicate (no model call) that
+answers "is this output disallowed?" — but it only *enforces* (``can_block``) in
+stage ``BLOCK``. Content-hashed via the predicate sha (the lineage key); carries
+``org_id``. Reversible: a promoted guard rolls back to any prior validated rule by
+re-synthesizing the earlier predicate (a fresh validation mints its own sha; it
+never edits a frozen prior rule).
+
+```python
+HouseGuard(predicate: 'Predicate', certificate: 'GuardCertificate', stage: 'GuardStage', *, name: 'str' = 'house_guard') -> 'None'
+```
+
+**Methods**
+
+- `as_metric(self) -> 'PredicateMetric'` — Expose the distilled predicate as a pure :class:`~crawfish.metrics.Metric`.
+- `blocks(self, output: 'Output[JSONValue]') -> 'bool'` — Whether this guard ENFORCES a block on ``output``.
+- `matches(self, output: 'Output[JSONValue]') -> 'bool'` — Pure predicate: True iff ``output`` is *disallowed* (no model call).
+- `require_earned(self) -> 'HouseGuard'` — Return ``self`` if earned; else raise :class:`GuardNotEarned` (fail-closed).
+
+### `GuardCertificate`
+
+*class* — bases: `BaseModel`
+
+The honest measurement that decides whether a guard may block (frozen).
+
+Reports **both** a precision lower bound **and** recall/coverage with CIs, so
+graduation gates on a JOINT criterion: a high-precision but near-zero-coverage
+rule (e.g. 99%-precision / 2%-coverage) cannot earn the right to block. Carries
+``org_id`` (tenancy) and ``content_sha`` (the predicate's lineage key); ``tainted``
+propagates fluid lineage so a consequential consumer can refuse a fluid-derived
+certificate as trusted ground truth.
+
+Field contract:
+
+* ``precision_point`` / ``precision_lb`` — the naive ``TP/(TP+FP)`` and its Wilson
+  *lower* bound; graduation reads the **lower bound**, never the optimistic point.
+* ``coverage`` — the coverage proportion + CI: ``fired-and-correct / total-disallowed``
+  (a recall over the disallowed ground truth).
+* ``n_decisions`` / ``n_disallowed`` — the support behind precision / coverage.
+* ``precision_floor`` / ``min_coverage`` — the JOINT thresholds this guard was
+  gated against (recorded for the audit / re-gate).
+* ``earned`` — the decision: ``precision_lb >= precision_floor`` AND
+  ``coverage.lo >= min_coverage`` AND there was a corpus (fail-closed otherwise).
+
+### `GuardStage`
+
+*class* — bases: `str`, `Enum`
+
+The shadow→warn→block lifecycle of a guard's enforcement authority.
+
+A guard earns authority only by clearing the JOINT precision-and-coverage bar
+(see :func:`synthesize_guard`). Below the bar it stays in ``SHADOW``/``WARN`` and
+**cannot** block a Sink; only a guard that clears the bar reaches ``BLOCK``.
+
+Members: `SHADOW` = `'shadow'`, `WARN` = `'warn'`, `BLOCK` = `'block'`
+
+### `GuardNotEarned`
+
+*class* — bases: `Exception`
+
+A guard was asked to enforce without clearing the joint precision/coverage bar.
+
+Raised by :func:`synthesize_guard` when the guard has **no corpus** (no trusted
+corrections to validate against) or when it fails the joint criterion — the gate
+**fails closed**: an un-validated guard stays in ``warn`` and is never granted
+authority to block by default. Mirrors :class:`~crawfish.eval.VerifierNotGated`.
+
+### `GuardGrammarError`
+
+*class* — bases: `ValueError`
+
+A proposal could not be distilled into the closed predicate grammar.
+
+Raised by :func:`distill` when a FLUID proposer emission references an unknown
+operator, a non-typed field path, or a malformed term. The grammar is **fixed**:
+a proposal cannot *widen* it — an out-of-grammar proposal is rejected, never
+admitted as a new operator. This is the SECURITY-minor predicate-grammar control.
+
+### `Predicate`
+
+*value* — `UnionType`
+
+`Predicate = crawfish.guard.Comparison | crawfish.guard.SetMembership | crawfish.guard.NumericBound | crawfish.guard.BoolCombination | crawfish.guard.Always`
+
+### `Comparison`
+
+*class* — bases: `BaseModel`
+
+``field OP literal`` over a typed Output field (canonical equality).
+
+``op`` is one of ``== != < <= > >=``. Ordering operators apply only to numerics
+(a non-numeric side makes them ``False``); equality is canonical (records key-
+sorted) so ``{"a":1,"b":2}`` matches ``{"b":2,"a":1}``.
+
+**Methods**
+
+- `matches(self, value: 'JSONValue') -> 'bool'`
+
+### `SetMembership`
+
+*class* — bases: `BaseModel`
+
+``field IN members`` (or ``NOT IN`` when ``negate``) — order-free membership.
+
+Members are compared by canonical JSON, so nested records/order do not matter.
+
+**Methods**
+
+- `matches(self, value: 'JSONValue') -> 'bool'`
+
+### `NumericBound`
+
+*class* — bases: `BaseModel`
+
+``lo <= field <= hi`` numeric range (either bound optional, inclusive).
+
+A non-numeric/absent field is ``False`` (out of every range). With both bounds
+``None`` the term is vacuously ``False`` (it bounds nothing).
+
+**Methods**
+
+- `matches(self, value: 'JSONValue') -> 'bool'`
+
+### `BoolCombination`
+
+*class* — bases: `BaseModel`
+
+``AND``/``OR`` of sub-predicates (``NOT`` is a one-term combination).
+
+The single recursive node. ``op`` is ``"and"``/``"or"``/``"not"``; ``"not"``
+requires exactly one term. Empty ``and`` is ``True`` (vacuous), empty ``or`` is
+``False`` — the standard identities, keeping the interpreter total.
+
+**Methods**
+
+- `matches(self, value: 'JSONValue') -> 'bool'`
+
+### `Always`
+
+*class* — bases: `BaseModel`
+
+The constant predicate (``value`` is its fixed truth). The grammar's unit.
+
+``Always(value=False)`` is the safe identity a fail-closed distillation falls back
+to: a guard that blocks nothing.
+
+**Methods**
+
+- `matches(self, value: 'JSONValue') -> 'bool'`
+
+### `PredicateMetric`
+
+*class* — bases: `Metric`
+
+A distilled :class:`Predicate` exposed as a pure :class:`~crawfish.metrics.Metric`.
+
+``evaluate`` returns ``1.0`` when the predicate matches (the output is
+*disallowed*) and ``0.0`` otherwise — zero model calls, same input ⇒ same score.
+This is the bridge that lets a learned-then-distilled guard plug into the existing
+metric/rubric machinery as an ordinary coded signal.
+
+```python
+PredicateMetric(predicate: 'Predicate', *, name: 'str | None' = None) -> 'None'
+```
+
+**Methods**
+
+- `evaluate(self, output: 'Output[JSONValue]') -> 'float'` — Score ``output`` to a float.
+
+### `Interval`
+
+*class* — bases: `BaseModel`
+
+A point estimate with a two-sided confidence interval ``[lo, hi]`` (frozen).
+
+### `wilson_lower_bound`
+
+*function*
+
+```python
+wilson_lower_bound(successes: 'int', n: 'int', *, alpha: 'float' = 0.05) -> 'float'
+```
+
+Wilson score **lower** bound for a binomial proportion ``successes / n``.
+
+The honest small-sample lower confidence bound on precision: unlike the naive
+``TP/(TP+FP)`` point estimate, it does not certify a high precision off a handful
+of decisions (3/3 has a Wilson lower bound well under 1.0). ``n == 0`` ⇒ ``0.0``
+(no evidence ⇒ the bar cannot be cleared — fail-closed arithmetic).
+
+Deterministic and pure: closed-form over :func:`crawfish.experiment.normal_ppf`
+(the F-8 statistical substrate), stdlib-only (no numpy/scipy).
+
+### `Grammar`
+
+*class* — bases: `BaseModel`
+
+A frozen, declarative constraint on a single decoded field.
+
+Construct via the classmethods (:meth:`enum`, :meth:`regex`, :meth:`json_object`,
+:meth:`from_output_schema`) rather than the raw initializer — they keep the
+kind/body invariant. Frozen so a constraint cannot be mutated after a runtime has
+keyed a cassette on it.
+
+**Methods**
+
+- `enforce(self, text: 'str') -> 'str'` — Project arbitrary ``text`` onto the constraint surface, deterministically.
+- `satisfies(self, text: 'str') -> 'bool'` — True if ``text`` already meets the constraint (no projection needed).
+- `to_request_grammar(self) -> 'str'` — Serialize to the per-call ``RunRequest.grammar`` dialect string.
+
+### `GrammarKind`
+
+*class* — bases: `str`, `Enum`
+
+The dialect of a :class:`Grammar`. ``(str, Enum)`` per ADR 0004.
+
+Members: `ENUM` = `'enum'`, `REGEX` = `'regex'`, `JSON_SCHEMA` = `'json_schema'`
+
+### `GrammarError`
+
+*class* — bases: `ValueError`
+
+Raised when text cannot be projected onto a constraint surface at all.
+
+### `parse_grammar`
+
+*function*
+
+```python
+parse_grammar(serialized: 'str') -> 'Grammar'
+```
+
+Read a per-call ``RunRequest.grammar`` dialect string back into a :class:`Grammar`.
+
+The inverse of :meth:`Grammar.to_request_grammar`. A runtime that mediates the
+constraint reads the request's grammar string through this to recover the typed
+constraint, then applies :meth:`Grammar.enforce`.
 
