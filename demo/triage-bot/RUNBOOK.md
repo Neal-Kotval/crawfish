@@ -103,18 +103,33 @@ real `cost_usd` on top of the synthetic per-call charge) that is a **`$4.32`** c
 real fresh-record run lands well under the bound; every subsequent run replays at `$0`.
 (The earlier `52 calls ≈ $3.12` figure predated the M2 Router/recurse step.)
 
-## Evidence checklist (verifier fills this in)
+## M3 live-acceptance gate — CERTIFIED ✅ (real `claude -p` haiku, 2026-06-24)
 
-Run `uv run craw demo --live` and confirm:
+Two consecutive real `claude -p --model claude-haiku-4-5` runs (deterministic `craw demo` also PASS 9/9).
+Both live runs printed **`PASS — 9/9`**. Cost interval bound: `worst=132 calls=$7.920 <= budget=$7.92`.
 
-- [ ] **Real reply produced** — the live `claude -p` returned a triage record (not the mock echo).
-- [ ] **Gate fired** — step 7 prints `gate.promoted=True` (promote) or a justified reject with a CI reason.
-- [ ] **Budget respected** — worst-case (step 6) ≥ actual spend; the run did not hit `BudgetExceeded`.
-- [ ] **$0 crash-resume** — re-running `craw demo --live` (cassettes present) shows step 9 `extra charges=0`.
-- [ ] **Cross-tenant isolation** — step 9 shows org-B gold cases = 0 (org B cannot read org A's corpus/ledger/cassettes).
-- [ ] **Bit-identical replay** — two runs produce the same loop fixed-point `output_content_sha` (printed in step 9).
+| # | item | fresh record (run 1) | second run (run 2) |
+|---|------|----------------------|--------------------|
+| 1 | real reply / flagship live | ✅ real haiku prose through the train/eval cycle | ✅ |
+| 2 | calibrate = irreducible **live** measurement | ✅ rubric_std[acc]=0.000, output_var=**0.917**, brier=**0.833** | ✅ re-measured: output_var=**1.000**, brier=**1.0** (different ⇒ genuinely re-sampled, not replayed) |
+| 3 | tune + variance-gate | ✅ knob `agent.lead.temperature`→0.0, obj=0.873, **promoted=True** (gain **0.973** clears band) | ✅ identical winner |
+| 4 | state_dict round-trip | ✅ knob-value sha `0ee4630f4707` → load_state → `0ee4630f4707` (identical) | ✅ identical |
+| 5 | eval()/freeze ship-gate | ✅ winner frozen `2cb283bb8c06`, Sink-eligible (train-mode forbidden) | ✅ identical |
+| 6 | Refine durable resume | ✅ refine spent **$0.18** (fresh), refine resume **$0.00** | ✅ refine **replayed $0.00**, resume $0.00 |
+| 7 | recurse durable resume | ✅ 3 levels → base_case, folded 3 parts, sha `f997a22d7a12`, resume $0 | ✅ identical sha, resume $0 |
+| 8 | budget respected | ✅ total ≤ worst_case $7.92, no BudgetExceeded | ✅ |
+| 9 | tenant isolation | ✅ org-B gold cases = 0 | ✅ |
+| 10 | bit-identical replay (deterministic steps) | refine `1561eaaf8ed9` / recurse `f997a22d7a12` / state_dict `0ee4630f4707` / freeze `2cb283bb8c06` | ✅ **all identical** |
 
-## Live acceptance evidence
+**Honest replay semantics (load-bearing):** the deterministic/durable steps (scoring, loop, Refine resume,
+recurse resume) replay at **$0** on run 2 — refine's spend dropped $0.18→$0.00, resumes $0. But
+**`cw.calibrate` re-measures live every run** (it refuses a `RecordReplayRuntime` — replaying canned outputs
+would fabricate a zero-variance band, mis-calibrating the gate), shown by output_var/Brier differing between
+runs. Its cost is folded into the structural `worst_case` ($7.92), so the honesty gate holds on every run.
+See `lang_notes/M3-calibrate-replay-decision.md`. The lockfile is unchanged after live (cassettes live under
+`.crawfish/`, excluded from the content hash).
+
+## Live acceptance evidence (historical — M1/M2/F)
 
 ### Verifier run 1 (2026-06-23, opus default) — FAILED, three harness defects found
 
