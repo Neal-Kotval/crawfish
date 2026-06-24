@@ -24,3 +24,13 @@ static-rejection fallback and flag R2 as a documented deferral. Never block the 
 **Pre-committed decision:** any such path **fails closed** at assembly time (ALG-3 semantics).
 The security-review agent on every issue checks for this; if found, the safe (reject/attenuate)
 branch is taken and recorded in that issue's decision file. Not escalated — resolved fail-closed.
+
+---
+## HB-3 RESOLVED (Milestone 7, CRA-229)
+The R2 `craw prove --no-injection` spike concluded a SOUND full-graph non-interference proof
+is not buildable today (the Definition exposes no serialized dataflow graph). Per the
+pre-committed decision, shipped the **ALG-3 conservative static-rejection fallback**:
+`guarantee="alg3-conservative-static-rejection"` — fail-closed, rejects any wiring where a
+FLUID value can reach a consequential static-only slot (Sink target / idempotency key);
+exits non-zero on a suspected path. Sound proof + ALG-7 conformance flagged best-effort/
+deferred in CRA-229.md. The stack was NOT blocked. R3 (replay --swap) shipped concretely.

@@ -1006,6 +1006,112 @@ def _cmd_lock(args: argparse.Namespace) -> int:
     return 0
 
 
+# ============================================================================
+# R3 / CRA-230 — `craw replay --swap`: counterfactual time-travel replay
+# ----------------------------------------------------------------------------
+def _cmd_replay(args: argparse.Namespace) -> int:
+    """Replay a recorded run with one model swapped — counterfactual vs. original.
+
+    ``--swap <from>=<to>`` re-runs only the leaves whose recorded model is ``from``;
+    every other leaf replays bit-for-bit from its cassette at $0. The dirtied fraction is
+    reported before any spend, and the cascade is bounded by ``--budget`` (a per-live-leaf
+    ``--cost-per-leaf`` projects the spend). ``org_id`` is carried for the report header.
+    """
+    from crawfish.replay_swap import SwapReport, parse_swap, run_swap
+
+    try:
+        swap = parse_swap(args.swap)
+    except ValueError as exc:
+        print(f"replay: {exc}")
+        return 1
+
+    cassette_dir = Path(args.cassettes)
+    if not cassette_dir.exists():
+        print(f"replay: no cassette dir at {cassette_dir}")
+        return 1
+
+    report: SwapReport = run_swap(
+        cassette_dir,
+        swap,
+        alt_cassette_dir=args.alt_cassettes,
+        budget_usd=args.budget,
+        live_cost_usd=args.cost_per_leaf,
+    )
+
+    if args.as_json:
+        payload = {
+            "schema": _opt_schema("replay"),
+            "org": args.org,
+            "swap": {"from": swap.frm, "to": swap.to},
+            "total_leaves": report.total_leaves,
+            "dirtied_leaves": report.dirtied_leaves,
+            "dirtied_fraction": report.dirtied_fraction,
+            "spent_usd": report.spent_usd,
+            "over_budget": report.over_budget,
+            "changed": report.changed,
+            "deltas": [
+                {
+                    "key": d.key,
+                    "dirtied": d.dirtied,
+                    "original_model": d.original_model,
+                    "original_text": d.original_text,
+                    "counterfactual_model": d.counterfactual_model,
+                    "counterfactual_text": d.counterfactual_text,
+                    "cost_usd": d.cost_usd,
+                }
+                for d in report.deltas
+            ],
+        }
+        print(json.dumps(payload, sort_keys=True))
+    else:
+        print(report.summary())
+    # Exit non-zero when the swap was refused (cascade over budget); zero otherwise.
+    return 1 if report.over_budget else 0
+
+
+# ============================================================================
+# R2 / CRA-229 — `craw prove --no-injection`: assembly-time non-interference
+# ----------------------------------------------------------------------------
+def _cmd_prove(args: argparse.Namespace) -> int:
+    """Prove no FLUID input reaches a consequential static-only Sink/idempotency slot.
+
+    Ships the **ALG-3 conservative static rejection** (fail-closed), not a sound
+    full-graph proof — see ``prove.py`` / ``docs/_changelog/CRA-229.md``. Exits non-zero
+    on a suspected fluid→static-slot path, zero when the static check passes.
+    """
+    from crawfish.definition import Definition
+    from crawfish.prove import prove_no_injection
+
+    definition = Definition.from_package(_opt_definition_path(args))
+    result = prove_no_injection(definition)
+
+    if args.as_json:
+        payload = {
+            "schema": _opt_schema("prove"),
+            "org": args.org,
+            "guarantee": result.guarantee,
+            "proven": result.proven,
+            "fluid_inputs": list(result.fluid_inputs),
+            "static_slots": list(result.static_slots),
+            "obligations": [
+                {
+                    "slot": o.slot,
+                    "source": o.source,
+                    "discharged": o.discharged,
+                    "detail": o.detail,
+                }
+                for o in result.obligations
+            ],
+            "violations": [
+                {"slot": v.slot, "source": v.source, "detail": v.detail} for v in result.violations
+            ],
+        }
+        print(json.dumps(payload, sort_keys=True))
+    else:
+        print(result.summary())
+    return 0 if result.proven else 1
+
+
 # --------------------------------------------------------------------------- init
 def _cmd_init(args: argparse.Namespace) -> int:
     from crawfish.scaffold import scaffold_project
@@ -1213,6 +1319,66 @@ def build_parser() -> argparse.ArgumentParser:
         "--check", action="store_true", help="CI drift gate: exit non-zero if the closure drifted"
     )
     p.set_defaults(func=_cmd_lock)
+
+    # -- R3 / CRA-230 — `craw replay --swap` -------------------------------
+    p = sub.add_parser(
+        "replay", help="counterfactual replay: re-run a recorded run with one model swapped"
+    )
+    p.add_argument(
+        "--cassettes",
+        required=True,
+        help="directory of the recorded run's cassettes (the historical run)",
+    )
+    p.add_argument(
+        "--swap",
+        required=True,
+        metavar="FROM=TO",
+        help="swap one model/decode setting, e.g. 'claude-haiku-4-5=claude-opus-4-8'",
+    )
+    p.add_argument(
+        "--alt-cassettes",
+        default=None,
+        help="directory of a previously recorded `to` run (deterministic counterfactual source)",
+    )
+    p.add_argument(
+        "--budget",
+        type=float,
+        default=None,
+        help="cost ceiling in USD; refuse the swap if the dirtied live cascade would exceed it",
+    )
+    p.add_argument(
+        "--cost-per-leaf",
+        type=float,
+        default=0.0,
+        help="projected USD cost per dirtied live leaf (for the cascade cost bound)",
+    )
+    p.add_argument("--org", default="local", help="tenancy org_id carried onto the report")
+    p.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="emit the versioned machine-readable schema",
+    )
+    p.set_defaults(func=_cmd_replay)
+
+    # -- R2 / CRA-229 — `craw prove --no-injection` ------------------------
+    p = sub.add_parser(
+        "prove", help="assembly-time non-interference check (ALG-3 conservative static rejection)"
+    )
+    p.add_argument("path", help="path to a Definition directory")
+    p.add_argument(
+        "--no-injection",
+        action="store_true",
+        help="prove no FLUID input reaches a consequential static-only Sink/idempotency slot",
+    )
+    p.add_argument("--org", default="local", help="tenancy org_id carried onto the report")
+    p.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="emit the versioned machine-readable schema",
+    )
+    p.set_defaults(func=_cmd_prove)
 
     # hidden: the detached supervisor entry point that `craw deploy` spawns
     p = sub.add_parser("_supervise")

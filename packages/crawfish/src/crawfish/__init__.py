@@ -16,6 +16,7 @@ from crawfish.abstain import (
     abstain_below_calibrated,
     is_abstention,
 )
+from crawfish.agentdiff import DefinitionDiff, MergeConflict, diff, merge
 from crawfish.anomaly import (
     AnomalyEngine,
     AnomalyRule,
@@ -276,6 +277,7 @@ from crawfish.observer import (
     StuckRun,
 )
 from crawfish.output import Output, WireError, check_wire, output_satisfies_inputs
+from crawfish.prove import ProofResult, prove_no_injection
 from crawfish.provider import ModelsConfig, Provider, ProviderPolicy, resolve_model
 from crawfish.refine import (
     PredicateStop,
@@ -286,6 +288,7 @@ from crawfish.refine import (
     VerifierStop,
     feature_loop,
 )
+from crawfish.replay_swap import SwapReport, parse_swap, run_swap
 from crawfish.resolve import (
     LOCKFILE_VERSION,
     CandidateSource,
@@ -978,4 +981,14 @@ __all__ = [
     "UnfrozenDefinitionError",
     "UnknownNameError",
     "UnreachableShaError",
+    # M7 — revolutionary capabilities (git-for-agents diff/merge, prove, replay --swap)
+    "diff",
+    "merge",
+    "DefinitionDiff",
+    "MergeConflict",
+    "prove_no_injection",
+    "ProofResult",
+    "run_swap",
+    "parse_swap",
+    "SwapReport",
 ]
