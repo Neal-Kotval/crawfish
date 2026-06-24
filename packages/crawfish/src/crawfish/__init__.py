@@ -211,6 +211,15 @@ from crawfish.observer import (
 )
 from crawfish.output import Output, WireError, check_wire, output_satisfies_inputs
 from crawfish.provider import ModelsConfig, Provider, ProviderPolicy, resolve_model
+from crawfish.refine import (
+    PredicateStop,
+    Refine,
+    RefineResult,
+    RubricThreshold,
+    StopCondition,
+    VerifierStop,
+    feature_loop,
+)
 from crawfish.retry import ItemResult, ItemStatus, RetryPolicy
 from crawfish.routing import (
     CostTier,
@@ -345,6 +354,12 @@ from crawfish.validation import (
     structural_diff,
     validate_inputs,
     validate_output,
+)
+from crawfish.verifier import (
+    GatedVerifier,
+    Verdict,
+    Verifier,
+    VerifierStage,
 )
 from crawfish.versioning import Freezable, FrozenError, Version
 from crawfish.visualize import (
@@ -715,4 +730,18 @@ __all__ = [
     "TrialResult",
     "TuneResult",
     "Tuner",
+    # the Verifier (CRA-203 — CL-2, the gated external-signal critic)
+    "Verifier",
+    "GatedVerifier",
+    "Verdict",
+    "VerifierStage",
+    # Refine — the verifier-gated, bounded, durable iterate-until-goal loop
+    # (CRA-202 CL-1 + CRA-204 CL-4)
+    "Refine",
+    "RefineResult",
+    "StopCondition",
+    "RubricThreshold",
+    "PredicateStop",
+    "VerifierStop",
+    "feature_loop",
 ]
