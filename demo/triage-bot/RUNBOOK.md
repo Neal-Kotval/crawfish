@@ -753,3 +753,90 @@ deterministic on record AND `$0` replay, for both `satisfied` and justified `no_
 
 > Deterministic `uv run craw demo` prints `PASS — 9/9` and the full suite is green (877 passed).
 > The on-disk cassette state is this certified PASS run; `uv run craw demo --live` replays it at `$0`.
+
+## Milestone 3 live evidence — the train/eval flagship (tunable-ML library)
+
+Milestone 3 shipped the **tunable-ML library** (CRA-209..214): the two-axis mode unifier
+(`train()` / `eval()`), `cw.calibrate`, the cost-regularized `Objective`, the
+variance-aware promotion gate, and `state_dict` / `load_state`. The cumulative scenario now
+contains the full train/eval cycle on the triage agent (printed as the four `calibrate
+(noise band)` / `tune + variance-gate` / `state_dict round-trip` / `eval() freeze` lines
+under step 9, between the Refine and Router steps):
+
+- **train() (9t).** `train(defn)` enters mutable mode — an **unfrozen copy with a fresh
+  `Version`**, so a training mutation is copy-on-write (it mints a new `version.sha` when
+  re-frozen, never an in-place edit of the frozen artifact). Consequential side effects are
+  forbidden until `eval()`.
+- **calibrate.** `cw.calibrate(train_defn, golden, runs=CALIBRATE_RUNS=3)` re-runs every
+  trusted golden case **3×** under distinct derived seeds and returns a `CalibrationReport`:
+  the per-metric noise band (`rubric_std`), the structural `output_variance`, the Brier
+  diagnostic, and an evidence-derived abstention threshold. It runs against the **bare,
+  non-replay** runtime — calibrate **refuses** a `RecordReplayRuntime` (replay would report
+  a fabricated zero-variance band), so on `--live` these are real, un-recorded, metered
+  re-runs (and the mock responder varies per `decode_seed` to mint a real band on the
+  deterministic path). The measured band is the input the promotion gate keys off.
+- **tune under the cost-regularized `Objective`.** Each candidate temperature is scored and
+  ranked by `Objective.value = Σ wᵢ·scoreᵢ − λ·cost − μ·ece` (cost normalized by the
+  cheapest candidate so λ is unit-free). The cooler candidate wins. The tuned knob is the
+  lead agent's decode **`temperature`** — a *safe* knob; a consequential `model`/`policies`
+  knob would be **static-only**, never fluid-derived.
+- **variance-aware promote.** `promote_against_baseline` promotes **only if** the primary
+  metric's gain exceeds the calibrated `k·std` band AND no metric regresses past its band.
+  On the deterministic path the cooler candidate's gain (~0.17) clears the small band
+  (~0.01) → a **promotion**; on `--live` real run-to-run variance may instead yield a
+  **justified reject** (gain inside the band, with a stated reason) — both are valid, the
+  same precedent the F-3 gate sets.
+- **state_dict round-trip.** The winner's tunable knobs extract to a `StateDict` (the
+  'weights' — per-role knobs + coordination + injected prompts + summoned-unit refs;
+  **no** architecture, JSON only). Loading them back into a fresh Definition re-mints a
+  **bit-identical knob-value sha** (sha-identity asserted in-scenario).
+- **eval() freeze (ship gate).** `eval(winner)` re-freezes the winner. Only an eval-mode
+  (frozen) Definition has the stable content identity a recorded run / consequential Sink
+  requires — the load-bearing train→eval gate on the Sink.
+
+The flagship runs inside the **same shared `CostBudget`**. Its calibrate + objective-sweep
+fan-out is folded into the structural worst-case call count (step 6): `_worst_case_calls`
+adds a `step9t = CALIBRATE_RUNS·n_calib + n_candidates·n_calib` term, so the bound stays a
+TRUE upper bound. With the M3 step the worst case is **132 calls = `$7.92`** on haiku
+(`132 × $0.05 × 1.2` headroom), which binds the `--live` `CostBudget` ceiling.
+
+### Exact command for the M3 live gate
+
+```bash
+claude -p "say ok"                                  # confirm auth
+uv run craw demo --live --model claude-haiku-4-5    # real haiku; records cassettes (calibrate is NOT recorded)
+uv run craw demo --live --model claude-haiku-4-5    # re-run: scoring/loops replay $0; calibrate re-runs fresh
+```
+
+> Note: `cw.calibrate` is never replayed (it refuses the replay wrapper), so unlike the
+> other steps it makes real metered re-runs on **every** `--live` run. The worst-case bound
+> already accounts for this; the replay's `$0` claim covers the scoring/loop/recurse steps,
+> not the inherently-non-replayable calibration measurement.
+
+### Evidence checklist (verifier fills this in)
+
+Run the command above and confirm, on the four flagship lines under step 9:
+
+- [ ] **Calibration report produced** — `calibrate (noise band)` prints `3×6 runs ->
+  rubric_std[accuracy]=<small, > 0>, output_var=…, brier=…, abstain<…`: a real,
+  non-degenerate noise band was measured over `runs × cases` seeded outputs.
+- [ ] **Tuned under the Objective** — `tune + variance-gate` prints `knob
+  agent.lead.temperature -> 0.0 | obj=…`: a candidate was selected by the cost-regularized
+  objective.
+- [ ] **Variance-gate: promote OR justified reject** — the same line prints
+  `promoted=True/False (gain … vs band …): <reason>`. A promotion (gain clears the band) or
+  a justified reject (gain inside the band, with a reason) are BOTH valid under real
+  variance — what must hold is a *reasoned verdict*, never a silent pass.
+- [ ] **state_dict round-trip** — `state_dict round-trip` prints `knob-value sha <x> ->
+  load_state -> <x> (identical)`: the winner's knobs re-minted the same sha.
+- [ ] **Budget respected** — `worst=132 calls=$7.920 <= budget=$7.92`; total spend stays
+  within the bound, no `BudgetExceeded`.
+- [ ] **Bit-identical replay** (scoring/loops) — two `--live` runs print the same frozen,
+  refine, recurse, and `state_dict`/`eval()` shas; the scoring + loop + recurse steps replay
+  at `$0` (calibrate excepted, per the note above).
+
+The deterministic path (`uv run craw demo`, `$0`) exercises every one of these off the mock
+runtime; the acceptance test is `packages/crawfish/tests/test_demo_train.py` (12 tests, no
+live calls — asserting the calibration-report fields, the variance-gate promotion past the
+band, the `state_dict` round-trip sha-identity, the eval()-freeze, and that the worst-case
+call model folds in the calibrate + objective-sweep fan-out).

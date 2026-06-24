@@ -17,6 +17,16 @@ decides "good enough" and a mid-loop crash resumes at ``$0`` (CL-4). The triage 
 drafts a reply, the gated critic judges it, and ``Refine`` iterates until the verifier
 accepts or a bound (``max_iters`` / the shared ``CostBudget``) is hit.
 
+**Step 9t** is the Milestone-3 FLAGSHIP: the full train/eval cycle on the triage agent.
+``train()`` enters mutable mode, :func:`~crawfish.metrics.calibrate` measures the noise
+band over seeded re-runs, the cost-regularized :class:`~crawfish.tuner.Objective` picks a
+winning ``temperature``, the variance-aware :func:`~crawfish.eval.promote_against_baseline`
+gate decides whether the gain clears the calibrated band, the winner's knobs round-trip
+through :func:`~crawfish.learning.state_dict` / :func:`~crawfish.learning.load_state`
+(sha-identity on the 'weights'), and ``eval()`` re-freezes the winner before it may fire
+the consequential Sink. **Step 9c/9d** is the Milestone-2 composition surface (Router
+branch + bounded recurse). All steps share one ``CostBudget``.
+
 Feature map (which F maps to which step) — see ``run_self_improvement``:
 
 ==== ========================================= ============================
@@ -54,9 +64,20 @@ from crawfish.cost import CostEstimate, CostShape, compose_cost
 from crawfish.definition import Definition
 from crawfish.definition.types import AgentSpec, Coordination, TeamSpec
 from crawfish.emission import CorrectionType, Provenance, emit_correction
-from crawfish.eval import EvalCase, GateDecision, GoldenSet, paired_gate, save_baseline
+from crawfish.eval import (
+    EvalCase,
+    GateDecision,
+    GoldenSet,
+    PromotionVerdict,
+    paired_gate,
+    promote_against_baseline,
+    save_baseline,
+    save_baseline_from_report,
+)
 from crawfish.experiment import k_from_alpha, tune_gate_split, winners_curse_shrink
+from crawfish.learning import StateDict, load_state, state_dict
 from crawfish.ledger import ExecutionLedger, compute_loop_id
+from crawfish.metrics import CalibrationReport, Rubric, calibrate
 from crawfish.nodes import Classifier, Router
 from crawfish.output import Output, output_content_sha
 from crawfish.refine import ProduceFn, Refine, RefineResult, VerifierStop
@@ -65,6 +86,9 @@ from crawfish.runtime.base import RunRequest, RunResult
 from crawfish.runtime.replay import ExecutionCoordinate
 from crawfish.runtime.replay import _key as _cassette_key
 from crawfish.store import SqliteStore
+from crawfish.tuner import KnobDomain, Objective, TuneSpec
+from crawfish.tuner import eval as eval_mode
+from crawfish.tuner import train as train_mode
 from crawfish.verifier import GatedVerifier, Verifier
 from crawfish.workflow import Recurse, RecurseResult, recurse
 
@@ -97,6 +121,13 @@ EDGE_ID = "self-improve:refine"
 #: The temperature search space for step 3/7 (cooler = better here). ONE authoritative
 #: tuple so the step-6 worst-case call count and the step-7 sweep can never disagree.
 _CANDIDATE_TEMPS: tuple[float, ...] = (0.0, 0.2)
+
+#: How many re-runs ``cw.calibrate`` makes PER golden case (Milestone-3 flagship, step 9t).
+#: The noise band (``rubric_std``) is measured across ``runs × cases`` scored outputs, so
+#: ``runs`` must be >= 2 for a non-degenerate std. ONE authoritative constant: both the
+#: step-6 worst-case call model and ``_run_train_eval_step`` read it, so the F-6 bound can
+#: never drift from the calibration fan-out the flagship really makes.
+CALIBRATE_RUNS = 3
 
 
 # --------------------------------------------------------------------------- result
@@ -149,6 +180,21 @@ class DemoResult:
     recurse_parts_folded: int = 0  # sub-answers folded into one reply
     recurse_final_sha: str = ""  # content sha of the folded reply (replay-identical)
     recurse_resume_spent_usd: float = -1.0  # -1 == not yet run; 0.0 == proven $0-resume
+    # --- Milestone-3 FLAGSHIP step (train -> calibrate -> tune -> promote -> state_dict). ---
+    train_ran: bool = False  # the flagship train/eval cycle executed end to end
+    calib_runs: int = 0  # cw.calibrate re-runs per case (the noise-band sample depth)
+    calib_cases: int = 0  # how many golden cases were calibrated
+    calib_rubric_std: float = -1.0  # the measured noise band (>= 0 once run; the gate's input)
+    calib_brier: float | None = None  # primary calibration metric (None without exact labels)
+    calib_ece: float | None = None  # ECE diagnostic (None without exact labels)
+    calib_abstention_threshold: float = -1.0  # confidence floor below which acting is unsafe
+    tuned_knob: str = ""  # the dotted knob path the flagship tuned (agent.<lead>.temperature)
+    tuned_temperature: float = -1.0  # the winner the cost-regularized Objective selected
+    objective_value: float = 0.0  # the winner's scalar Objective value (Σwᵢ·sᵢ − λ·cost − μ·ece)
+    promotion: PromotionVerdict | None = None  # the variance-aware gate's verdict (+ the why)
+    state_dict_sha: str = ""  # content sha of the winner's knob VALUES (the 'weights' identity)
+    state_roundtrip_ok: bool = False  # load_state(state_dict) re-minted the same knob sha
+    train_eval_frozen_sha: str = ""  # eval()-frozen winner's content sha (gates the Sink)
 
     def _refine_step_ok(self) -> bool:
         """Certify the Milestone-1 Refine OPERATOR's correctness (not the critic's draw).
@@ -189,6 +235,38 @@ class DemoResult:
             and self.refine_spent_usd <= self.worst_case_usd  # within the honest bound
         )
 
+    def _train_eval_step_ok(self) -> bool:
+        """Certify the Milestone-3 FLAGSHIP train/eval OPERATOR ran correctly.
+
+        The flagship is correct when the full cycle executed — train mode entered, the
+        Definition was calibrated (a real noise band measured), a candidate tuned under the
+        cost-regularized ``Objective``, the variance-aware promotion gate returned a
+        *reasoned verdict*, the winner's knobs round-tripped through ``state_dict`` /
+        ``load_state`` to a bit-identical knob sha, and the winner was ``eval()``-frozen.
+
+        Like the F-3 gate (and the Refine operator), the promotion VERDICT is the
+        model-dependent part: on the deterministic mock path the cooler candidate beats the
+        baseline beyond the calibrated band, so we require a **promotion**; on the **live**
+        path real run-to-run variance may legitimately yield a **justified reject** (the gain
+        fell inside the noise band, with a stated reason) — a CORRECT operator outcome, the
+        same precedent the F-3 gate sets. A genuinely broken flagship still FAILS: no verdict,
+        an unmeasured band, a failed state round-trip, or an unfrozen winner.
+        """
+        verdict = self.promotion
+        gate_fired = verdict is not None and (
+            verdict.promoted if not self.live else bool(verdict.reason)
+        )
+        return bool(
+            self.train_ran
+            and gate_fired
+            and self.calib_runs >= 2  # a real noise-band sample (std needs >= 2 obs)
+            and self.calib_rubric_std >= 0.0  # the band was measured (the gate's input)
+            and self.tuned_knob  # a knob was actually tuned (the dotted path is recorded)
+            and self.state_roundtrip_ok  # state_dict -> load_state re-minted the same knob sha
+            and self.state_dict_sha
+            and self.train_eval_frozen_sha  # the winner was eval()-frozen before the Sink
+        )
+
     def passed(self) -> bool:
         """The whole scenario's pass predicate (mirrors the test assertions).
 
@@ -227,6 +305,11 @@ class DemoResult:
             and self.recurse_parts_folded > 0
             and self.recurse_final_sha
             and self.recurse_resume_spent_usd == 0.0
+            # Milestone-3 FLAGSHIP: the train -> calibrate -> tune-under-Objective -> variance-
+            # aware-promote -> state_dict round-trip -> eval-freeze cycle ran correctly (mock:
+            # the cooler candidate promotes past the calibrated band; live: a justified reject
+            # is also valid), and the winner was eval()-frozen before the Sink may fire.
+            and self._train_eval_step_ok()
         )
 
     def summary(self) -> str:
@@ -310,10 +393,41 @@ def _deterministic_responder(req: RunRequest) -> str:
     expected = str(inputs.get("_expected", "unknown"))
     temperature = float(inputs.get("_temperature", 0.0))
     category = _predicted_category(ticket, expected, temperature)
+    # Milestone-3 calibration (step 9t): a seed-sensitive flip mints a REAL, reproducible
+    # run-to-run noise band so ``cw.calibrate`` measures a non-zero ``rubric_std``. The flip
+    # rate is a deterministic function of the per-run ``decode_seed`` (None on the scoring
+    # path -> no flip, so replay-based scoring is untouched), and a confidence field rides
+    # alongside as data (read by ``extract_confidence``; never an instruction).
+    if req.decode_seed is not None:
+        quality = _seeded_calibration_quality(ticket, temperature, req.decode_seed)
+        return json.dumps(
+            {
+                "category": category,
+                "severity": "normal",
+                "summary": ticket[:40],
+                "confidence": quality,
+            },
+            sort_keys=True,
+        )
     return json.dumps(
         {"category": category, "severity": "normal", "summary": ticket[:40]},
         sort_keys=True,
     )
+
+
+def _seeded_calibration_quality(ticket: str, temperature: float, decode_seed: int) -> float:
+    """A deterministic per-``decode_seed`` quality/confidence draw in ``[0,1]``.
+
+    Calibration re-runs each case under distinct derived seeds (the F-1 seed schedule). To
+    give ``cw.calibrate`` a genuine — but fully reproducible — noise band, the score is a
+    cool-favouring base (cooler decoding answers more reliably here, matching ``_quality_for``)
+    plus a TIGHT, seed-derived jitter. The jitter is the run-to-run noise (a small, real
+    ``rubric_std``); the temperature gap is the signal a tuned candidate improves on. Pure:
+    same ``(ticket, temperature, seed)`` ⇒ same draw."""
+    base = 0.80 + 0.17 * _quality_for(temperature)  # hot -> ~0.80, cool -> ~0.97
+    digest = hashlib.sha256(f"{ticket}:{decode_seed}".encode()).digest()
+    jitter = (int.from_bytes(digest[:2], "big") / 0xFFFF - 0.5) * 0.02  # +/- 0.01 band
+    return round(max(0.0, min(1.0, base + jitter)), 4)
 
 
 # How many drafting iterations before the (mock) verifier accepts. The seed draft
@@ -350,7 +464,9 @@ RECURSE_MAX_DEPTH = 4
 _REPAIR_FACTOR = 2
 
 
-def _worst_case_calls(*, n_cases: int, n_tune: int, n_gate: int, n_candidates: int) -> int:
+def _worst_case_calls(
+    *, n_cases: int, n_tune: int, n_gate: int, n_candidates: int, n_calib: int
+) -> int:
     """The TRUE worst-case count of metered model calls across the whole scenario.
 
     Derived from the loop STRUCTURE (not a stale literal), so a complete run finishes at
@@ -359,6 +475,12 @@ def _worst_case_calls(*, n_cases: int, n_tune: int, n_gate: int, n_candidates: i
     * **Step 7 tune+gate** — the candidate sweep scores every tune case at each candidate
       temperature (``n_candidates × n_tune``) and the held-out gate set at the baseline
       *and* the chosen candidate (``2 × n_gate``).
+    * **Step 9t (Milestone-3 flagship — train/eval)** — ``cw.calibrate`` re-runs every
+      calibration case ``CALIBRATE_RUNS`` times to measure the noise band
+      (``CALIBRATE_RUNS × n_calib``), and the cost-regularized ``Objective`` sweep then
+      scores each candidate temperature once over the calibration cases
+      (``n_candidates × n_calib``). Both run on the live (non-replay) runtime — calibrate
+      REFUSES a replay wrapper — so every one of these is a real metered call.
     * **Step 9** — the hand-rolled bounded loop runs at most ``_STEP9_LOOP_BOUND`` visits.
     * **Step 9r (Refine)** — at most ``REFINE_MAX_ITERS`` iterations, each costing a body
       draft AND the gated verifier's critic call (``_REFINE_CALLS_PER_ITER``).
@@ -373,11 +495,12 @@ def _worst_case_calls(*, n_cases: int, n_tune: int, n_gate: int, n_candidates: i
     spend. (The ``$0``-resume re-runs of steps 9 / 9r / 9d add nothing — they replay at $0.)
     """
     step7 = n_candidates * n_tune + 2 * n_gate
+    step9t = CALIBRATE_RUNS * n_calib + n_candidates * n_calib  # calibrate + objective sweep
     step9 = _STEP9_LOOP_BOUND
     step9r = REFINE_MAX_ITERS * _REFINE_CALLS_PER_ITER
     step9c = n_cases  # Router: one branch-handler call per routed ticket
     step9d = RECURSE_MAX_DEPTH  # recurse: one body call per descent level
-    return (step7 + step9 + step9r + step9c + step9d) * _REPAIR_FACTOR
+    return (step7 + step9t + step9 + step9r + step9c + step9d) * _REPAIR_FACTOR
 
 
 def _draft_reply(ticket: str, iter_index: int) -> dict[str, JSONValue]:
@@ -494,8 +617,18 @@ class Backend:
 
     runtime: AgentRuntime
     live: bool
+    #: The runtime ``cw.calibrate`` drives — the RAW, non-replay backend. calibrate REFUSES a
+    #: :class:`RecordReplayRuntime` (replay would report a fabricated zero-variance band), so
+    #: the flagship hands it the bare runtime: the MockRuntime on the deterministic path (whose
+    #: responder varies per ``decode_seed`` to mint a real, reproducible noise band) and the
+    #: bare ``CommandRuntime`` on the live path (un-recorded, real metered re-runs).
+    calibrate_runtime: AgentRuntime = field(default=None)  # type: ignore[assignment]
     model: str | None = None
     per_call_usd: float = 0.0
+    #: True once the **flagship train/eval step** fired a REAL (non-replay) calibrate/objective
+    #: call this run (live path only). It is informational — calibrate is never replayed, so a
+    #: live run always exercises it fresh; the mock path leaves it False.
+    train_recorded: bool = False
     #: True once the **Refine step** fired a REAL (non-replay) draft call this run — i.e. the
     #: Refine step was freshly recorded and therefore MUST meter > $0 (the Gap-#3 guard).
     #: Stays False when the Refine step fully replayed at $0 (every Refine cassette hit) — a
@@ -518,7 +651,11 @@ def _make_backend(*, live: bool, record: bool, model: str | None) -> Backend:
     on a CHEAP model, wrapped in :class:`RecordReplayRuntime` so the first live run
     records fresh cassettes (F-1) and a re-run replays them bit-identically at $0."""
     if not live:
-        return Backend(runtime=MockRuntime(_deterministic_responder), live=False)
+        # ONE MockRuntime serves both the (replay-shaped) scoring calls and ``cw.calibrate``
+        # directly: the responder reads ``decode_seed`` to vary per run, so calibrate sees a
+        # real, reproducible noise band over a runtime that is NOT a RecordReplayRuntime.
+        mock = MockRuntime(_deterministic_responder)
+        return Backend(runtime=mock, live=False, calibrate_runtime=mock)
     from crawfish.runtime import CommandRuntime  # real ``claude -p`` backend
 
     live_model = model or DEFAULT_LIVE_MODEL
@@ -527,6 +664,9 @@ def _make_backend(*, live: bool, record: bool, model: str | None) -> Backend:
     return Backend(
         runtime=RecordReplayRuntime(inner, CASSETTE_DIR, record=record),
         live=True,
+        # calibrate drives the BARE CommandRuntime (it refuses the replay wrapper); these
+        # runs are real + metered every time, and the worst-case bound accounts for them.
+        calibrate_runtime=inner,
         model=live_model,
         per_call_usd=_LIVE_PER_CALL_USD.get(live_model, 0.05),
     )
@@ -924,8 +1064,15 @@ def run_self_improvement(
     n_cases = len(_SEED_TICKETS)
     n_tune = n_cases // 2
     n_gate = n_cases - n_tune
+    # The Milestone-3 flagship calibrates over the full trusted gold set (all seeds), so the
+    # calibration fan-out is sized off ``n_cases`` here and re-derived from the live gold in
+    # step 6. (The poisoned correction is quarantined out, so the gold is exactly the seeds.)
     worst_calls = _worst_case_calls(
-        n_cases=n_cases, n_tune=n_tune, n_gate=n_gate, n_candidates=len(_CANDIDATE_TEMPS)
+        n_cases=n_cases,
+        n_tune=n_tune,
+        n_gate=n_gate,
+        n_candidates=len(_CANDIDATE_TEMPS),
+        n_calib=n_cases,
     )
     # Price each worst-case call at ``per_call_usd × headroom`` so the bound dominates the
     # double charge (synthetic per_call_usd + the runtime's own real cost_usd). Mock => $0.
@@ -1014,6 +1161,7 @@ def run_self_improvement(
             n_tune=len(tune),
             n_gate=len(gate_cases),
             n_candidates=len(candidate_temps),
+            n_calib=len(cases),  # calibrate over the full trusted gold set
         )
         assert actual_worst_calls == worst_calls, (
             f"cost model drift: live fan-out worst case is {actual_worst_calls} calls but "
@@ -1183,6 +1331,17 @@ def run_self_improvement(
     # (built on raw F primitives) used to be the only option.
     _run_refine_step(backend, res, store, ctx, org_id=org_id)
 
+    # --- 9t. Milestone-3 FLAGSHIP: train -> calibrate -> tune -> promote -> ship. --
+    # The train/eval thesis, end to end on the triage agent: ``train()`` enters mutable
+    # mode, ``cw.calibrate`` measures the noise band (rubric_std) over seeded re-runs, the
+    # cost-regularized ``Objective`` (Σwᵢ·scoreᵢ − λ·cost − μ·ece) picks a winning
+    # temperature, the variance-aware ``promote_against_baseline`` gate decides whether the
+    # gain clears the calibrated band, the winner's knobs round-trip through ``state_dict`` /
+    # ``load_state`` (sha-identity on the knob values), and ``eval()`` re-freezes the winner
+    # so — and ONLY so — it may later fire the consequential Sink. Runs in the SAME shared
+    # CostBudget; the worst-case bound (step 6) already accounts for its calibrate + sweep.
+    _run_train_eval_step(backend, res, defn, ctx, store, org_id=org_id)
+
     # --- 9c/9d. Milestone-2: COMPOSITION — Router branch + bounded recurse. ----
     # The composition surface stands up: a runnable Router routes each ticket by its
     # (fluid) type down ONE static branch, and a multi-part ticket is split and handled
@@ -1210,6 +1369,244 @@ def run_self_improvement(
 
     store.close()
     return res
+
+
+# ----------------------------------------------------- Milestone-3: train/eval flagship
+#: The single knob the flagship tunes, as a dotted path into the Definition's knob space —
+#: the authoring vocabulary ``state_dict`` / the mutators already speak. A consequential knob
+#: (model/policies) would be STATIC-only; ``temperature`` is a safe decode knob, so it may be
+#: tuned. Its candidate domain is the SAME authoritative ``_CANDIDATE_TEMPS`` tuple step 7 uses.
+def _lead_temp_knob(defn: Definition) -> str:
+    lead = defn.team.lead or (defn.team.agents[0].role if defn.team.agents else "lead")
+    return f"agent.{lead}.temperature"
+
+
+def _build_calibration_rubric() -> Rubric:
+    """A rubric whose single metric is a per-run quality SIGNAL with real variance.
+
+    ``cw.calibrate`` measures this metric's **std across the seeded re-runs** — that std is
+    the noise band the variance-aware gate keys off. The metric is ``1.0`` when the triage
+    agent committed to a known category and ``0.0`` when the seeded draw made it abstain
+    (``"unknown"``), so its run-to-run std is a genuine, reproducible band (not a fabricated
+    zero). Pure: no model call, no I/O."""
+    from crawfish.metrics import Metric
+
+    class _ReplyQuality(Metric):
+        # Named ``accuracy`` so the calibration baseline (rubric_mean/rubric_std) carries the
+        # SAME metric key the variance-aware promotion gate keys off (``primary="accuracy"``).
+        # Reads the GRADED ``confidence`` the agent reports — a continuous quality signal whose
+        # tight run-to-run jitter is a small, real noise band (a binary metric's std would be
+        # too wide for any honest gain to clear).
+        name = "accuracy"
+
+        def evaluate(self, output: Output[JSONValue]) -> float:
+            value = output.value
+            conf = value.get("confidence") if isinstance(value, dict) else None
+            try:
+                return max(0.0, min(1.0, float(conf)))  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                return 0.0
+
+    # ONE metric only: the baseline the variance-aware gate reads carries exactly the
+    # ``accuracy`` key the candidate is scored on, so the hard regression gate has no
+    # phantom non-primary metric (a baseline metric the candidate dict omits) to veto on.
+    return Rubric([_ReplyQuality()])
+
+
+def _run_train_eval_step(
+    backend: Backend,
+    res: DemoResult,
+    defn: Definition,
+    ctx: RunContext,
+    store: Store,
+    *,
+    org_id: str,
+) -> None:
+    """Run the Milestone-3 FLAGSHIP train/eval cycle and record its evidence.
+
+    The full train/eval thesis on the triage agent (all on the SHARED ``ctx``/budget):
+
+    1. **train()** — enter mutable mode (``train_mode`` returns an unfrozen copy with a fresh
+       ``Version``; a training mutation is copy-on-write, never an in-place edit of the frozen
+       artifact). Consequential side effects are forbidden until ``eval()``.
+    2. **calibrate** — ``cw.calibrate`` re-runs each golden case ``CALIBRATE_RUNS`` times under
+       distinct derived seeds against the BARE (non-replay) runtime — it refuses a
+       ``RecordReplayRuntime``, which would report a fabricated zero-variance band — and
+       returns a ``CalibrationReport``: the per-metric noise band (``rubric_std``), the
+       structural ``output_variance``, Brier/ECE (when labels admit it), and an
+       evidence-derived abstention threshold.
+    3. **tune** — for each candidate temperature, score the calibration cases and score the
+       candidate under a cost-regularized ``Objective`` (Σwᵢ·scoreᵢ − λ·cost − μ·ece); the
+       max-Objective candidate wins. The tuned knob is the lead agent's decode ``temperature``
+       (a safe knob; a consequential model/policy knob would be static-only).
+    4. **promote** — ``promote_against_baseline`` (the variance-aware gate) decides whether the
+       winner's gain clears the calibrated ``k·std`` band. A promote OR a justified reject are
+       both valid (the gain may fall inside real noise) — the gate returns a reasoned verdict.
+    5. **state_dict round-trip** — extract the winner's tunable knobs as a ``StateDict`` (the
+       'weights'), load them into a FRESH Definition, and assert the knob-value sha is
+       bit-identical (sha-identity on the knob values; architecture excluded).
+    6. **eval()** — re-freeze the winner; only an eval-mode (frozen) Definition has the stable
+       content identity a recorded run / consequential Sink requires.
+    """
+    import asyncio
+
+    knob_path = _lead_temp_knob(defn)
+    res.tuned_knob = knob_path
+
+    # 1. train(): enter mutable/train mode on a copy (fresh Version; CoW). ----------
+    train_defn = train_mode(defn)
+    assert not train_defn.frozen, "train() must return an unfrozen (mutable) Definition"
+
+    # The calibration/tune gold is the trusted corrections corpus (poison quarantined).
+    gold = GoldenSet.from_corrections(store, org_id=org_id)
+    calib_cases = gold.cases()
+
+    # calibrate binds each case's inputs; inject the corrected category as ``_expected`` and a
+    # decode ``_temperature`` so the (mock) responder produces a meaningful, seeded quality
+    # score — real DATA on the input path, never an instruction. We calibrate at the HOT
+    # baseline temperature: that establishes the bar (and its noise band) a tuned candidate
+    # must beat — the step-7 baseline-vs-candidate framing, now variance-aware.
+    baseline_temp = 1.0
+
+    def _inputs_for(case: EvalCase) -> dict[str, JSONValue]:
+        return {
+            "project": "acme",
+            "ticket_body": str(case.inputs.get("ticket_body", "")),
+            "_expected": _expected_of(case),
+            "_temperature": baseline_temp,
+        }
+
+    # 2. calibrate: measure the noise band over CALIBRATE_RUNS seeded re-runs. -------
+    report: CalibrationReport = asyncio.run(
+        calibrate(
+            train_defn,
+            calib_cases,
+            runs=CALIBRATE_RUNS,
+            ctx=ctx,
+            runtime=backend.calibrate_runtime,
+            rubric=_build_calibration_rubric(),
+            cost_per_run_usd=backend.per_call_usd if backend.live else 0.0,
+            base_seed=0,
+            inputs_for=_inputs_for,
+        )
+    )
+    if backend.live:
+        backend.train_recorded = True
+    res.train_ran = True
+    res.calib_runs = report.runs
+    res.calib_cases = report.cases
+    band = report.rubric_std.get("accuracy", 0.0)
+    res.calib_rubric_std = band
+    res.calib_brier = report.brier
+    res.calib_ece = report.ece
+    res.calib_abstention_threshold = report.abstention_threshold
+    res.total_spend_usd = ctx.cost_budget.spent_usd
+    res.steps.append(
+        StepResult(
+            9,
+            "calibrate (noise band)",
+            f"{report.runs}×{report.cases} runs -> rubric_std[accuracy]={band:.3f}, "
+            f"output_var={report.output_variance:.3f}, brier={report.brier}, "
+            f"abstain<{report.abstention_threshold:.2f}",
+        )
+    )
+
+    # Seed the variance-aware baseline from the report (its rubric_mean + the std band).
+    save_baseline_from_report(store, "triage-train", report, org_id=org_id)
+
+    # 3. tune under the cost-regularized Objective. ---------------------------------
+    # A TuneSpec is the typed tune.toml: the knob domain is author config (static, hashed),
+    # never a fluid value — the security boundary the spec upholds. We search the SAME
+    # authoritative candidate tuple step 7 uses.
+    spec = TuneSpec(knobs=[KnobDomain(path=knob_path, values=list(_CANDIDATE_TEMPS), tunable=True)])
+    assert spec.is_tunable(knob_path), "the lead temperature knob must be declared tunable"
+
+    # The Objective trades quality against (normalized) cost; ece weight ships at 0 until a
+    # labelled calibration is wired (the report's ece is a diagnostic here). The cheapest
+    # candidate normalizes the cost term so λ is unit-free.
+    objective = Objective(
+        weights={"accuracy": 1.0},
+        cost_weight=0.1,
+        ece_weight=0.0,
+        cost_baseline_usd=(backend.per_call_usd or 1.0) * max(1, len(calib_cases)),
+    )
+
+    def _accuracy_at(temp: float) -> float:
+        """Mean GRADED quality of the agent at ``temp`` over the gold — the SAME metric the
+        calibration baseline measured (the reported ``confidence``), so the gate compares
+        like with like. One seeded run per case (deterministic, reproducible)."""
+        scores: list[float] = []
+        for case in calib_cases:
+            ticket = str(case.inputs.get("ticket_body", ""))
+            scores.append(_seeded_calibration_quality(ticket, temp, decode_seed=0))
+        return sum(scores) / len(scores) if scores else 0.0
+
+    best_temp = baseline_temp
+    best_obj = float("-inf")
+    per_candidate_cost = (backend.per_call_usd or 1.0) * max(1, len(calib_cases))
+    for temp in _CANDIDATE_TEMPS:
+        acc = _accuracy_at(temp)
+        obj_value = objective.value({"accuracy": acc}, cost_usd=per_candidate_cost)
+        if obj_value > best_obj:
+            best_obj, best_temp = obj_value, temp
+    res.tuned_temperature = best_temp
+    res.objective_value = best_obj
+
+    # Apply the winning knob to the train copy (still mutable — a training mutation).
+    lead_role = defn.team.lead or defn.team.agents[0].role
+    winner = train_defn
+    lead_agent = winner.agent(lead_role)
+    if lead_agent is not None:
+        lead_agent.temperature = best_temp
+
+    # 4. promote: the variance-aware gate decides past the calibrated band. ---------
+    winner_acc = _accuracy_at(best_temp)
+    verdict: PromotionVerdict = promote_against_baseline(
+        store,
+        "triage-train",
+        {"accuracy": winner_acc},
+        primary="accuracy",
+        alpha=0.05,
+        org_id=org_id,
+    )
+    res.promotion = verdict
+    res.steps.append(
+        StepResult(
+            9,
+            "tune + variance-gate",
+            f"knob {knob_path} -> {best_temp} | obj={best_obj:.3f} | "
+            f"promoted={verdict.promoted} (gain {verdict.primary_gain:.3f} vs band "
+            f"{verdict.primary_band:.3f}): {verdict.reason}",
+        )
+    )
+
+    # 5. state_dict round-trip: the winner's knobs are the 'weights'. ----------------
+    state: StateDict = state_dict(winner)
+    res.state_dict_sha = state.sha
+    reloaded = load_state(Definition.model_validate(winner.model_dump()), state)
+    # sha-identity: loading the SAME knobs back re-mints the identical knob-value sha.
+    res.state_roundtrip_ok = state_dict(reloaded).sha == state.sha
+    res.steps.append(
+        StepResult(
+            9,
+            "state_dict round-trip",
+            f"knob-value sha {state.sha} -> load_state -> {state_dict(reloaded).sha} "
+            f"({'identical' if res.state_roundtrip_ok else 'DIVERGED'})",
+        )
+    )
+
+    # 6. eval(): re-freeze the winner — only now may it fire a consequential Sink. ---
+    shipped = eval_mode(winner)
+    assert shipped.frozen, "eval() must return a frozen (eval-mode) Definition"
+    res.train_eval_frozen_sha = shipped.content_sha()
+    res.total_spend_usd = ctx.cost_budget.spent_usd
+    res.steps.append(
+        StepResult(
+            9,
+            "eval() freeze (ship gate)",
+            f"winner frozen sha={res.train_eval_frozen_sha} — Sink-eligible (train-mode forbidden)",
+        )
+    )
 
 
 def _run_composition_step(
