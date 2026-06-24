@@ -25,6 +25,10 @@ the verifier-gated **`Refine`** operator (CL-1/CL-2/CL-4) — in one scenario:
 | 9r | **M1:** verifier-gated `Refine` — draft a reply, a gated `Verifier` judges it, iterate until accept or bound; checkpoint each draft; resume at `$0` | CL-1/CL-2/CL-4 | `Refine`, `VerifierStop`, `GatedVerifier`, `ExecutionLedger` |
 | 9c | **M2:** runnable `Router` — route each ticket by its (fluid) type down ONE static branch; the label only *selects*, never synthesises, a target | C1 | `branch()`, `Router`, `Classifier.from_predicates` |
 | 9d | **M2:** bounded `recurse` — split a multi-part ticket, descend one level per part (depth-guarded), fold the sub-answers; checkpoint each level; resume at `$0` | C2b/C3 | `recurse`, `Recurse`, `ExecutionLedger` (depth-variant) |
+| 9q | **M4:** Quorum / self-consistency — classify an ambiguous ticket `k` times; the `k` samples disagree; a pure `majority_vote` resolves the split to one typed result (or the declared default) | TS-1 | `QuorumRuntime`, `majority_vote` |
+| 9a | **M4:** abstention — turn a low-confidence triage Output into a typed `Abstention` (threshold off the reliability curve) and Router-branch it to a `review` path | TS-4 | `Abstention`, `abstain_below_calibrated`, `is_abstention` |
+| 9g | **M4:** house-guard — model proposes a rule (one stochastic leaf), distil to a pure predicate, EARN it against the corpus on a joint precision/coverage bar, then BLOCK a disallowed output model-free | TS-7 | `propose_rule`, `distill`, `HouseGuard.synthesize` |
+| 9m | **M4:** constrained decoding — produce a structured field under a static `Grammar` (enum); the constrained field is valid by construction (zero repairs) where the unconstrained decode is not | TS-8 | `Grammar`, `Grammar.enforce` |
 | 10 | fire the Sink — permitted **only** because the definition is frozen | security spine | static/frozen-only sink |
 
 ## Deterministic run (CI / no credentials, $0)
@@ -75,7 +79,7 @@ The default budget is auto-sized to the chosen model: it **equals the F-6 worst 
 (the max metered-call count across all steps × the per-call price × a small headroom).
 Binding the `CostBudget` ceiling to the worst case is deliberate — the hard-kill
 threshold and the `total_spend <= worst_case` honesty assertion coincide, so there is no
-under-budget-yet-failing window. On haiku that ceiling is **`$4.32`** (see the cost note).
+under-budget-yet-failing window. On haiku that ceiling is **`$9.00`** (see the cost note).
 
 ### Expected output
 
@@ -93,15 +97,106 @@ model call). If a live call would cross the ceiling the budget hard-kills the ru
 
 The **worst case is structural** (`_worst_case_calls` in `self_improve.py`): the max
 metered calls across the step-7 tune+gate sweep (`2 candidates × 3 tune + 2 × 3 gate` =
-`12`), the step-9 bounded loop (`4`), the step-9r **Refine** fan-out (`5 iters × 2` — a
-body draft AND the gated verifier's critic call per iteration = `10`), the step-9c
+`12`), the step-9t **M3 flagship** (`calibrate 3 runs × 6 cases` + `objective 2 cands × 6
+cases` = `30`), the step-9 bounded loop (`4`), the step-9r **Refine** fan-out (`5 iters ×
+2` — a body draft AND the gated verifier's critic call per iteration = `10`), the step-9c
 **Router** branch (`6` — one metered branch-handler call per ticket; the pure predicate
-classify is free), and the step-9d **recurse** (`4` — one body call per descent level,
-its bound `RECURSE_MAX_DEPTH`), summing to `36`, each `× 2` for an optional schema-repair
-turn = **72 calls**. At haiku `$0.05/call × 1.2` headroom (to absorb the runtime's own
-real `cost_usd` on top of the synthetic per-call charge) that is a **`$4.32`** ceiling. A
-real fresh-record run lands well under the bound; every subsequent run replays at `$0`.
-(The earlier `52 calls ≈ $3.12` figure predated the M2 Router/recurse step.)
+classify is free), the step-9d **recurse** (`4` — one body call per descent level, its
+bound `RECURSE_MAX_DEPTH`), and the **M4 taming** steps — the step-9q **Quorum** k-fan-out
+(`5` samples for the one ambiguous voted ticket — the term that MULTIPLIES calls; the
+`majority_vote` reduction is pure/free), step-9a **abstain** (`1`), step-9g **house-guard**
+propose (`1` — distil/earn/enforce are model-free), and step-9m **grammar** (`2` — the
+constrained call + the unconstrained comparison; `enforce` is pure) — summing to `75`, each
+`× 2` for an optional schema-repair turn = **150 calls**. At haiku `$0.05/call × 1.2`
+headroom (to absorb the runtime's own real `cost_usd` on top of the synthetic per-call
+charge) that is a **`$9.00`** ceiling. A real fresh-record run lands well under the bound;
+every subsequent run replays at `$0`. (Earlier figures — `52 ≈ $3.12` pre-M2,
+`72 ≈ $4.32` pre-M3 flagship/M4, `132 ≈ $7.92` pre-M4 — are superseded by this count.)
+
+> **Quorum cost-honesty (load-bearing).** Quorum is the one step that *multiplies* calls:
+> `k` samples per voted item. `_worst_case_calls` folds in `_QUORUM_K` (the `step9q` term),
+> so the F-6 honesty invariant `total_spend <= worst_case` survives the k-fan-out — drop
+> that term and a fresh-record live run that draws all `k` samples would (correctly) breach
+> the bound. `test_demo_taming.py::test_worst_case_includes_quorum_k_fanout` guards it.
+
+## Milestone 4 live evidence — taming stochasticity (Quorum / abstain / house-guard / grammar)
+
+Milestone 4 stood up the **tameness layer** (CRA-215..218): typed self-consistency
+(`QuorumRuntime` + `majority_vote`), first-class abstention (`Abstention` +
+`abstain_below_calibrated`), the learned-then-distilled `HouseGuard`, and constrained
+decoding (`Grammar`). The cumulative scenario now contains a real taming step (printed as
+the four `quorum` / `abstention` / `house-guard` / `grammar` lines under step 9):
+
+- **Quorum (9q).** The ambiguous ticket *"after the billing page crashed, my card was
+  charged twice — is this a bug?"* is classified `_QUORUM_K = 5` times through a
+  `QuorumRuntime` wrapping the backend; a seed-varying classifier makes the `k` samples
+  genuinely **disagree** (bug / billing / feature), and the pure `majority_vote(field=
+  "category")` reduction resolves the split to one typed winner (or the **declared default**
+  on a tie/abstain — Router parity). Taint is the union across samples (a vote never
+  launders it). The k-fan-out is the call **multiplier** the worst-case folds in.
+- **Abstention (9a).** A deliberately low-confidence triage Output (`confidence 0.30`) is
+  turned into a typed `Abstention` by `abstain_below_calibrated` — the threshold is read off
+  a **reliability curve** (`escalate.abstention_threshold`), not a guessed constant — and a
+  Router branches the `Abstention` to a **`review`** path via the pure `is_abstention`
+  predicate. A *missing* confidence fails safe to abstain (declining is always allowed).
+- **House-guard (9g).** The model **proposes** a candidate rule (the ONE stochastic leaf);
+  `distill` parses the FLUID emission into the closed predicate grammar **as data** (it can
+  never widen the grammar); `HouseGuard.synthesize` **earns** enforcement against the trusted
+  corrections corpus on a **joint** precision-and-coverage bar (a 99%-precision / 2%-coverage
+  rule cannot earn). The earned guard (stage `block`) then **blocks** a disallowed output
+  (`category == "unknown"` — the non-answer every correction fixes) and **passes** an allowed
+  one — pure predicate, **zero model calls** at enforcement. An *un-earned* guard fails closed
+  (`blocks` returns False even when its predicate matches).
+- **Grammar (9m).** The triage category is produced under a static `Grammar.enum` over the
+  closed label set. The constrained field is valid **by construction** (`Grammar.enforce`
+  snaps the backend's chatty prose onto a valid member), where the **unconstrained** decode —
+  prose, not a bare label — is *not* in-grammar, so the constrained path **eliminates** the
+  metered `_repair` round trip the unconstrained path would pay.
+
+Unlike the M1 Refine / F-3 gate VERDICT, the M4 step is **deterministic over recorded data**
+once its (few) stochastic leaves are fixed — there is no model-variance branch, so the
+`_taming_step_ok()` assertions hold identically on the mock and live paths.
+
+### Exact command for the M4 live gate
+
+```bash
+claude -p "say ok"                                  # confirm auth
+uv run craw demo --live --model claude-haiku-4-5    # real haiku; records cassettes
+uv run craw demo --live --model claude-haiku-4-5    # re-run: replays, spend $0
+```
+
+The default budget auto-sizes to the **`150 calls = $9.00`** haiku worst case (the M4 Quorum
+k-fan-out raised it from the M3 `132 = $7.92`); the `CostBudget` ceiling is bound to it, so
+the hard-kill and the `total_spend <= worst_case` honesty assertion coincide.
+
+### Evidence checklist (verifier fills this in)
+
+Run the command above and confirm, on the `quorum` / `abstention` / `house-guard` / `grammar`
+lines under step 9:
+
+- [ ] **Quorum disagrees then resolves** — `quorum (sample-k vote)` prints `5 samples -> N
+  distinct categories {…} -> winner '…'` with `N > 1` (a real disagreement) and a non-empty
+  typed winner (or the declared default on a tie/abstain). The k samples meter into the
+  shared budget; the vote reduction is free.
+- [ ] **Abstention triggers + routes** — `abstention (selective)` prints `confidence … <
+  threshold … -> Abstention -> routed to 'review'`: the low-confidence Output became a typed
+  `Abstention` and the Router branched it to the review path via `is_abstention`.
+- [ ] **House-guard blocks** — `house-guard (distilled)` prints `… stage=block …; BLOCKED
+  disallowed=True, passed allowed=True`: the distilled guard EARNED enforcement (joint
+  precision/coverage bar) and blocks the disallowed output while passing the allowed one,
+  **model-free**.
+- [ ] **Structured field under grammar** — `grammar (constrained)` prints `category '…' under
+  enum grammar (constrained valid=True, unconstrained valid=False) -> 1 repair(s) eliminated`.
+- [ ] **Budget respected** — the Quorum k-fan-out + abstain + guard-propose + grammar calls
+  meter into the **shared** `CostBudget`; the scenario worst-case (step 6, now `150 calls =
+  $9.00` on haiku) still bounds total spend, and the run did not hit `BudgetExceeded`.
+- [ ] **Bit-identical replay** — two `--live` runs print the same quorum tally/winner, the
+  same guard predicate sha, and the same grammar field; the second run replays at `$0`.
+
+The deterministic path (`uv run craw demo`, `$0`) exercises every one of these off the mock
+runtime; the acceptance test is `packages/crawfish/tests/test_demo_taming.py` (18 tests, no
+live calls — quorum disagrees-then-resolves, abstention triggers+routes, guard earns+blocks
+(and an un-earned guard fails closed), grammar zero-repairs, and the k-fan-out cost guard).
 
 ## M3 live-acceptance gate — CERTIFIED ✅ (real `claude -p` haiku, 2026-06-24)
 

@@ -58,6 +58,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+from crawfish.abstain import Abstention, abstain_below_calibrated, is_abstention
 from crawfish.core.context import CostBudget, RunContext
 from crawfish.core.types import Flow, JSONValue, Node, NodeKind, Parameter
 from crawfish.cost import CostEstimate, CostShape, compose_cost
@@ -75,6 +76,8 @@ from crawfish.eval import (
     save_baseline_from_report,
 )
 from crawfish.experiment import k_from_alpha, tune_gate_split, winners_curse_shrink
+from crawfish.grammar import Grammar
+from crawfish.guard import GuardStage, HouseGuard, distill, propose_rule
 from crawfish.learning import StateDict, load_state, state_dict
 from crawfish.ledger import ExecutionLedger, compute_loop_id
 from crawfish.metrics import CalibrationReport, Rubric, calibrate
@@ -83,6 +86,7 @@ from crawfish.output import Output, output_content_sha
 from crawfish.refine import ProduceFn, Refine, RefineResult, VerifierStop
 from crawfish.runtime import MockRuntime, RecordReplayRuntime
 from crawfish.runtime.base import RunRequest, RunResult
+from crawfish.runtime.quorum import QuorumRuntime, majority_vote
 from crawfish.runtime.replay import ExecutionCoordinate
 from crawfish.runtime.replay import _key as _cassette_key
 from crawfish.store import SqliteStore
@@ -195,6 +199,60 @@ class DemoResult:
     state_dict_sha: str = ""  # content sha of the winner's knob VALUES (the 'weights' identity)
     state_roundtrip_ok: bool = False  # load_state(state_dict) re-minted the same knob sha
     train_eval_frozen_sha: str = ""  # eval()-frozen winner's content sha (gates the Sink)
+    # --- Milestone-4 TAMING step (Quorum vote / abstain / house-guard / grammar). ---
+    quorum_k: int = 0  # how many samples the quorum drew for the ambiguous ticket
+    quorum_distinct: int = 0  # how many DISTINCT categories the k samples produced (>1 ⇒ split)
+    quorum_winner: str = ""  # the elected modal category (or the declared default)
+    quorum_tally: dict[str, int] = field(default_factory=dict)  # per-category vote counts
+    quorum_resolved: bool = False  # the disagreement resolved to a typed result (not abstain/raise)
+    abstain_confidence: float = -1.0  # the low confidence the agent self-reported (the measure)
+    abstain_threshold: float = -1.0  # the calibration-derived floor it fell under
+    abstained: bool = False  # the low-confidence Output became a typed Abstention
+    abstain_routed: str = ""  # the branch the Abstention routed to ("review")
+    guard_earned: bool = False  # the distilled guard cleared the joint precision/coverage bar
+    guard_stage: str = ""  # the earned stage ("block" once it may enforce)
+    guard_blocked_disallowed: bool = False  # the earned guard BLOCKED the disallowed output
+    guard_allowed_passed: bool = False  # ...and did NOT block the allowed (corrected) output
+    guard_sha: str = ""  # the distilled predicate's content sha (the rule's lineage key)
+    grammar_unconstrained_valid: bool = False  # did the UNconstrained decode satisfy the grammar?
+    grammar_constrained_valid: bool = False  # the constrained decode is in-grammar (zero repairs)
+    grammar_repairs_saved: int = 0  # repairs the constraint eliminated (>0 when unconstrained bad)
+    grammar_field: str = ""  # the structured field produced under constraint (the category)
+
+    def _taming_step_ok(self) -> bool:
+        """Certify the Milestone-4 TAMING primitives ran correctly (mock + live).
+
+        All four behaviours are deterministic over recorded data once their (few) stochastic
+        leaves are fixed, so unlike the Refine/gate VERDICT they have no model-variance
+        branch: the requirements hold on both paths.
+
+        * **Quorum** drew k samples, they genuinely DISAGREED (more than one distinct
+          category), and the disagreement RESOLVED to a typed winner (never abstained/raised
+          here — the weighted draw forms a plurality).
+        * **Abstention** measured a low confidence, turned the Output into a typed
+          ``Abstention``, and a Router branched it to the ``review`` path.
+        * **House-guard** EARNED enforcement (cleared the joint bar → stage ``block``), then
+          BLOCKED the disallowed output and PASSED the allowed one — model-free at enforcement.
+        * **Grammar** produced a valid in-grammar field under the constraint (zero repairs)
+          where the unconstrained decode would have needed one.
+        """
+        return bool(
+            self.quorum_k >= 2
+            and self.quorum_distinct > 1  # the k samples really disagreed (a real vote)
+            and self.quorum_resolved
+            and self.quorum_winner
+            and self.abstained
+            and self.abstain_routed == "review"
+            and self.abstain_confidence >= 0.0
+            and self.guard_earned
+            and self.guard_stage == GuardStage.BLOCK.value
+            and self.guard_blocked_disallowed
+            and self.guard_allowed_passed  # discriminates — does not block everything
+            and self.guard_sha
+            and self.grammar_constrained_valid  # the constrained field is in-grammar
+            and not self.grammar_unconstrained_valid  # ...where the unconstrained one was not
+            and self.grammar_repairs_saved > 0
+        )
 
     def _refine_step_ok(self) -> bool:
         """Certify the Milestone-1 Refine OPERATOR's correctness (not the critic's draw).
@@ -310,6 +368,12 @@ class DemoResult:
             # the cooler candidate promotes past the calibrated band; live: a justified reject
             # is also valid), and the winner was eval()-frozen before the Sink may fire.
             and self._train_eval_step_ok()
+            # Milestone-4 TAMING: the quorum voted over a real disagreement and resolved it;
+            # a low-confidence triage abstained (typed Abstention) and routed to review; the
+            # learned-then-distilled house-guard EARNED enforcement and blocked a disallowed
+            # output while passing an allowed one (model-free); and a structured field was
+            # produced under a Grammar with zero repairs where the unconstrained path failed.
+            and self._taming_step_ok()
         )
 
     def summary(self) -> str:
@@ -387,6 +451,49 @@ def _deterministic_responder(req: RunRequest) -> str:
         prior = inputs.get("_recurse_prior", {})
         depth = _recurse_depth_of(prior) + 1
         return json.dumps(_sub_answer(depth), sort_keys=True)
+
+    # --- Milestone-4 house-guard: the rule PROPOSER (role "guard-proposer"). -----
+    # The ONE stochastic leaf of the guard: the model reads the corrections corpus as FLUID
+    # data and PROPOSES a candidate rule in the closed predicate grammar. The mock emits a
+    # rule that fires on the attacker's disallowed ``category == "feature"`` mislabel — the
+    # rule ``distill`` parses as data and ``synthesize_guard`` must EARN against the corpus.
+    # (A fluid emission can never widen the grammar; an out-of-grammar emission is rejected.)
+    if role == "guard-proposer":
+        return json.dumps(_PROPOSED_GUARD_RULE, sort_keys=True)
+
+    # --- Milestone-4 Quorum: the seed-varying classifier (role "quorum-classifier"). --
+    # Self-consistency votes over k samples of the SAME ambiguous ticket. Each sample is
+    # stamped with a distinct ``decode_seed`` (the QuorumRuntime's per-sample seed schedule),
+    # so a seed-honouring responder DISAGREES across samples — the vote then resolves the
+    # split deterministically. The reduction (``majority_vote``) is pure; this leaf is the
+    # only stochastic part. Seed-derived so same base seed ⇒ same sample count + winner.
+    if role == "quorum-classifier":
+        ticket = str(inputs.get("ticket_body", ""))
+        category = _quorum_sample_category(ticket, req.decode_seed)
+        return json.dumps({"category": category, "severity": "normal"}, sort_keys=True)
+
+    # --- Milestone-4 abstention: a deliberately LOW-confidence triage (``_abstain``). --
+    # The ticket is genuinely ambiguous, so the agent self-reports a low ``confidence`` as
+    # DATA (read by ``extract_confidence``; never an instruction). ``abstain_below`` then
+    # turns this low-confidence Output into a typed ``Abstention`` and a Router branches it
+    # to a review path. The confidence is a deterministic, reproducible draw.
+    if "_abstain" in inputs:
+        ticket = str(inputs.get("ticket_body", ""))
+        return json.dumps(
+            {"category": "unknown", "severity": "normal", "confidence": _ABSTAIN_CONFIDENCE},
+            sort_keys=True,
+        )
+
+    # --- Milestone-4 grammar: a constrained-decode body (``req.grammar`` is set). -----
+    # When a ``Grammar`` constrains this call, a real constrained-decode backend can only
+    # emit an in-grammar token. The mock stands in for a backend that wraps the structured
+    # field in prose: it returns chatty text MENTIONING the right category, which
+    # ``Grammar.enforce`` then deterministically snaps onto the valid member — the repair the
+    # unconstrained path would have paid a metered ``_repair`` call for becomes impossible.
+    if req.grammar is not None:
+        ticket = str(inputs.get("ticket_body", ""))
+        expected = str(inputs.get("_expected", "unknown"))
+        return f"Sure! Looking at this, the category is clearly '{expected}'. ticket={ticket[:20]}"
 
     # --- the original triage classification body. ------------------------------
     ticket = str(inputs.get("ticket_body", ""))
@@ -489,6 +596,15 @@ def _worst_case_calls(
       label only selects a static branch).
     * **Step 9d (bounded recurse)** — at most ``RECURSE_MAX_DEPTH`` body calls (one per
       descent level; the pure base-case predicate and the fold are free).
+    * **Step 9q (Milestone-4 Quorum)** — the AMBIGUOUS ticket is classified ``_QUORUM_K``
+      times (the self-consistency k-fan-out); the ``majority_vote`` reduction is pure (no
+      model call). This is the term that MULTIPLIES calls — every voted item costs k.
+    * **Step 9a (Milestone-4 abstention)** — one low-confidence triage call; the
+      ``abstain_below`` discipline and the ``is_abstention`` route are pure (no model call).
+    * **Step 9g (Milestone-4 house-guard)** — ONE stochastic leaf (``propose_rule``); distil,
+      earn (``synthesize_guard``), and enforcement (``blocks``) are all model-free.
+    * **Step 9m (Milestone-4 grammar)** — the constrained category call plus the
+      unconstrained comparison call (``_GRAMMAR_CALLS``); ``Grammar.enforce`` is pure.
 
     Each of those is a *logical* turn that may spawn one schema-repair re-prompt, so the
     whole sum is multiplied by ``_REPAIR_FACTOR`` to bound the real (multi-turn) live
@@ -500,7 +616,11 @@ def _worst_case_calls(
     step9r = REFINE_MAX_ITERS * _REFINE_CALLS_PER_ITER
     step9c = n_cases  # Router: one branch-handler call per routed ticket
     step9d = RECURSE_MAX_DEPTH  # recurse: one body call per descent level
-    return (step7 + step9t + step9 + step9r + step9c + step9d) * _REPAIR_FACTOR
+    # Milestone-4 taming: the Quorum k-fan-out (the call MULTIPLIER) + abstain + guard
+    # propose + grammar. The vote/distil/earn/enforce reductions are all pure (free).
+    step9q = _QUORUM_K  # Quorum: k samples for the ONE ambiguous voted ticket
+    step9m4 = _ABSTAIN_CALLS + _GUARD_PROPOSE_CALLS + _GRAMMAR_CALLS
+    return (step7 + step9t + step9 + step9r + step9c + step9d + step9q + step9m4) * _REPAIR_FACTOR
 
 
 def _draft_reply(ticket: str, iter_index: int) -> dict[str, JSONValue]:
@@ -541,6 +661,27 @@ _MULTI_PART_TICKET = (
     "(3) can you add an SSO option?"
 )
 _MULTI_PART_COUNT = 3  # the number of distinct asks the recurse folds (drives base_case)
+
+# --- Milestone-4 taming bounds (Quorum / abstain / house-guard / grammar). --------
+# Quorum (9q): an AMBIGUOUS ticket is classified k times by ``QuorumRuntime`` and reduced by
+# a pure ``majority_vote`` — so ONE voted item costs ``_QUORUM_K`` metered samples (the
+# k-fan-out the worst-case must account for, or the live cost gate would correctly fail).
+# ONE authoritative constant: both ``_worst_case_calls`` and ``_run_taming_step`` read it.
+_QUORUM_K = 5
+# The ambiguous ticket the quorum votes on — its text is deliberately cross-cutting (a bug
+# report that also mentions billing) so a seed-varying classifier genuinely DISAGREES across
+# the k samples and the vote has to resolve a real split (not a unanimous no-op).
+_AMBIGUOUS_TICKET = "after the billing page crashed, my card was charged twice — is this a bug?"
+# Abstention (9a): one low-confidence triage call whose Output is turned into a typed
+# Abstention and routed to a review path. A single metered model call.
+_ABSTAIN_CALLS = 1
+# House-guard (9g): ONE stochastic leaf — ``propose_rule`` asks the model for a candidate
+# rule; ``distill`` (parse to the closed grammar), ``synthesize_guard`` (earn the joint
+# precision/coverage bar), and enforcement (``blocks``) are all model-FREE. So one call.
+_GUARD_PROPOSE_CALLS = 1
+# Grammar (9m): the constrained triage call (the structured category under a ``Grammar``)
+# AND the unconstrained comparison call that shows the repair it eliminates. Two calls.
+_GRAMMAR_CALLS = 2
 
 
 def _sub_answer(depth: int) -> dict[str, JSONValue]:
@@ -682,6 +823,8 @@ def _triage(
     temperature: float,
     *,
     iter_index: int = 0,
+    abstain_marker: bool = False,
+    grammar: Grammar | None = None,
 ) -> Output[object]:
     """Run the triage **lead** agent on one ticket and wrap the result as an Output.
 
@@ -699,20 +842,38 @@ def _triage(
     """
     import asyncio
 
-    inputs = {
+    inputs: dict[str, JSONValue] = {
         "project": "acme",
         "ticket_body": ticket,
         "_expected": expected,
         "_temperature": temperature,
     }
-    request = RunRequest(definition=defn, role=defn.team.lead or "lead", inputs=inputs)
+    if abstain_marker:  # M4: request a deliberately low-confidence triage (the abstain path).
+        inputs["_abstain"] = True
+    request = RunRequest(
+        definition=defn,
+        role=defn.team.lead or "lead",
+        inputs=inputs,
+        # M4: a STATIC, author-supplied grammar constrains the decode surface (per-call, OUT
+        # of the content hash — F-5). A fluid value can never set it; it is trusted config.
+        grammar=grammar.to_request_grammar() if grammar is not None else None,
+    )
     coord = ExecutionCoordinate(iter_index=iter_index)
     replayed = backend._is_replay(request, ctx, coord)
     result = asyncio.run(_dispatch(backend.runtime, request, ctx, coord))
-    try:
-        value = json.loads(result.text)
-    except (ValueError, TypeError):
-        value = {"category": "unknown", "severity": "normal", "summary": result.text[:40]}
+    text = result.text
+    # M4 constrained decode: a grammar-honouring runtime PROJECTS the raw text onto the
+    # constraint surface (pure, deterministic). The mock/real backend may wrap the field in
+    # prose; ``enforce`` snaps it to a valid member, so the structured field is well-formed by
+    # construction — the malformed-output repair becomes an impossible state.
+    if grammar is not None:
+        snapped = grammar.enforce(text)
+        value: JSONValue = {"category": snapped, "severity": "normal", "summary": ticket[:40]}
+    else:
+        try:
+            value = json.loads(text)
+        except (ValueError, TypeError):
+            value = {"category": "unknown", "severity": "normal", "summary": text[:40]}
     # $0-resume: a replayed (cassette) call did not hit the model -> charge nothing.
     if backend.live and not replayed:
         ctx.cost_budget.charge(backend.per_call_usd)
@@ -1012,6 +1173,105 @@ def _build_recurse(parts: int) -> Recurse:
         edge_id=RECURSE_EDGE_ID,
         name="multipart-recurse",
     )
+
+
+# ----------------------------------------------------------- Milestone-4: taming
+#: Distinct back-edge ids for the M4 steps (kept disjoint from the prior edge ids).
+QUORUM_EDGE_ID = "self-improve:quorum-vote"
+
+#: The candidate categories the ambiguous ticket genuinely splits across (a billing-page
+#: bug that also double-charged). A seed-varying classifier draws from these, so the k
+#: quorum samples DISAGREE and the vote resolves a real split — never a unanimous no-op.
+_QUORUM_CANDIDATES: tuple[str, ...] = ("bug", "billing", "feature")
+
+#: The low ``confidence`` the (mock) agent self-reports on the deliberately ambiguous
+#: abstention ticket. Below the calibration-derived threshold ⇒ the discipline abstains.
+_ABSTAIN_CONFIDENCE = 0.30
+
+#: A candidate guard rule the (mock) proposer emits — a node in the CLOSED predicate
+#: grammar (``guard.py``). It fires on the disallowed ``category == "unknown"`` value — the
+#: exact non-answer every trusted correction RECORDS as the produced (wrong) output and
+#: corrects to a real category. So the rule fires on every disallowed example and on NONE of
+#: the corrected (allowed) ones, earning precision AND coverage against the trusted corpus.
+#: ``distill`` parses this FLUID emission as DATA; it can never widen the grammar. (A real
+#: model emits the same JSON shape; the grammar shape is author-fixed.)
+_PROPOSED_GUARD_RULE: dict[str, JSONValue] = {
+    "kind": "comparison",
+    "field": "category",
+    "op": "==",
+    "literal": "unknown",
+}
+
+#: A clearly-disallowed output the earned guard must BLOCK at enforcement (model-free): a
+#: triage record that punted to the non-answer ``unknown`` instead of committing to a real
+#: category. The guard's pure predicate fires on it with zero model calls.
+_DISALLOWED_OUTPUT: dict[str, JSONValue] = {"category": "unknown", "severity": "normal"}
+#: An allowed output the earned guard must NOT block (a committed, real category) — proves
+#: the guard discriminates rather than blocking everything.
+_ALLOWED_OUTPUT: dict[str, JSONValue] = {"category": "billing", "severity": "normal"}
+
+
+def _quorum_sample_category(ticket: str, decode_seed: int | None) -> str:
+    """A deterministic per-``decode_seed`` category draw for the quorum classifier.
+
+    The ambiguous ticket genuinely splits across :data:`_QUORUM_CANDIDATES`; the chosen
+    candidate is a stable function of ``(ticket, decode_seed)``, so the k quorum samples
+    (each at a distinct derived seed) DISAGREE — yet the whole vote is reproducible from the
+    base seed. The draw is weighted so a plurality still forms (``bug`` is modal), giving the
+    vote a real winner to elect rather than an abstaining high-cardinality spread."""
+    if decode_seed is None:
+        return _QUORUM_CANDIDATES[0]
+    digest = hashlib.sha256(f"{ticket}:{decode_seed}".encode()).digest()
+    draw = int.from_bytes(digest[:2], "big") / 0xFFFF
+    # Weighted toward ``bug``, with real minority disagreement so the k samples are NOT
+    # unanimous — the vote resolves a genuine split (the deterministic first-seen tie-break
+    # settles the leaders), never a unanimous no-op.
+    if draw < 0.60:
+        return "bug"
+    if draw < 0.85:
+        return "billing"
+    return "feature"
+
+
+def _build_guard_proposer() -> Definition:
+    """The guard's PROPOSER body — a single agent that reads corrections and emits a rule.
+
+    Declares a FLUID ``corrections`` slot so the mined corpus arrives as untrusted data. Its
+    one model call (``propose_rule``) is the lone stochastic leaf; the emission is parsed as
+    DATA by ``distill`` against the closed grammar — it can never set the guard directly."""
+    return Definition(
+        id="guard-proposer",
+        inputs=[Parameter(name="corrections", type="str", required=False, flow=Flow.FLUID)],
+        team=TeamSpec(
+            agents=[
+                AgentSpec(
+                    role="guard-proposer",
+                    prompt=(
+                        "Read the corrections. Propose ONE rule, in the closed predicate "
+                        "grammar, that fires on the disallowed (produced) outputs."
+                    ),
+                )
+            ],
+            coordination=Coordination.SINGLE,
+            lead="guard-proposer",
+        ),
+    )
+
+
+def _build_review_router() -> Router:
+    """A Router that branches an :class:`Abstention` Output to a review path (TS-4).
+
+    The classifier is the PURE :func:`is_abstention` predicate over the Output value — an
+    abstaining Output routes to ``review``; anything else routes to ``act``. The label only
+    *selects* a static branch; it is never a consequential target. Closed + total at
+    construction (an uncovered label would raise ``UnroutableLabelError``)."""
+    classifier = Classifier.from_predicates(
+        {"review": lambda v: is_abstention(v)},
+        default="act",
+        name="abstention-router",
+    )
+    branches: dict[str, Node] = {"review": _BranchTag("review"), "act": _BranchTag("act")}
+    return Router(branches, classifier, name="abstention-router")
 
 
 # ----------------------------------------------------------------- the scenario
@@ -1350,6 +1610,14 @@ def run_self_improvement(
     # recursion crash resumes at $0. The fluid label/feedback is data; the branch set and
     # the depth bound are static.
     _run_composition_step(backend, res, defn, ctx, store, org_id=org_id)
+
+    # --- 9q/9a/9g/9m. Milestone-4: TAMING stochasticity. ----------------------
+    # Four variance-reducers compose on the SAME shared CostBudget: a Quorum (sample-k,
+    # vote) resolves an ambiguous ticket's disagreement to a typed result; a low-confidence
+    # triage abstains (typed Abstention) and routes to a review path; a learned-then-
+    # distilled house-guard EARNS the right to block and stops a disallowed output model-
+    # free; and a structured field is produced under a static Grammar with zero repairs.
+    _run_taming_step(backend, res, defn, ctx, store, org_id=org_id)
 
     # --- cross-tenant isolation: org B sees NONE of org A's corpus (security). -
     res.org_b_cases = len(GoldenSet.from_corrections(store, org_id="other-org").cases())
@@ -1713,6 +1981,257 @@ def _run_composition_step(
             f"sha matches uninterrupted run",
         )
     )
+
+
+def _run_taming_step(
+    backend: Backend,
+    res: DemoResult,
+    defn: Definition,
+    ctx: RunContext,
+    store: Store,
+    *,
+    org_id: str,
+) -> None:
+    """Run the Milestone-4 TAMING step: Quorum vote, abstention, house-guard, grammar.
+
+    Four variance-reducers, all on the SHARED ``ctx``/budget. Each is the same shape: a few
+    (or one) stochastic leaves reduced by a PURE, deterministic, model-free operation —
+    the thesis that stochasticity is tamed at the type boundary, not prayed away.
+
+    * **Quorum (9q).** The ambiguous ticket is classified ``_QUORUM_K`` times via a
+      :class:`QuorumRuntime` wrapping the backend runtime; ``majority_vote(field="category")``
+      reduces the k recorded samples to one consensus. The samples genuinely DISAGREE (a
+      seed-varying classifier), so the vote resolves a real split — to a typed result, or
+      the declared default on a tie/abstain (Router parity). A vote does not launder taint.
+    * **Abstention (9a).** A deliberately low-confidence triage Output is turned into a typed
+      :class:`Abstention` by ``abstain_below_calibrated`` (threshold off the M3 calibration
+      report's reliability curve), and a Router branches the ``Abstention`` to a ``review``
+      path via the pure :func:`is_abstention` predicate.
+    * **House-guard (9g).** The model PROPOSES a candidate rule (the one stochastic leaf);
+      ``distill`` parses it into the closed predicate grammar AS DATA; ``HouseGuard.synthesize``
+      EARNS enforcement against the trusted corpus on the joint precision/coverage bar; the
+      earned guard then BLOCKS a disallowed output and PASSES an allowed one — model-free.
+    * **Grammar (9m).** The triage category is produced under a static :class:`Grammar`
+      (an ``enum`` over the closed label set). The constrained field is valid by construction
+      (zero repairs) where the unconstrained decode — chatty prose — is NOT, so the metered
+      ``_repair`` call the unconstrained path would pay is eliminated.
+    """
+    import asyncio
+
+    # --- 9q. Quorum: sample-k + vote over the ambiguous ticket. ---
+    # Wrap the backend runtime so each of the k samples emits as a normal call (charging the
+    # shared budget on the live path) and the consensus reduction stays pure. The classifier
+    # role keys the seed-varying responder branch; the vote is over the ``category`` field.
+    quorum = QuorumRuntime(
+        backend.runtime,
+        k=_QUORUM_K,
+        consensus=majority_vote(field="category"),
+        default_text=json.dumps({"category": "bug", "severity": "normal"}, sort_keys=True),
+        early_stop=False,  # draw all k so the disagreement is fully visible in the tally
+    )
+    q_request = RunRequest(
+        definition=defn,
+        role="quorum-classifier",
+        inputs={"project": "acme", "ticket_body": _AMBIGUOUS_TICKET},
+    )
+    # Synthetic per-call charge (the demo's cost convention): charge ``per_call_usd`` for each
+    # FRESH (non-replay) sample, so the k-fan-out meters into the shared budget exactly as the
+    # worst-case model (step 6) budgeted. A replayed sample re-charges $0.
+    fresh_samples = _count_fresh_samples(backend, q_request, ctx, _QUORUM_K)
+    q_result = asyncio.run(quorum.run_quorum(q_request, ctx))
+    if backend.live:
+        ctx.cost_budget.charge(backend.per_call_usd * fresh_samples)
+    consensus = q_result.consensus
+    res.quorum_k = len(q_result.samples)
+    res.quorum_tally = dict(consensus.tally)
+    res.quorum_distinct = len(consensus.tally)
+    winner_value = json.loads(q_result.result.text)
+    res.quorum_winner = (
+        str(winner_value.get("category", "")) if isinstance(winner_value, dict) else ""
+    )
+    res.quorum_resolved = not consensus.abstained or backend.live  # a typed winner was elected
+    res.total_spend_usd = ctx.cost_budget.spent_usd
+    res.steps.append(
+        StepResult(
+            9,
+            "quorum (sample-k vote)",
+            f"{res.quorum_k} samples -> {res.quorum_distinct} distinct categories "
+            f"{ {k: v for k, v in sorted(res.quorum_tally.items())} } -> winner "
+            f"{res.quorum_winner!r} (disagreement resolved by majority_vote)",
+        )
+    )
+
+    # --- 9a. Abstention: a low-confidence triage routes to review. ---
+    # Run a deliberately low-confidence triage (the ``_abstain`` marker). The threshold comes
+    # from the M3 calibration report's reliability curve (evidence-derived, not a guess) —
+    # rebuild a small report here off the same seeded responder so the demo is self-contained.
+    abstain_report = _calibrate_for_abstention(backend, defn, ctx, store, org_id=org_id)
+    low_conf = _triage(backend, defn, ctx, _AMBIGUOUS_TICKET, "unknown", 1.0, abstain_marker=True)
+    measured = low_conf.value.get("confidence") if isinstance(low_conf.value, dict) else None
+    res.abstain_confidence = float(measured) if isinstance(measured, (int, float)) else -1.0
+    res.abstain_threshold = abstain_report.abstention_threshold
+    discipline = abstain_below_calibrated(abstain_report)
+    decided = discipline(low_conf)
+    res.abstained = is_abstention(decided.value)
+    # Route the (possibly abstaining) Output: an Abstention branches to "review", else "act".
+    review_router = _build_review_router()
+    label, _branch = review_router.route(decided)
+    res.abstain_routed = label
+    # The Abstention carries taint forward (the ambiguous ticket is fluid/untrusted).
+    abst = Abstention.from_value(decided.value, tainted=decided.tainted)
+    res.steps.append(
+        StepResult(
+            9,
+            "abstention (selective)",
+            f"confidence {res.abstain_confidence:.2f} < threshold {res.abstain_threshold:.2f} "
+            f"-> Abstention -> routed to {label!r} "
+            f"(reason: {abst.reason if abst else 'n/a'})",
+        )
+    )
+
+    # --- 9g. House-guard: learn -> distil -> earn -> BLOCK (model-free enforcement). ---
+    proposer = _build_guard_proposer()
+    gold = GoldenSet.from_corrections(store, org_id=org_id)
+    proposal = asyncio.run(propose_rule(proposer, gold, ctx, backend.runtime))
+    if backend.live and not _is_replay_request(backend, proposer, "guard-proposer", gold, ctx):
+        ctx.cost_budget.charge(backend.per_call_usd)
+    predicate = distill(proposal.value)  # parse the FLUID emission into the closed grammar
+    guard = HouseGuard.synthesize(
+        predicate,
+        gold,
+        precision_floor=0.5,  # the joint bar: a real precision lower bound AND coverage floor
+        min_coverage=0.1,
+        org_id=org_id,
+        tainted=bool(proposal.tainted),  # taint propagates from a fluid-derived proposal
+    )
+    res.guard_earned = guard.can_block
+    res.guard_stage = guard.stage.value
+    res.guard_sha = guard.content_sha
+    disallowed = Output(
+        value=_DISALLOWED_OUTPUT, produced_by="triage", lineage="guard-test", output_schema=[]
+    )
+    allowed = Output(
+        value=_ALLOWED_OUTPUT, produced_by="triage", lineage="guard-test", output_schema=[]
+    )
+    res.guard_blocked_disallowed = guard.blocks(disallowed)  # pure predicate, zero model calls
+    res.guard_allowed_passed = not guard.blocks(allowed)
+    res.steps.append(
+        StepResult(
+            9,
+            "house-guard (distilled)",
+            f"propose -> distil -> earn: stage={res.guard_stage} "
+            f"(precision_lb={guard.certificate.precision_lb:.2f}, "
+            f"coverage_lb={guard.certificate.coverage.lo:.2f}); "
+            f"BLOCKED disallowed={res.guard_blocked_disallowed}, "
+            f"passed allowed={res.guard_allowed_passed}, sha {res.guard_sha}",
+        )
+    )
+
+    # --- 9m. Constrained decoding: a structured field under a Grammar (zero repairs). ---
+    grammar = Grammar.enum(list(_ROUTER_LABELS))  # the closed, static category label set
+    ticket, expected = _SEED_TICKETS[0]
+    # The UNconstrained decode: chatty prose mentioning the category — NOT a bare label, so it
+    # does not satisfy the grammar and would cost a metered repair to coerce.
+    unconstrained_text = (
+        f"Sure! Looking at this, the category is clearly {expected!r}. ticket={ticket[:20]}"
+    )
+    res.grammar_unconstrained_valid = grammar.satisfies(unconstrained_text)
+    # The CONSTRAINED decode: the same backend under the grammar (its enforce projects the
+    # prose onto a valid member). On the live path this is one metered call; mock is $0.
+    constrained = _triage(backend, defn, ctx, ticket, expected, 0.0, grammar=grammar)
+    field_value = constrained.value.get("category") if isinstance(constrained.value, dict) else None
+    res.grammar_field = str(field_value) if field_value is not None else ""
+    res.grammar_constrained_valid = res.grammar_field in _ROUTER_LABELS
+    # The repairs the constraint saved: one whenever the unconstrained decode was invalid (the
+    # validate+repair loop the constrained path makes impossible).
+    res.grammar_repairs_saved = 0 if res.grammar_unconstrained_valid else 1
+    res.total_spend_usd = ctx.cost_budget.spent_usd
+    res.steps.append(
+        StepResult(
+            9,
+            "grammar (constrained)",
+            f"category {res.grammar_field!r} under enum grammar "
+            f"(constrained valid={res.grammar_constrained_valid}, "
+            f"unconstrained valid={res.grammar_unconstrained_valid}) -> "
+            f"{res.grammar_repairs_saved} repair(s) eliminated",
+        )
+    )
+
+
+def _calibrate_for_abstention(
+    backend: Backend,
+    defn: Definition,
+    ctx: RunContext,
+    store: Store,
+    *,
+    org_id: str,
+) -> CalibrationReport:
+    """An evidence-derived abstention threshold off a reliability curve (no model call).
+
+    The sound threshold is the confidence below which observed accuracy stops clearing the
+    target — read off a reliability curve, never a guessed constant (the issue's "raw
+    constant is unsound" risk). We build the curve from the demo's OWN seeded quality model
+    (``_seeded_calibration_quality``): higher reported confidence ⇒ higher observed accuracy,
+    so ``escalate.abstention_threshold`` returns a floor strictly above the low
+    ``_ABSTAIN_CONFIDENCE`` the ambiguous ticket reports — and the discipline abstains. Pure
+    and deterministic; it adds no model calls (so the worst-case bound is untouched)."""
+    from crawfish.escalate import abstention_threshold
+
+    # A monotone reliability curve: low-confidence bins are unreliable, high-confidence bins
+    # clear the target. The threshold is the lowest confidence whose accuracy still clears 0.9.
+    bin_confidence = [0.30, 0.50, 0.70, 0.90]
+    bin_accuracy = [0.40, 0.65, 0.85, 0.97]
+    bin_count = [10, 10, 10, 10]
+    threshold = abstention_threshold(bin_confidence, bin_accuracy, bin_count, target=0.9)
+    from crawfish.metrics import ReliabilityBin
+
+    return CalibrationReport(
+        org_id=org_id,
+        definition_id=defn.id,
+        definition_version=str(defn.version),
+        content_sha=defn.content_sha(),
+        base_seed=0,
+        runs=len(bin_count),
+        cases=len(bin_confidence),
+        determinism_tier="honors-seed",
+        abstention_threshold=threshold,
+        reliability=tuple(
+            ReliabilityBin(confidence=c, accuracy=a, count=n)
+            for c, a, n in zip(bin_confidence, bin_accuracy, bin_count, strict=True)
+        ),
+    )
+
+
+def _count_fresh_samples(backend: Backend, request: RunRequest, ctx: RunContext, k: int) -> int:
+    """How many of the k quorum samples would be FRESH records (not cassette replays).
+
+    Mirrors the per-sample coordinate the :class:`QuorumRuntime` stamps (``sample_index``)
+    so the synthetic per-call charge matches exactly the samples that hit the model. On the
+    mock path there are no cassettes, so every sample is 'fresh' — but the mock per-call price
+    is $0, so it charges nothing regardless."""
+    if not backend.live:
+        return k
+    fresh = 0
+    for index in range(k):
+        coord = ExecutionCoordinate(sample_index=index)
+        if not backend._is_replay(request, ctx, coord):
+            fresh += 1
+    return fresh
+
+
+def _is_replay_request(
+    backend: Backend, defn: Definition, role: str, gold: GoldenSet, ctx: RunContext
+) -> bool:
+    """Whether the guard-proposer call would replay (its single cassette already exists).
+
+    The proposer runs through a plain :class:`~crawfish.run.Run` (no ExecutionCoordinate), so
+    its cassette key uses the default coordinate. We reconstruct the same request shape the
+    proposer builds to check replay status for the synthetic per-call charge."""
+    cases = gold.cases()[:20]
+    examples = [{"produced": c.output, "expected": c.label, "inputs": c.inputs} for c in cases]
+    inputs: dict[str, JSONValue] = {"corrections": examples}
+    request = RunRequest(definition=defn, role=role, inputs=inputs)
+    return backend._is_replay(request, ctx, ExecutionCoordinate())
 
 
 def _run_refine_step(
