@@ -21,6 +21,11 @@ from crawfish.core.context import RunContext
 from crawfish.core.ids import new_id
 from crawfish.core.types import JSONValue
 from crawfish.definition.types import Definition
+from crawfish.emission import (
+    CorrectionType,
+    Provenance,
+    read_corrections,
+)
 from crawfish.experiment import holm_correction, paired_bootstrap_ci
 from crawfish.metrics import Rubric, is_regression
 from crawfish.output import Output
@@ -93,6 +98,67 @@ class GoldenSet:
     @property
     def _kind(self) -> str:
         return f"golden:{self.name}@{self.version}"
+
+    @classmethod
+    def from_corrections(
+        cls,
+        store: Store,
+        name: str = "corrections",
+        *,
+        org_id: str = "local",
+        version: str = "0.1",
+        kinds: Sequence[CorrectionType | str] = (
+            CorrectionType.HUMAN_REVERT,
+            CorrectionType.CI_FAILURE,
+            CorrectionType.REVIEW_REJECT,
+        ),
+    ) -> GoldenSet:
+        """Build a :class:`GoldenSet` by mining ``correction`` emissions (F-4).
+
+        Sources the corrections corpus from the Store ledger (the records written by
+        :func:`crawfish.emission.emit_correction`) for ``org_id``, filtered to the
+        requested correction ``kinds`` (sub-categories
+        ``human_revert``/``ci_failure``/``review_reject``), and turns each into an
+        :class:`EvalCase` (inputs + the corrected ``expected`` output as the label).
+
+        **SECURITY — provenance/taint gate (Gap S4, corpus poisoning).** Corrections
+        feed guards/verifiers as ground truth, so this gate decides WHO may enter the
+        set. A correction is admitted **only if** ``provenance == TRUSTED`` **AND**
+        ``tainted is False``. Any correction that is ``UNTRUSTED`` (authored from
+        fluid/untrusted session data) **or** carries the fluid taint marker is
+        *quarantined*: it stays in the ledger for audit but never enters the
+        GoldenSet as trusted ground truth. This is why the gate is an AND of both
+        signals — a fluid-derived value cannot silently become a guard's ground truth
+        even if mislabelled ``TRUSTED``.
+
+        Org isolation: only ``org_id``'s correction records are read, and the built
+        GoldenSet is persisted (each admitted case written back) under the same
+        ``org_id``. Deterministic given a fixed ledger (no clock, no model call): the
+        same ledger always yields the same set of cases (case ids are the emission
+        ids). Returns the curated :class:`GoldenSet`.
+        """
+        gs = cls(store, name, org_id=org_id, version=version)
+        wanted = tuple(k if isinstance(k, CorrectionType) else CorrectionType(k) for k in kinds)
+        for em in read_corrections(store, org_id=org_id, kinds=wanted):
+            # -- provenance/taint gate (Security S4): admit trusted ground truth only.
+            provenance = em.attrs.get("provenance")
+            if provenance != Provenance.TRUSTED.value or em.tainted:
+                continue  # quarantine: untrusted or fluid-tainted correction
+            raw_inputs = em.attrs.get("inputs")
+            case = EvalCase(
+                id=em.id,
+                inputs=dict(raw_inputs) if isinstance(raw_inputs, dict) else {},
+                output=em.attrs.get("produced"),
+                label=em.attrs.get("expected"),
+                metadata={
+                    "source": "correction",
+                    "correction_type": em.attrs.get("correction_type"),
+                    "provenance": provenance,
+                    "run_id": em.run_id,
+                },
+            )
+            gs.add(case)
+        return gs
 
     def add(self, case: EvalCase) -> None:
         self._store.put_record(self._kind, case.id, case.model_dump(mode="json"), org_id=self._org)
