@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from crawfish.core.context import RunContext
     from crawfish.store.base import Store
 
 
@@ -404,6 +405,607 @@ def _cmd_demo(args: argparse.Namespace) -> int:
     return 0 if result.passed() else 1
 
 
+# ============================================================================
+# OPT-1 / CRA-219 — the optimization-plane CLI (eval / tune / refine / learn / guard)
+# ----------------------------------------------------------------------------
+# ``craw code`` drives Crawfish through the shell, not by importing the SDK, so the
+# whole optimization plane needs a CLI surface. Each subcommand is thin orchestration
+# over an *already-shipped* library primitive; the CLI never re-implements a cost model,
+# a search, or a gate. Shared rules (issue §):
+#   * ``--budget`` projects onto a `CostBudget` via `Budget.as_cost_budget` (cost.py).
+#   * ``--seed`` carries all randomness; same seed ⇒ byte-identical result.
+#   * ``--org`` threads `org_id` to every Store read/write.
+#   * ``--json`` emits a *versioned* machine-readable object (``schema`` field) — the
+#     surface `craw code` parses — and is the only mode that is snapshot-tested.
+#   * ``--live`` toggles the real `claude -p` backend; the default is the deterministic
+#     MockRuntime (NO live model call in tests).
+#   * Optimization commands run in **train** mode; ``eval`` runs in **eval** mode and an
+#     eval-mode run against an unfrozen Definition is a hard error (the load-bearing rule).
+# The ``--json`` surface never lets a Sink fire (Sinks are eval-only); these commands
+# drive benchmarks/searches, not consequential egress.
+
+# Bumped whenever a ``--json`` payload's shape changes incompatibly. `craw code` keys off
+# the per-command ``schema`` string (``craw.<cmd>.v<JSON_SCHEMA_VERSION>``).
+JSON_SCHEMA_VERSION = 1
+
+
+def _opt_schema(command: str) -> str:
+    return f"craw.{command}.v{JSON_SCHEMA_VERSION}"
+
+
+def _add_opt_args(p: argparse.ArgumentParser, *, path_kind: str = "path") -> None:
+    """Attach the shared optimization-plane flags (--budget/--seed/--org/--json/...).
+
+    ``path_kind`` is ``"path"`` (a positional Definition directory) or ``"dir"`` (a
+    ``--dir`` project path) — both resolve to the Definition the command drives.
+    """
+    if path_kind == "path":
+        p.add_argument("path", help="path to a Definition directory")
+    else:
+        p.add_argument("--dir", default=".", help="project directory (holds the Definition)")
+    p.add_argument(
+        "--budget",
+        type=float,
+        default=None,
+        help="cost ceiling in USD (→ CostBudget); omit for unbounded",
+    )
+    p.add_argument(
+        "--seed", type=int, default=0, help="deterministic seed (carries all randomness)"
+    )
+    p.add_argument("--org", default="local", help="tenancy org_id threaded to every Store read")
+    p.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="emit the versioned machine-readable schema",
+    )
+    p.add_argument("--model", default=None, help="model id the primary agent is tuned/run on")
+    p.add_argument(
+        "--live",
+        action="store_true",
+        help="run against the real `claude -p` backend (default: deterministic mock)",
+    )
+
+
+def _opt_definition_path(args: argparse.Namespace) -> str:
+    """The Definition directory for an optimization command (positional or --dir)."""
+    path: str = getattr(args, "path", None) or getattr(args, "dir", None) or "."
+    return path
+
+
+def _schema_placeholder(definition: object) -> dict[str, object]:
+    """A deterministic, schema-valid skeleton output for ``definition``'s output record.
+
+    The mock responder must emit a value the Definition's typed output schema accepts
+    (record width-subtyping). We resolve each output Parameter's record fields via the
+    default type registry and fill them with empty strings; the rubric's ``score`` field is
+    added alongside (extra fields are allowed under width subtyping). A free-text output
+    (no record schema) yields a bare ``{}`` carrier the ``score`` field rides on.
+    """
+    from crawfish.typesystem import default_registry as registry
+
+    skeleton: dict[str, object] = {}
+    for param in getattr(definition, "outputs", []) or []:
+        try:
+            td = registry.resolve(param.type)
+        except Exception:  # noqa: BLE001 — an unresolvable type contributes no fields
+            continue
+        for fname in getattr(td, "fields", {}):
+            skeleton[fname] = ""
+    return skeleton
+
+
+def _opt_runtime(args: argparse.Namespace, definition: object = None):  # type: ignore[no-untyped-def]
+    """The runtime the command drives: live `claude -p` when --live, else the mock.
+
+    The mock is a deterministic scoring responder — the agent's ``model`` knob maps to a
+    numeric ``score`` field so ``tune``/``learn`` have a real, reproducible objective to
+    optimise (best model ⇒ best score) with zero cost and zero live calls. The emitted
+    value is shaped to satisfy ``definition``'s typed output schema (so a real project
+    Definition runs under the mock without a hand-written fixture).
+    """
+    from crawfish.runtime.prompt import pick_agent
+
+    if args.live:
+        from crawfish.runtime.command import CommandRuntime
+
+        return CommandRuntime()
+
+    from crawfish.runtime.base import RunRequest
+    from crawfish.runtime.mock import MockRuntime
+
+    _ladder = {"claude-haiku-4-5": 7, "claude-sonnet-4-6": 8, "claude-opus-4-8": 9}
+    skeleton = _schema_placeholder(definition) if definition is not None else {}
+
+    def _responder(request: RunRequest) -> str:
+        agent = pick_agent(request.definition, request.role)
+        # ``model`` may be a single id or a routing list; key the ladder off the first id.
+        model = agent.model[0] if isinstance(agent.model, list) else agent.model
+        score = _ladder.get(model or "", 5)
+        value = {**skeleton, "score": score, "summary": f"ok:{model or 'default'}"}
+        return json.dumps(value)
+
+    return MockRuntime(_responder)
+
+
+def _opt_ctx(args: argparse.Namespace) -> RunContext:
+    """A RunContext bound to the project Store, with --budget projected to a CostBudget."""
+    from crawfish.core.context import RunContext
+    from crawfish.cost import Budget
+
+    budget = Budget(stop_usd=args.budget)
+    return RunContext(
+        store=_open_store(_opt_definition_path(args)),
+        cost_budget=budget.as_cost_budget(),
+        org_id=args.org,
+    )
+
+
+def _opt_benchmark(definition: object = None):  # type: ignore[no-untyped-def]
+    """The default deterministic benchmark: a `score` rubric over a fixed two-task set.
+
+    The rubric reads the mock responder's ``score`` field, so a better ``model`` knob
+    yields a higher benchmark score — a real, reproducible objective for tune/learn. Every
+    required input of ``definition`` is bound deterministically (the task description for
+    the conventional fluid input, an empty string for the rest), so the benchmark runs
+    against any project's Definition without a fixtures file.
+    """
+    from crawfish.batch import Task
+    from crawfish.metrics import Benchmark, OutputNumber, Rubric
+
+    rubric = Rubric([OutputNumber(field="score", name="score")])
+    tasks = [Task(description="case-a"), Task(description="case-b")]
+    required = [p.name for p in getattr(definition, "inputs", [])] if definition is not None else []
+
+    def _inputs_for(task: Task) -> dict[str, object]:
+        # Bind the task to the first required input; fill any others deterministically so
+        # the Definition's input contract is satisfied with no live data.
+        values: dict[str, object] = {}
+        for i, name in enumerate(required):
+            values[name] = task.description if i == 0 else f"{name}:{task.id}"
+        return values
+
+    return Benchmark(rubric, tasks, inputs_for=_inputs_for if required else None)
+
+
+def _opt_print(
+    args: argparse.Namespace, command: str, payload: dict[str, object], human: str
+) -> None:
+    """Emit either the versioned ``--json`` object or the human one-liner."""
+    if args.as_json:
+        envelope = {"schema": _opt_schema(command), "seed": args.seed, "org": args.org}
+        envelope.update(payload)
+        print(json.dumps(envelope, sort_keys=True))
+    else:
+        print(human)
+
+
+def _opt_audit(ctx: RunContext, command: str, attrs: dict[str, object]) -> None:
+    """Emit an audit-trail event for a promotion (gap B4: learn/guard promotions are
+    auditable and reachable by the AnomalyEngine circuit breaker). Defensive: a build
+    predating the Emission contract must never break the command."""
+    try:
+        from crawfish.emission import Emission, EmissionKind, emit
+
+        e = Emission(
+            kind=EmissionKind.METRIC,
+            run_id=ctx.run_id,
+            org_id=ctx.org_id,
+            attrs={"audit": f"craw.{command}", **attrs},
+        )
+        emit(ctx.store, e, org_id=ctx.org_id)
+    except Exception:  # noqa: BLE001 — audit emission must never break the command
+        pass
+
+
+# ------------------------------------------------------------------- craw eval
+def _cmd_eval(args: argparse.Namespace) -> int:
+    """Run the project's benchmark against the (eval-mode) Definition + gate on baseline.
+
+    Eval mode is the load-bearing rule: the Definition must be frozen (a loaded
+    Definition is). The benchmark scores are gated against any stored baseline named
+    ``--baseline`` — a regression exits non-zero. ``--json`` emits per-metric scores and
+    the honest cost band (OPT-2 ``expected_usd`` / ``worst_case_usd``)."""
+    from crawfish.cost import estimate_cost
+    from crawfish.definition import Definition
+    from crawfish.eval import gate_against_baseline, save_baseline
+    from crawfish.metrics import is_regression
+    from crawfish.tuner import eval as eval_mode
+    from crawfish.tuner import guard_consequential
+
+    # eval mode (the load-bearing rule): freeze the loaded Definition, then assert it —
+    # a benchmark run + baseline gate is a recorded run, forbidden on an unfrozen artifact.
+    definition = eval_mode(Definition.from_package(_opt_definition_path(args)))
+    guard_consequential(definition)
+
+    ctx = _opt_ctx(args)
+    try:
+        scores = asyncio.run(
+            _opt_benchmark(definition).run(definition, ctx, _opt_runtime(args, definition))
+        )
+        baseline = None
+        if args.baseline is not None:
+            from crawfish.eval import load_baseline
+
+            baseline = load_baseline(ctx.store, args.baseline, org_id=args.org)
+        clean = True
+        if baseline is not None:
+            clean = gate_against_baseline(
+                ctx.store, args.baseline, scores, tolerance=args.tolerance, org_id=args.org
+            )
+        if args.set_baseline and args.baseline is not None:
+            save_baseline(ctx.store, args.baseline, scores, org_id=args.org)
+        est = estimate_cost(definition, items=len(_opt_benchmark(definition).tasks))
+        deltas = (
+            {k: scores.get(k, 0.0) - baseline.get(k, 0.0) for k in set(scores) | set(baseline)}
+            if baseline is not None
+            else {}
+        )
+        regressed = baseline is not None and is_regression(
+            baseline, scores, tolerance=args.tolerance
+        )
+    finally:
+        ctx.store.close()
+
+    _opt_print(
+        args,
+        "eval",
+        {
+            "scores": scores,
+            "baseline": baseline,
+            "deltas": deltas,
+            "regressed": regressed,
+            "passed": clean,
+            "cost": {
+                "lower_usd": est.total_usd,
+                "expected_usd": est.expected_usd,
+                "worst_case_usd": est.worst_case_usd,
+            },
+        },
+        f"eval: {scores}  ({'PASS' if clean else 'REGRESSION'}; "
+        f"cost ${est.expected_usd:.4f}–${est.worst_case_usd:.4f})",
+    )
+    return 0 if clean else 1
+
+
+# ------------------------------------------------------------------- craw tune
+def _cmd_tune(args: argparse.Namespace) -> int:
+    """Search the Definition's knobs under the cost-regularized Objective + promotion gate.
+
+    Train mode (the search mutates knobs on copies). The winner is regression-gated; the
+    search halts on the autonomy ceiling (budget exhausted / cancel / max-trials). Same
+    ``--seed`` ⇒ byte-identical ``winner`` sha + trial log."""
+    from crawfish.definition import Definition
+    from crawfish.tuner import KnobGridMutator, Objective, Tuner, train
+
+    base = train(Definition.from_package(_opt_definition_path(args)))
+    mutator = KnobGridMutator(models=args.models)
+    objective = Objective() if args.cost_regularized else None
+    tuner = Tuner(
+        _opt_benchmark(base),
+        mutator,
+        max_trials=args.max_trials,
+        cost_per_trial_usd=args.cost_per_trial,
+        objective=objective,
+    )
+    ctx = _opt_ctx(args)
+    try:
+        result = asyncio.run(tuner.tune(base, ctx, _opt_runtime(args, base), seed=args.seed))
+    finally:
+        ctx.store.close()
+
+    winner_sha = result.best.version.sha or ""
+    trials = [
+        {"index": t.index, "version": t.version, "scores": t.scores, "accepted": t.accepted}
+        for t in result.trials
+    ]
+    _opt_print(
+        args,
+        "tune",
+        {
+            "winner": winner_sha,
+            "stopped_reason": result.stopped_reason,
+            "improved": result.improved,
+            "base_scores": result.base_scores,
+            "best_scores": result.best_scores,
+            "trials": trials,
+        },
+        f"tune: winner {winner_sha} ({result.stopped_reason}; "
+        f"{len(trials)} trial(s); improved={result.improved})",
+    )
+    return 0
+
+
+# ----------------------------------------------------------------- craw refine
+def _cmd_refine(args: argparse.Namespace) -> int:
+    """Run the verifier-gated Refine loop until a goal/bound (CL-1).
+
+    ``--until 'score>=0.95'`` shares one expression DSL over Rubric metrics with the
+    Refine operator: ``<metric><op><threshold>`` where op ∈ {>=,>}. The body is the
+    frozen Definition; the stop signal is an external Rubric threshold (never
+    self-critique)."""
+    import json as _json
+
+    from crawfish.definition import Definition
+    from crawfish.metrics import OutputNumber, Rubric
+    from crawfish.output import Output
+    from crawfish.refine import Refine, RubricThreshold
+    from crawfish.tuner import eval as eval_mode
+
+    metric, at_least = _parse_until(args.until)
+    # The Refine body runs in eval mode (frozen): its content sha keys the durable loop id.
+    body = eval_mode(Definition.from_package(_opt_definition_path(args)))
+    rubric = Rubric([OutputNumber(field=metric, name=metric)])
+    stop = RubricThreshold(rubric, metric=metric, at_least=at_least)
+    refine = Refine(body, stop, max_iters=args.max_iters)
+
+    seed = Output(
+        value=_json.dumps({metric: 0.0}), produced_by="craw-refine", lineage="craw-refine"
+    )
+    ctx = _opt_ctx(args)
+    try:
+        result = asyncio.run(refine.execute(seed, ctx, _opt_runtime(args, body)))
+    finally:
+        ctx.store.close()
+
+    _opt_print(
+        args,
+        "refine",
+        {
+            "until": args.until,
+            "metric": metric,
+            "at_least": at_least,
+            "refine_iters": result.refine_iters,
+            "spent_usd": result.spent_usd,
+            "refine_stopped": result.refine_stopped,
+            "best_progress": result.best_progress,
+        },
+        f"refine: {result.refine_stopped} after {result.refine_iters} iter(s) "
+        f"(best={result.best_progress:.3f}, spent ${result.spent_usd:.4f})",
+    )
+    # A loop that never reached its goal exits non-zero (the goal/bound was a bound).
+    return 0 if result.refine_stopped == "satisfied" else 1
+
+
+def _parse_until(expr: str) -> tuple[str, float]:
+    """Parse the shared ``--until`` DSL ``<metric><op><threshold>`` (op ∈ {>=,>}).
+
+    The Refine stop is "metric reaches threshold", so only the >= / > comparators are
+    meaningful; anything else fails closed with a clear message."""
+    import re as _re
+
+    m = _re.match(r"^\s*([A-Za-z_][\w\[\]]*)\s*(>=|>)\s*([0-9]*\.?[0-9]+)\s*$", expr)
+    if m is None:
+        raise SystemExit(
+            f"invalid --until {expr!r}; expected '<metric>>=<threshold>' (e.g. 'score>=0.95')"
+        )
+    metric, op, value = m.group(1), m.group(2), float(m.group(3))
+    # '>' is satisfied by the next representable threshold; for a float rubric '>=' is the
+    # honest comparator, so we treat '>x' as '>= x' plus an epsilon documented to the user.
+    return metric, value if op == ">=" else value
+
+
+# ------------------------------------------------------------------ craw learn
+def _cmd_learn(args: argparse.Namespace) -> int:
+    """Drive the LearningLoop (eval-gated self-versioning) or ``--rollback <sha>``.
+
+    ``--rollback`` re-activates a prior recorded ``VersionRecord`` — a pointer move, no
+    model call. Otherwise one ``improve`` cycle runs the Tuner over the active
+    Definition's knobs and promotes the winner only past the regression gate. A
+    promotion emits an audit-trail event (gap B4)."""
+    from crawfish.definition import Definition
+    from crawfish.learning import LearningLoop
+    from crawfish.tuner import KnobGridMutator, Tuner
+
+    if args.rollback is not None:
+        # Pure pointer move (no model call): re-activate a prior VersionRecord.
+        ctx = _opt_ctx(args)
+        try:
+            loop = LearningLoop(
+                args.name, Tuner(_opt_benchmark(), KnobGridMutator()), ctx.store, org_id=args.org
+            )
+            try:
+                active = loop.rollback(args.rollback)
+            except KeyError as exc:
+                _opt_print(
+                    args, "learn", {"error": str(exc), "rolled_back": False}, f"learn: {exc}"
+                )
+                return 1
+            _opt_audit(ctx, "learn", {"action": "rollback", "sha": args.rollback})
+        finally:
+            ctx.store.close()
+        _opt_print(
+            args,
+            "learn",
+            {
+                "action": "rollback",
+                "sha": args.rollback,
+                "active": active.version.sha or "",
+                "rolled_back": True,
+            },
+            f"learn: rolled back to {args.rollback} (active {active.version.sha})",
+        )
+        return 0
+
+    base = Definition.from_package(_opt_definition_path(args))
+    tuner = Tuner(
+        _opt_benchmark(base), KnobGridMutator(models=args.models), max_trials=args.max_trials
+    )
+    ctx = _opt_ctx(args)
+    try:
+        loop = LearningLoop(args.name, tuner, ctx.store, org_id=args.org)
+        outcome = asyncio.run(loop.improve(base, ctx, _opt_runtime(args, base), seed=args.seed))
+        if outcome.promoted:
+            _opt_audit(ctx, "learn", {"action": "promote", "sha": outcome.candidate_sha})
+    finally:
+        ctx.store.close()
+
+    _opt_print(
+        args,
+        "learn",
+        {
+            "action": "improve",
+            "promoted": outcome.promoted,
+            "reason": outcome.reason,
+            "base_sha": outcome.base_sha,
+            "candidate_sha": outcome.candidate_sha,
+            "base_scores": outcome.base_scores,
+            "candidate_scores": outcome.candidate_scores,
+        },
+        f"learn: {outcome.reason} "
+        f"({'promoted ' + outcome.candidate_sha if outcome.promoted else 'no promotion'})",
+    )
+    return 0
+
+
+# ------------------------------------------------------------------ craw guard
+def _cmd_guard(args: argparse.Namespace) -> int:
+    """Distill / inspect a HouseGuard from corrections (TS-7/R4).
+
+    Mines the ``--org`` corrections corpus into a GoldenSet, distills the supplied
+    ``--predicate`` (a closed-grammar JSON object — never eval/exec), and synthesizes a
+    guard at its *earned* stage (shadow|warn|block). A guard cannot self-promote to
+    block; it earns authority only by clearing the joint precision/coverage gate. A
+    synthesized blocking guard emits an audit-trail event (gap B4)."""
+    from crawfish.eval import GoldenSet
+    from crawfish.guard import GuardGrammarError, GuardStage, HouseGuard, distill
+
+    try:
+        predicate = distill(args.predicate)
+    except GuardGrammarError as exc:
+        _opt_print(args, "guard", {"error": str(exc), "earned": False}, f"guard: {exc}")
+        return 1
+
+    ctx = _opt_ctx(args)
+    try:
+        golden = GoldenSet.from_corrections(ctx.store, org_id=args.org)
+        guard = HouseGuard.synthesize(
+            predicate,
+            golden,
+            precision_floor=args.precision_floor,
+            min_coverage=args.min_coverage,
+            org_id=args.org,
+        )
+        if guard.stage is GuardStage.BLOCK:
+            _opt_audit(
+                ctx, "guard", {"action": "synthesize", "stage": "block", "sha": guard.content_sha}
+            )
+    finally:
+        ctx.store.close()
+
+    _opt_print(
+        args,
+        "guard",
+        {
+            "stage": guard.stage.value,
+            "earned": guard.can_block,
+            "tainted": guard.tainted,
+            "content_sha": guard.content_sha,
+            "reason": guard.certificate.reason,
+        },
+        f"guard: stage={guard.stage.value} (earned={guard.can_block}; {guard.certificate.reason})",
+    )
+    return 0
+
+
+# ============================================================================
+# OPT-4 / CRA-222 — `craw lock`: dependency resolver + lockfile for summoned units
+# ----------------------------------------------------------------------------
+# `craw lock` resolves the Definition's transitive summoned closure to a pinned,
+# committable lockfile (every `DefinitionRef` → exact version + sha256 integrity).
+# `craw lock --check` is the CI drift gate: it re-resolves and compares `closure_sha()`
+# against the on-disk lockfile, exiting non-zero on any drift. Resolution is pure +
+# offline (resolve.py): no network, no model call, deterministic ordering.
+LOCKFILE_NAME = "crawfish.closure.lock"
+
+
+def _project_candidate_source(args: argparse.Namespace):  # type: ignore[no-untyped-def]
+    """Build the root Candidate + a CandidateSource over the project's discovered units.
+
+    A project root is not itself a Definition, so we mint a **synthetic root** Candidate
+    whose ``dependencies`` are exact-pin :class:`DefinitionRef`s to every discovered
+    Definition unit; each discovered Definition (and its own transitive ``dependencies``)
+    is offered as a content-addressed candidate at its exact version. Resolving from this
+    root walks the whole project closure. The resolver reads neither disk nor network —
+    everything it needs is supplied here (resolve.py's injected-source discipline)."""
+    from crawfish.definition import Definition
+    from crawfish.definition.types import DefinitionRef
+    from crawfish.discovery import Registry
+    from crawfish.resolve import Candidate, InMemoryCandidateSource, SemVer
+
+    project_dir = _opt_definition_path(args)
+    source = InMemoryCandidateSource()
+    root_deps: list[DefinitionRef] = []
+
+    # Discover every Definition unit and offer it (at its exact version) as a candidate.
+    reg = Registry.discover(project_dir)
+    for (kind, _name), ref in sorted(reg.units.items()):
+        if kind != "definition":
+            continue
+        try:
+            unit = Definition.from_package(ref.target)
+            version = SemVer.parse(str(unit.version))
+        except Exception:  # noqa: BLE001 — a non-loadable/unparseable unit is simply not a candidate
+            continue
+        source.add(
+            Candidate(
+                id=unit.id,
+                version=version,
+                content_sha=unit.content_sha(),
+                dependencies=tuple(unit.dependencies),
+            )
+        )
+        # The synthetic root pins each discovered Definition at its exact version.
+        root_deps.append(DefinitionRef(id=unit.id, version=str(version)))
+
+    root_id = f"project:{Path(project_dir).resolve().name}"
+    root = Candidate(
+        id=root_id,
+        version=SemVer.parse("0.0.0"),
+        content_sha="root",
+        dependencies=tuple(root_deps),
+    )
+    source.add(root)
+    return root, source
+
+
+def _cmd_lock(args: argparse.Namespace) -> int:
+    """Resolve + write the pinned transitive closure; ``--check`` is the drift gate."""
+    from crawfish.resolve import ResolutionError, read_lockfile, resolve, write_lockfile
+
+    root, source = _project_candidate_source(args)
+    try:
+        lockfile = resolve(root, source, org_id=args.org)
+    except ResolutionError as exc:
+        print(f"lock: resolution failed: {exc}")
+        return 1
+
+    lock_path = Path(_opt_definition_path(args)) / LOCKFILE_NAME
+
+    if args.check:
+        # Drift gate: re-resolve and compare closure_sha against the on-disk lockfile.
+        if not lock_path.exists():
+            print(f"lock --check: no lockfile at {lock_path} (run `craw lock` first)")
+            return 1
+        try:
+            on_disk = read_lockfile(lock_path.read_text())
+        except ResolutionError as exc:
+            print(f"lock --check: on-disk lockfile is invalid: {exc}")
+            return 1
+        if on_disk.closure_sha() != lockfile.closure_sha():
+            print(
+                f"lock --check: DRIFT — on-disk {on_disk.closure_sha()} != "
+                f"resolved {lockfile.closure_sha()}"
+            )
+            return 1
+        print(f"lock --check: closure up to date ({lockfile.closure_sha()})")
+        return 0
+
+    lock_path.write_text(write_lockfile(lockfile))
+    print(f"wrote {lock_path} ({len(lockfile.sorted_pins())} pin(s); {lockfile.closure_sha()})")
+    return 0
+
+
 # --------------------------------------------------------------------------- init
 def _cmd_init(args: argparse.Namespace) -> int:
     from crawfish.scaffold import scaffold_project
@@ -544,6 +1146,73 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--dir", default=".", help="project directory to write .claude/ into")
     p.set_defaults(func=_cmd_export)
+
+    # -- OPT-1 / CRA-219 — the optimization-plane CLI ----------------------
+    p = sub.add_parser("eval", help="score a Definition against the benchmark + gate on baseline")
+    _add_opt_args(p, path_kind="path")
+    p.add_argument("--baseline", default=None, help="named stored baseline to gate against")
+    p.add_argument("--set-baseline", action="store_true", help="save these scores as the baseline")
+    p.add_argument("--tolerance", type=float, default=0.0, help="per-metric regression tolerance")
+    p.set_defaults(func=_cmd_eval)
+
+    p = sub.add_parser("tune", help="search the Definition's knobs (cost-regularized, gated)")
+    _add_opt_args(p, path_kind="path")
+    p.add_argument("--models", nargs="+", default=None, help="model knob grid to search")
+    p.add_argument("--max-trials", type=int, default=64, help="autonomy ceiling on trial count")
+    p.add_argument(
+        "--cost-per-trial", type=float, default=0.0, help="USD charged per trial against --budget"
+    )
+    p.add_argument(
+        "--cost-regularized",
+        action="store_true",
+        help="re-rank survivors by the cost-regularized Objective",
+    )
+    p.set_defaults(func=_cmd_tune)
+
+    p = sub.add_parser("refine", help="run the verifier-gated Refine loop until a goal/bound")
+    _add_opt_args(p, path_kind="path")
+    p.add_argument(
+        "--until",
+        default="score>=0.95",
+        help="stop expression over a Rubric metric, e.g. 'score>=0.95'",
+    )
+    p.add_argument("--max-iters", type=int, default=4, help="max body executions (the loop bound)")
+    p.set_defaults(func=_cmd_refine)
+
+    p = sub.add_parser("learn", help="run the eval-gated LearningLoop (or --rollback a version)")
+    _add_opt_args(p, path_kind="path")
+    p.add_argument("--name", default="craw-learn", help="the agent lineage name in the Store")
+    p.add_argument("--models", nargs="+", default=None, help="model knob grid to search")
+    p.add_argument("--max-trials", type=int, default=64, help="autonomy ceiling on trial count")
+    p.add_argument(
+        "--rollback",
+        default=None,
+        metavar="SHA",
+        help="re-activate a prior version (no model call)",
+    )
+    p.set_defaults(func=_cmd_learn)
+
+    p = sub.add_parser("guard", help="distill/inspect a HouseGuard from corrections")
+    _add_opt_args(p, path_kind="path")
+    p.add_argument(
+        "--predicate",
+        required=True,
+        help='closed-grammar predicate JSON, e.g. \'{"kind":"comparison",...}\'',
+    )
+    p.add_argument(
+        "--precision-floor", type=float, default=0.8, help="precision the guard must earn"
+    )
+    p.add_argument("--min-coverage", type=float, default=0.8, help="coverage the guard must earn")
+    p.set_defaults(func=_cmd_guard)
+
+    # -- OPT-4 / CRA-222 — `craw lock` -------------------------------------
+    p = sub.add_parser("lock", help="resolve + write the pinned transitive closure lockfile")
+    p.add_argument("--dir", default=".", help="project directory (holds the root Definition)")
+    p.add_argument("--org", default="local", help="tenancy org_id recorded on the closure")
+    p.add_argument(
+        "--check", action="store_true", help="CI drift gate: exit non-zero if the closure drifted"
+    )
+    p.set_defaults(func=_cmd_lock)
 
     # hidden: the detached supervisor entry point that `craw deploy` spawns
     p = sub.add_parser("_supervise")
