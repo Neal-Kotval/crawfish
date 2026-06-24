@@ -92,6 +92,10 @@ _SEED_TICKETS: tuple[tuple[str, str], ...] = (
 #: The back-edge identity of our single refine loop (one logical loop in the demo).
 EDGE_ID = "self-improve:refine"
 
+#: The temperature search space for step 3/7 (cooler = better here). ONE authoritative
+#: tuple so the step-6 worst-case call count and the step-7 sweep can never disagree.
+_CANDIDATE_TEMPS: tuple[float, ...] = (0.0, 0.2)
+
 
 # --------------------------------------------------------------------------- result
 @dataclass
@@ -245,6 +249,47 @@ def _deterministic_responder(req: RunRequest) -> str:
 # exactly three body calls and stops on a *verifier pass*, not on the bound.
 _ACCEPT_AT_ITER = 2
 
+# The Refine loop's hard iteration ceiling (step 9r). ONE authoritative constant: both
+# the cost model (step 6 worst case) and ``_run_refine_step`` read it, so the F-6 bound
+# can never drift from the bound the loop actually enforces.
+REFINE_MAX_ITERS = 5
+
+# Each Refine iteration runs TWO metered model calls in the worst case: the body draft
+# AND the gated verifier's critic call (VerifierStop's second stochastic leaf).
+_REFINE_CALLS_PER_ITER = 2
+
+# The hand-rolled step-9 loop's iteration ceiling (a plain bounded ``for`` over visits).
+_STEP9_LOOP_BOUND = 4
+
+# Any single triage turn may spawn at most ONE schema-repair re-prompt (``Run._repair``),
+# so the worst case for a "logical" call is two metered model calls. Folding this 2×
+# into the worst-case call count is what makes the bound a TRUE upper bound on real
+# live spend (a fresh-record run with repairs hit ~49 calls — see the RUNBOOK).
+_REPAIR_FACTOR = 2
+
+
+def _worst_case_calls(*, n_cases: int, n_tune: int, n_gate: int, n_candidates: int) -> int:
+    """The TRUE worst-case count of metered model calls across the whole scenario.
+
+    Derived from the loop STRUCTURE (not a stale literal), so a complete run finishes at
+    ≤ this bound by construction. Every term is a hard ceiling on its step:
+
+    * **Step 7 tune+gate** — the candidate sweep scores every tune case at each candidate
+      temperature (``n_candidates × n_tune``) and the held-out gate set at the baseline
+      *and* the chosen candidate (``2 × n_gate``).
+    * **Step 9** — the hand-rolled bounded loop runs at most ``_STEP9_LOOP_BOUND`` visits.
+    * **Step 9r (Refine)** — at most ``REFINE_MAX_ITERS`` iterations, each costing a body
+      draft AND the gated verifier's critic call (``_REFINE_CALLS_PER_ITER``).
+
+    Each of those is a *logical* turn that may spawn one schema-repair re-prompt, so the
+    whole sum is multiplied by ``_REPAIR_FACTOR`` to bound the real (multi-turn) live
+    spend. (The ``$0``-resume re-runs of steps 9 / 9r add nothing — they replay at $0.)
+    """
+    step7 = n_candidates * n_tune + 2 * n_gate
+    step9 = _STEP9_LOOP_BOUND
+    step9r = REFINE_MAX_ITERS * _REFINE_CALLS_PER_ITER
+    return (step7 + step9 + step9r) * _REPAIR_FACTOR
+
 
 def _draft_reply(ticket: str, iter_index: int) -> dict[str, JSONValue]:
     """A deterministic 'drafted reply' whose quality climbs with ``iter_index``.
@@ -272,6 +317,13 @@ def _draft_iter_of(draft: JSONValue) -> int:
             return 0
     return 0
 
+
+# Each real (non-replay) live call charges the budget TWICE: the demo's synthetic
+# worst-case ``per_call_usd`` AND the runtime's own reported ``cost_usd`` (haiku ≈ a few
+# hundredths of a cent). Pricing the worst case at a small multiple of ``per_call_usd``
+# absorbs that second charge so the bound strictly dominates real spend (no off-by-a-penny
+# overrun when every one of the worst-case calls fires fresh).
+_PER_CALL_HEADROOM = 1.2
 
 # Default per-call price (USD) for the live model. The heuristic table
 # (DEFAULT_MODEL_PRICES) lists $0.01 for haiku; we use a *generous* worst-case
@@ -561,11 +613,28 @@ def run_self_improvement(
     org_id = "acme"
 
     backend = _make_backend(live=live, record=record, model=model)
-    # A budget that actually completes the full flow on the chosen backend: ~14 live
-    # calls at the model's worst-case per-call price, with headroom. The mock path is
-    # free, so a small fixed budget is plenty.
+    # The TRUE worst case (F-6): the max metered calls across ALL steps — the step-7
+    # sweep, the step-9 loop, and the step-9r Refine fan-out (drafts + verifier critic
+    # per iteration), each × the repair factor — at the SELECTED model's per-call price.
+    # The gold set is the 6 trusted seeds split 50/50 (tune=3, gate=3) over 2 candidate
+    # temperatures; step 6 re-derives this from the live fan-out and asserts it matches.
+    n_cases = len(_SEED_TICKETS)
+    n_tune = n_cases // 2
+    n_gate = n_cases - n_tune
+    worst_calls = _worst_case_calls(
+        n_cases=n_cases, n_tune=n_tune, n_gate=n_gate, n_candidates=len(_CANDIDATE_TEMPS)
+    )
+    # Price each worst-case call at ``per_call_usd × headroom`` so the bound dominates the
+    # double charge (synthetic per_call_usd + the runtime's own real cost_usd). Mock => $0.
+    worst_case_usd = worst_calls * backend.per_call_usd * _PER_CALL_HEADROOM
+    # Bind the hard kill to the honesty bound: on the LIVE path the CostBudget ceiling IS
+    # the worst case, so the preflight kill threshold and the ``total_spend <= worst_case``
+    # assertion coincide — no ($worst, $limit] window where a run is under budget yet
+    # FAILS the honesty gate. On the mock path every call is $0 (worst case $0), so the
+    # ceiling is irrelevant to spend; a small fixed positive budget keeps the loops'
+    # preflight from tripping while $0 <= $0 holds trivially.
     if budget is None:
-        budget = 3.0 if not live else max(3.0, 20.0 * backend.per_call_usd)
+        budget = worst_case_usd if live else 1.0
     res.budget_usd = budget
 
     store = SqliteStore()  # in-memory; tenancy-scoped by org_id throughout
@@ -601,7 +670,7 @@ def run_self_improvement(
 
         # --- 3. Expose temperature as a tunable knob (F-5). -------------------
         baseline_temp = 1.0
-        candidate_temps = (0.0, 0.2)  # the search space (cooler = better here)
+        candidate_temps = _CANDIDATE_TEMPS  # the search space (cooler = better here)
         res.steps.append(
             StepResult(
                 3, "tunable knob", f"temperature baseline={baseline_temp} search={candidate_temps}"
@@ -626,40 +695,44 @@ def run_self_improvement(
             StepResult(5, "tune/gate split", f"tune={len(tune)} gate={len(gate_cases)} (disjoint)")
         )
 
-        # --- 6. Cost: worst-case (F-6) must be <= budget AND bound real spend. -
+        # --- 6. Cost: worst-case (F-6) is a TRUE upper bound on real spend. ----
         # Price per call is tied to the SELECTED model (mock=$0, else its worst-case
-        # per-call price), so the interval honestly bounds what a live run can spend.
+        # per-call price). The worst case is the STRUCTURAL max metered-call count —
+        # the step-7 sweep + step-9 loop + step-9r Refine fan-out (drafts AND the gated
+        # verifier's critic call per iteration), each × the repair factor — priced at
+        # that per-call rate. It was computed up front and BINDS the CostBudget ceiling
+        # (live), so the hard preflight kill and the ``total_spend <= worst_case``
+        # assertion in ``passed()`` coincide: a complete run finishes at ≤ worst_case by
+        # construction. Here we re-derive it from the ACTUAL live fan-out and assert the
+        # precomputed bound still matches (no drift from the loop the run really takes).
         per_call = backend.per_call_usd if live else 0.0
-        # One call per agent per item is the lower bound; the cost interval below
-        # folds in the refine multiplier for the worst case.
+        actual_worst_calls = _worst_case_calls(
+            n_cases=len(cases),
+            n_tune=len(tune),
+            n_gate=len(gate_cases),
+            n_candidates=len(candidate_temps),
+        )
+        assert actual_worst_calls == worst_calls, (
+            f"cost model drift: live fan-out worst case is {actual_worst_calls} calls but "
+            f"the budget was sized for {worst_calls}"
+        )
+        res.worst_case_usd = worst_case_usd
+        # An informational per-step cost interval (F-6 multiplicative law) over the
+        # cost-bearing Refine operator — its worst case is folded into the structural
+        # total above; this just records the interval shape for the printed summary.
         base = CostEstimate(
             team_size=len(defn.team.agents),
             items=len(cases),
             per_item_usd=per_call,
             total_usd=per_call * len(cases),
         )
-        # The refine loop is the cost-bearing operator (F-6 multiplicative law).
-        # The scenario's TRUE worst case is the RunContext budget itself: the tune
-        # sweep, the gate pass, and the loop each fan out, and on a fresh live
-        # record a cassette miss can re-charge — so a fictional fixed multiplier
-        # would NOT honestly bound real spend. Instead we size the refine
-        # multiplier to the budget that ``CostBudget`` actually enforces with a
-        # hard preflight kill. The worst case then *equals* that hard ceiling, so
-        # the F-6 honesty invariant (actual spend <= worst case, asserted in
-        # ``passed()``) holds by construction: the run cannot complete if spend
-        # would cross the budget. On the mock path (per_call == 0) the worst case
-        # is $0 and the loop bound stands in for max_iters.
-        max_iters = max(1, int(budget // base.total_usd)) if base.total_usd > 0 else 4
-        est = compose_cost(base, [CostShape.refine(max_iters=max_iters)])
-        res.worst_case_usd = est.worst_case_usd
-        assert est.worst_case_usd <= budget, (
-            f"worst-case ${est.worst_case_usd} exceeds budget ${budget}"
-        )
+        _ = compose_cost(base, [CostShape.refine(max_iters=REFINE_MAX_ITERS)])
+        assert worst_case_usd <= budget, f"worst-case ${worst_case_usd} exceeds budget ${budget}"
         res.steps.append(
             StepResult(
                 6,
                 "cost interval",
-                f"worst=${est.worst_case_usd:.3f} <= budget=${budget:.2f} "
+                f"worst={worst_calls} calls=${worst_case_usd:.3f} <= budget=${budget:.2f} "
                 f"(model={backend.model or 'mock'} @ ${per_call:.2f}/call)",
             )
         )
@@ -858,12 +931,12 @@ def _run_refine_step(
     refine = Refine(
         body,
         VerifierStop(verifier),
-        max_iters=5,
+        max_iters=REFINE_MAX_ITERS,
         # A gated VerifierStop's ``progress`` is binary (accepted=1.0 else 0.0), so the
         # noise-aware no-progress guard would otherwise stop the loop on the first
         # rejected draft. We disable it (patience == max_iters) so ONLY the verifier
         # verdict or the bound/budget stops the loop — the verifier is the stop signal.
-        no_progress_patience=5,
+        no_progress_patience=REFINE_MAX_ITERS,
         edge_id=REFINE_EDGE_ID,
         name="reply-refine",
     )

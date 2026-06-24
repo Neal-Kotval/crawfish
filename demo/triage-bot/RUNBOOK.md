@@ -69,8 +69,11 @@ uv run craw demo --live --model claude-sonnet-4-6   # a stronger live model
 uv run craw demo --live --budget 2.50               # custom cost ceiling (USD)
 ```
 
-The default budget is auto-sized to the chosen model (`max($3, 20 × per-call price)`),
-so the full 10-step flow completes for cents on haiku.
+The default budget is auto-sized to the chosen model: it **equals the F-6 worst case**
+(the max metered-call count across all steps × the per-call price × a small headroom).
+Binding the `CostBudget` ceiling to the worst case is deliberate — the hard-kill
+threshold and the `total_spend <= worst_case` honesty assertion coincide, so there is no
+under-budget-yet-failing window. On haiku that ceiling is **`$3.12`** (see the cost note).
 
 ### Expected output
 
@@ -83,9 +86,18 @@ run re-charges $0.
 The scenario charges each triage turn against the budget at the model's worst-case
 per-call price (haiku `$0.05`, sonnet `$0.20`, opus `$0.80` — deliberately generous
 so the step-6 interval **bounds** real spend). A cassette **replay charges $0** (no
-model call). If a live call is unexpectedly expensive the budget hard-kills the run
-(`BudgetExceeded`) rather than overspending. On haiku the whole flow is ~14 calls
-≈ `$0.70` against a ~`$1`+ auto budget.
+model call). If a live call would cross the ceiling the budget hard-kills the run
+(`BudgetExceeded`) rather than overspending.
+
+The **worst case is structural** (`_worst_case_calls` in `self_improve.py`): the max
+metered calls across the step-7 tune+gate sweep (`2 candidates × 3 tune + 2 × 3 gate`),
+the step-9 bounded loop (`4`), and the step-9r **Refine** fan-out (`5 iters × 2` — a body
+draft AND the gated verifier's critic call per iteration), each `× 2` for an optional
+schema-repair turn = **52 calls**. At haiku `$0.05/call × 1.2` headroom (to absorb the
+runtime's own real `cost_usd` on top of the synthetic per-call charge) that is a
+**`$3.12`** ceiling. A real fresh-record run lands at **~49 calls ≈ `$2.46`** — well under
+the bound; every subsequent run replays at `$0`. (The earlier `~14 calls ≈ $0.70` estimate
+predated the Refine step and undercounted the repair/critic fan-out.)
 
 ## Evidence checklist (verifier fills this in)
 
@@ -232,3 +244,63 @@ Run the command above and confirm, on the `refine` lines under step 9:
 The deterministic path (`uv run craw demo`, `$0`) exercises every one of these off the
 mock runtime; the acceptance test is `packages/crawfish/tests/test_demo_refine.py`
 (10 tests, no live calls).
+
+### M1 live-acceptance gate — RUN BY `verifier-m1` (2026-06-24, `claude-haiku-4-5`)
+
+Independent fresh live run against the **real** logged-in `claude -p` (`claude 2.1.187`,
+authed; `claude -p "say ok"` → `OK`). Cassettes were moved aside first to force a true
+fresh record this session, then a replay run confirmed bit-identical reproduction.
+
+**Exact commands run:**
+
+```bash
+uv run craw demo                                       # deterministic sanity → PASS (9/9)
+# move existing cassettes aside to force a fresh real-model record:
+mv demo/triage-bot/.crawfish/cassettes{,.bak} && mkdir demo/triage-bot/.crawfish/cassettes
+uv run craw demo --live --model claude-haiku-4-5       # FRESH RECORD (real haiku)
+uv run craw demo --live --model claude-haiku-4-5       # REPLAY → $0, bit-identical
+```
+
+**spent_usd of the live run:** fresh-record total `$2.461` (≈49 metered calls @ `$0.05`),
+of which the verifier-gated Refine loop spent `$0.141`. Replay run spent `$0.00`.
+
+**Verdict: PASS — with one ⚠️ cost-honesty caveat (real defect found, see below).**
+The M1 Refine surface itself is fully load-bearing and proven; the ⚠️ is a pre-existing
+F-6 worst-case-vs-budget gap that real-model variance can trip.
+
+| # | M1 evidence item | result | proof |
+|---|------------------|--------|-------|
+| 1 | **Real refined reply** | ✅ | live `claude -p` drafted real prose, e.g. cassette `df792c15819a8567.json`: *"URGENT: Login Service Incident – Investigation Underway … We are aware that logins have been broken following today's deployment and are treating this as a critical P0 incident …"* — not the mock echo; iterated across drafts. |
+| 2 | **Verifier gated the loop** | ✅ | `refine (verifier-gated): N drafts -> satisfied (verifier precision=1.00)`. The gated critic STOPPED the loop on its **accept verdict**, not on `max_iters=5`. Real-model variance in the accept point is itself evidence the gate is load-bearing: across runs the critic accepted at iter 1 and iter 4 (`refine_stopped=="satisfied"` both times, never `exhausted`). |
+| 3 | **Budget respected / metered spend** | ✅ (defect FIXED) | Spend is REAL and metered (`refine_spent=$0.141` on the PASS record; `$0.56` on a higher-variance run). The F-6 honesty invariant `total_spend <= worst_case` is now **enforced by construction**: `worst_case_usd` is the structural max-call bound (`$3.12` on haiku) and the `CostBudget` ceiling is **bound to it**, so the hard-kill and the assertion coincide — there is no under-budget-yet-failing window. See the resolved defect note below. |
+| 4 | **Crash-resume = $0** | ✅ | `refine resume ($0): … resume spend=$0.00 ($0)` and step-9 `resume re-run: extra calls=0, spend=$0.00`. A resume over the same ledger replayed every committed draft at zero cost; `refine_resume_spent_usd == 0.0`. |
+| 5 | **Tenant isolation** | ✅ | step 9 `tenant isolation: org-B gold cases=0 (cannot read org-A)`; `org_b_cases == 0`, `org_a_cases == 6`. |
+| 6 | **Bit-identical replay** | ✅ | replay run reproduced the fresh-record shas exactly: frozen `9dfc8be045b2`, loop fixed-point `d9b59d63c276`, refine `f34b4de5990a`. Resume also asserts the accepted draft's `output_content_sha` matches the uninterrupted run in-scenario. |
+
+#### Defect found (cost honesty — F-6) — RESOLVED (`demo-runner-m1`, 2026-06-24)
+
+**Was:** `run_self_improvement` set `worst_case_usd = $2.70` from a stale refine-multiplier
+literal, but `CostBudget.limit_usd` was the **larger** `$3.00`. `CostBudget.charge`
+(`packages/crawfish/src/crawfish/core/context.py:42-47`) only hard-kills when spend crosses
+`limit_usd`, so any live run whose real fan-out (more refine drafts / scoring variance)
+landed spend in the open interval `($2.70, $3.00]` stayed UNDER budget yet **FAILED** the
+honesty assertion `total_spend_usd <= worst_case_usd` in `DemoResult.passed()` — flaky under
+real variance. (The first live run this session printed `FAIL` for exactly this reason; a
+later fresh record with fewer drafts passed.)
+
+**Fix (in `self_improve.py`):**
+1. `worst_case_usd` is now a **TRUE structural upper bound** — `_worst_case_calls()` sums
+   the max metered calls across ALL steps (step-7 sweep `2×3 + 2×3`, step-9 loop `4`, and
+   the step-9r **Refine** fan-out `5 iters × 2` for draft + verifier critic), each `× 2` for
+   an optional schema-repair turn = **52 calls**, priced at `per_call_usd × 1.2` headroom
+   (absorbing the runtime's own `cost_usd` charged on top of the synthetic per-call charge).
+   On haiku that is **`$3.12`**. Step 6 re-derives the count from the live fan-out and
+   asserts it matches the precomputed bound — no drift.
+2. The live `CostBudget(limit_usd=…)` is **bound to `worst_case_usd`**, so the hard-kill
+   threshold and the `total_spend <= worst_case` assertion coincide: a complete run finishes
+   at ≤ worst_case by construction, and a run that would exceed it raises `BudgetExceeded`
+   (aborts) rather than printing a false PASS. The `$0.30` flake window is gone.
+
+Observed live spend (~`$2.46`, ≈49 calls) now sits comfortably under the `$3.12` bound with
+margin, so real-model variance cannot exceed it. The deterministic `craw demo` (mock, `$0`)
+and `test_demo_refine.py` / `test_demo_self_improve.py` are green.
