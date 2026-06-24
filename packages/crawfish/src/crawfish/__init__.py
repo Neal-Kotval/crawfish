@@ -92,6 +92,15 @@ from crawfish.definition import (
     TeamSpec,
     load_definition,
 )
+from crawfish.definition_store import (
+    DefinitionStore,
+    DefinitionVersion,
+    UnfrozenDefinitionError,
+    UnknownNameError,
+    UnreachableShaError,
+    modify,
+    reset,
+)
 from crawfish.deploy import (
     DeployEntry,
     DeployRegistry,
@@ -961,4 +970,12 @@ __all__ = [
     "RagSeam",
     "RagDeferred",
     "WIKI_RECORD_KIND",
+    # save/recall + modify/reset — git for Definitions (CRA-225/226)
+    "DefinitionStore",
+    "DefinitionVersion",
+    "modify",
+    "reset",
+    "UnfrozenDefinitionError",
+    "UnknownNameError",
+    "UnreachableShaError",
 ]
