@@ -54,10 +54,11 @@ from crawfish.definition.types import (
     DefinitionRef,
     Prompt,
 )
+from crawfish.derive import refreeze as _refreeze
 from crawfish.eval import gate_against_baseline, load_baseline, save_baseline
 from crawfish.runtime.base import AgentRuntime
 from crawfish.store.base import Store
-from crawfish.tuner import Tuner, TuneResult, _refreeze
+from crawfish.tuner import Tuner, TuneResult
 
 __all__ = [
     "VersionRecord",

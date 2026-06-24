@@ -98,39 +98,13 @@ class Candidate(BaseModel):
 
 
 # -- helpers: re-freeze a mutated Definition with a fresh content sha --------
-def _content_sha(definition: Definition) -> str:
-    """A deterministic content hash over the Definition's knob-bearing payload.
-
-    Delegates to the **canonical** :meth:`Definition.content_sha` (ADR 0017 / F-5), the
-    single source of hash truth: it drops the volatile ``version`` and identity ``id``,
-    and folds in the tunable decode knobs (hash-neutral when None). Two structurally
-    identical candidates collapse to one sha; any knob change diverges — which gives each
-    candidate a distinct cassette key on replay. The Tuner does not re-implement the law.
-    """
-    return definition.content_sha()
-
-
-def _refreeze(base: Definition, mutated: Definition) -> Definition:
-    """Return a frozen copy of ``mutated`` carrying a fresh content-hash version.
-
-    A frozen artifact rejects mutation, so the search never edits in place: each
-    candidate is a new, sealed Definition. The new ``version.sha`` is the content hash,
-    so a candidate that differs from the base in any knob gets a distinct version and
-    therefore a distinct cassette key (no replay collision); an identical candidate
-    re-hashes to the same sha (idempotent).
-    """
-    sha = _content_sha(mutated)
-    version = Version(major=base.version.major, minor=base.version.minor, sha=sha)
-    # model_copy keeps a fresh (unfrozen) Version object we can seal without touching base.
-    candidate = mutated.model_copy(update={"version": version}, deep=True)
-    candidate.freeze()
-    return candidate
-
-
-def _with_agents(base: Definition, agents: Sequence[AgentSpec]) -> Definition:
-    """A deep, *unfrozen* copy of ``base`` with its team agents replaced."""
-    team = base.team.model_copy(update={"agents": list(agents)}, deep=True)
-    return base.model_copy(update={"team": team, "version": Version()}, deep=True)
+# The content-hash primitives now live in the shared, low-dep ``crawfish.derive`` module
+# (CRA-223 / DV-0) so the Tuner and the public Definition-as-variable API (AL-DV1/2/3) and
+# ``state_dict`` (AL-T2) share ONE content-hash path — two implementations would drift, a
+# determinism hazard. These are the same function objects (a pure re-export: behaviour
+# unchanged, hashing byte-identical before/after the refactor); the underscored names are
+# kept for the mutators below that reference them.
+from crawfish.derive import _refreeze, _with_agents  # noqa: E402
 
 
 def _primary_agent(definition: Definition) -> AgentSpec:

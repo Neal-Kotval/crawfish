@@ -100,6 +100,15 @@ from crawfish.deploy import (
     deploy,
     stop,
 )
+from crawfish.derive import (
+    SkillRef,
+    Summonable,
+    SummonMode,
+    SummonRef,
+    with_agent,
+    with_context,
+    with_skill,
+)
 from crawfish.discovery import Registry, UnitRef
 from crawfish.doctor import DoctorFinding, DoctorReport, diagnose
 from crawfish.emission import (
@@ -448,6 +457,14 @@ from crawfish.visualize import (
     emission_dashboard_state,
     serve_dashboard,
     serve_emission_dashboard,
+)
+from crawfish.wiki import (
+    WIKI_RECORD_KIND,
+    RagDeferred,
+    RagSeam,
+    TrustTier,
+    Wiki,
+    WikiPage,
 )
 from crawfish.workflow import (
     Edge,
@@ -930,4 +947,18 @@ __all__ = [
     "read_lockfile",
     "write_lockfile",
     "LOCKFILE_VERSION",
+    # M6 — variables & knowledge (CoW compose + summonable Wiki)
+    "with_skill",
+    "with_context",
+    "with_agent",
+    "SkillRef",
+    "SummonRef",
+    "SummonMode",
+    "Summonable",
+    "Wiki",
+    "WikiPage",
+    "TrustTier",
+    "RagSeam",
+    "RagDeferred",
+    "WIKI_RECORD_KIND",
 ]
