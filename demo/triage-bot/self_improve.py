@@ -115,6 +115,10 @@ class DemoResult:
 
     steps: list[StepResult] = field(default_factory=list)
     live: bool = False
+    #: True iff this run made at least one REAL (non-replay) model call — i.e. a fresh
+    #: record. False on a pure $0 replay and on the mock path. Gates the Gap-#3 metering
+    #: lower bound: a fresh record MUST meter > $0; a replay re-pays $0 and that is correct.
+    recorded: bool = False
     gate: GateDecision | None = None
     baseline_temperature: float = 0.0
     promoted_temperature: float = 0.0
@@ -161,13 +165,20 @@ class DemoResult:
         stays its ``""`` default, since ``execute`` would otherwise have raised), a dead-
         letter/abstain (``stuck``), an unbounded run (``iters > max_iters``), or an overspend
         (``spent > worst_case``) are all rejected.
+
+        **Metering vs. replay (Gap-#3).** The metering lower bound (spend ``> $0``) is a
+        *fresh-record* property — it proves real model calls fired. A ``--live`` **replay**
+        re-pays exactly ``$0`` by design (every cassette hits), so requiring ``> $0`` every
+        run would (wrongly) fail a bit-identical replay of a recorded PASS. So the lower
+        bound applies **only when ``recorded``** (a fresh record was made); on a replay (and
+        on the mock path) ``$0`` is the expected, correct reading and passes.
         """
         if self.live:
             justified_stop = self.refine_stopped in ("satisfied", "no_progress", "exhausted")
-            metered = self.refine_spent_usd > 0.0  # real model calls cost > $0 on a record
         else:
             justified_stop = self.refine_stopped == "satisfied"  # mock critic always accepts
-            metered = self.refine_spent_usd >= 0.0  # mock is always $0 — a valid $0 reading
+        # Gap-#3 lower bound only on a fresh record; a $0 replay (recorded=False) is correct.
+        metered = (self.refine_spent_usd > 0.0) if self.recorded else True
         return bool(
             justified_stop
             and self.refine_iters > 0
@@ -485,6 +496,14 @@ class Backend:
     live: bool
     model: str | None = None
     per_call_usd: float = 0.0
+    #: True once the **Refine step** fired a REAL (non-replay) draft call this run — i.e. the
+    #: Refine step was freshly recorded and therefore MUST meter > $0 (the Gap-#3 guard).
+    #: Stays False when the Refine step fully replayed at $0 (every Refine cassette hit) — a
+    #: correct $0 reading the metering lower bound must waive, even if OTHER steps (e.g. the
+    #: newer recurse step) recorded fresh cassettes in the same run. Scoping the flag to the
+    #: Refine step is what makes a partial re-record (Refine replays, recurse records) still
+    #: certify: a $0 Refine replay is honest. Also False on the mock path.
+    refine_recorded: bool = False
 
     def _is_replay(self, request: RunRequest, ctx: RunContext, coord: ExecutionCoordinate) -> bool:
         """True if a cassette already exists for this call (so it replays at $0)."""
@@ -671,6 +690,9 @@ def _make_reply_producer(backend: Backend, body: Definition, ticket: str) -> Pro
         except (ValueError, TypeError):
             value = {"reply": result.text, "_draft_iter": visit}
         if backend.live and not replayed:
+            # A REAL Refine draft call fired (not a replay) -> this Refine step was freshly
+            # recorded, so it must meter > $0 (the Gap-#3 lower bound applies this run).
+            backend.refine_recorded = True
             ctx.cost_budget.charge(backend.per_call_usd)
         # CoW: a fresh frozen Output per iteration; DETERMINISTIC producer coordinate so
         # a second-process resume reproduces a bit-identical content sha (CL-4).
@@ -1179,6 +1201,12 @@ def run_self_improvement(
     # --- 10. Sink fires — allowed ONLY because the definition is frozen. -------
     _fire_sink(defn, fixed_sha)
     res.steps.append(StepResult(10, "sink (send)", "permitted — definition is frozen"))
+
+    # Record whether the REFINE STEP fired a real (non-replay) call this run. A fresh Refine
+    # record sets it True (and must meter > $0); a $0 Refine replay leaves it False (a $0
+    # reading is correct, so the metering lower bound is waived — the replay-PASS guarantee),
+    # even if OTHER steps recorded fresh cassettes in the same partial-record run.
+    res.recorded = backend.refine_recorded
 
     store.close()
     return res

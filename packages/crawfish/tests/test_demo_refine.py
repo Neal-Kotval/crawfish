@@ -109,23 +109,26 @@ def test_scenario_pass_predicate_requires_refine(result) -> None:
 import dataclasses  # noqa: E402
 
 
-def _live_pass_template(result):
+def _live_pass_template(result, *, recorded=True):
     """A fully-passing scenario result, marked ``live`` — every non-Refine criterion met.
 
     Derived from a real mock run (so all the structural fields — gate, shas, resume deltas,
     tenancy — are internally consistent) then flipped to the live acceptance mode with
     live-realistic cost fields: a positive worst case (mock prices every call at $0, but a
-    live run prices haiku at a few cents) that bounds a nonzero metered Refine spend (a real
-    fresh record always charges > $0). Individual tests then perturb ONLY the Refine
-    outcome to probe ``passed()``.
+    live run prices haiku at a few cents) that bounds the Refine spend.
+
+    ``recorded=True`` models a **fresh record** (real calls fired → Refine spent > $0);
+    ``recorded=False`` models a **$0 replay** (every cassette hit → Refine spent $0, which
+    is correct and must still PASS). Individual tests perturb ONLY the Refine outcome.
     """
     return dataclasses.replace(
         result,
         live=True,
+        recorded=recorded,
         worst_case_usd=4.32,  # the live haiku worst case (72 calls × $0.05 × 1.2)
         budget_usd=4.32,  # bound to the worst case on the live path
-        total_spend_usd=2.50,  # a real run's total, within the worst case
-        refine_spent_usd=0.10,  # a real fresh-record Refine spends > $0, within budget
+        total_spend_usd=2.50 if recorded else 0.0,  # fresh record spends; replay re-pays $0
+        refine_spent_usd=0.10 if recorded else 0.0,  # fresh > $0; replay $0 (correct)
     )
 
 
@@ -162,14 +165,29 @@ def test_live_rejects_unbounded_or_overspending_refine(module, result) -> None:
     assert not overspend.passed()  # spent > worst_case -> overspend
 
 
-def test_live_requires_metered_refine_spend(module, result) -> None:
-    """On the live path a $0 Refine spend is NOT a real record — it FAILS.
+def test_fresh_record_requires_metered_refine_spend(module, result) -> None:
+    """On a FRESH RECORD (``recorded=True``) a $0 Refine spend FAILS (Gap-#3 guard).
 
-    (A real fresh record always hits the model and charges > $0; a $0 live reading means
-    nothing actually ran, so the operator was not exercised.)
+    A real fresh record always hits the model and charges > $0; a $0 reading on a record
+    means nothing actually ran, so the operator was not exercised.
     """
-    zero = dataclasses.replace(_live_pass_template(result), refine_spent_usd=0.0)
+    zero = dataclasses.replace(_live_pass_template(result, recorded=True), refine_spent_usd=0.0)
     assert not zero.passed()
+
+
+@pytest.mark.parametrize("stopped", ["satisfied", "no_progress", "exhausted"])
+def test_zero_dollar_replay_passes(module, result, stopped) -> None:
+    """A $0 REPLAY (``recorded=False``, ``refine_spent_usd == 0``) MUST PASS.
+
+    A ``--live`` replay re-pays exactly $0 by design (every cassette hits), so the metering
+    lower bound is waived on a replay — the replay-PASS guarantee. The justified bounded
+    stop (including a ``no_progress``/``exhausted`` draw recorded earlier) still certifies.
+    """
+    replay = dataclasses.replace(
+        _live_pass_template(result, recorded=False), refine_stopped=stopped
+    )
+    assert replay.refine_spent_usd == 0.0  # a replay re-pays $0
+    assert replay.passed(), replay.summary()
 
 
 def test_mock_still_requires_satisfied(module, result) -> None:

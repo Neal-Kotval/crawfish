@@ -224,13 +224,16 @@ In the scenario the early drafts are rejected and the loop stops on a **verifier
 > outcome (the same precedent as the F-3 gate accepting a justified reject under variance).
 > `DemoResult.passed()` therefore certifies a **justified bounded Refine outcome** on the
 > live path: PASS when `refine_stopped ∈ {satisfied, no_progress, exhausted}` AND the bound
-> held (`iters ≤ max_iters`) AND spend was metered (`> $0`) AND within the worst case. A
-> genuinely broken Refine still FAILS — an error (no recorded verdict), a `stuck` dead-
-> letter/abstain, an unbounded run (`iters > max_iters`), or an overspend. The
-> **deterministic** (mock) path is unchanged: the rigged critic always accepts, so the mock
-> gate still strictly requires `satisfied`. (`test_demo_refine.py` asserts this whole
-> matrix — live accepts the three justified stops, rejects the broken ones; mock stays
-> strict.)
+> held (`iters ≤ max_iters`) AND the crash-resume re-charged `$0` AND total ≤ worst case. The
+> Gap-#3 metering lower bound (*Refine spend `> $0`*) is a **fresh-record** property, so it
+> applies **only on a fresh record** (`recorded`, set when the Refine step fires a real draft
+> call) — a `--live` **replay** re-pays `$0` and that is correct, so a `$0` Refine replay
+> PASSES. A genuinely broken Refine still FAILS — an error (no recorded verdict), a `stuck`
+> dead-letter/abstain, an unbounded run (`iters > max_iters`), an overspend, or a **fresh
+> record** that spent `$0`. The **deterministic** (mock) path is unchanged: the rigged critic
+> always accepts, so the mock gate still strictly requires `satisfied`. (`test_demo_refine.py`
+> asserts this whole matrix — live accepts the three justified stops, a fresh record needs
+> metered spend, a `$0` replay passes, the broken outcomes fail; mock stays strict.)
 
 ### Exact command for the M1 live gate
 
@@ -541,15 +544,32 @@ satisfied`, sha `e621bb77cd5e`), so `passed()` is `True`.
 **Resolution.** `DemoResult.passed()` now certifies the Refine **operator's** correctness,
 not the critic's draw (`self_improve.py`, new `_refine_step_ok()`): on the **live** path it
 accepts any *justified, bounded* stop — `refine_stopped ∈ {satisfied, no_progress,
-exhausted}` — provided the bound held (`iters ≤ max_iters`), spend was metered (`> $0`), and
-total stayed within the worst case. A broken Refine still FAILS (an error → no recorded
+exhausted}` — provided the bound held (`iters ≤ max_iters`), the crash-resume re-charged $0,
+and total stayed within the worst case. A broken Refine still FAILS (an error → no recorded
 verdict; a `stuck` dead-letter/abstain; an unbounded run; or an overspend). The
 **deterministic (mock) path is unchanged** — the rigged critic always accepts, so the mock
-gate still strictly requires `satisfied`. So `craw demo --live` now lands a **deterministic
-PASS** regardless of whether the real haiku critic happens to accept within the bound. The
-acceptance matrix is covered by `test_demo_refine.py` (live accepts the three justified
-stops, rejects `stuck`/`""`/unbounded/overspend/$0-spend; mock stays strict). The original
-analysis is retained below for the record.
+gate still strictly requires `satisfied`.
+
+**Metering vs. replay (the follow-up fix).** The Gap-#3 metering lower bound — *Refine spend
+`> $0`* — is a **fresh-record** property (it proves real model calls fired). A `--live`
+**replay** re-pays exactly `$0` by design, so an unconditional `> $0` would wrongly fail a
+bit-identical replay of a recorded PASS. The fix threads a **Refine-scoped** `recorded` flag
+into `DemoResult`: the backend sets `refine_recorded = True` only when the Refine step fires a
+real (non-replay) **draft** call (`_make_reply_producer`). The metering bound then applies
+**only when `recorded`** — a fresh Refine record must meter `> $0`; a `$0` Refine replay is
+correct and PASSES. Scoping the flag to the Refine step (not a global "any call recorded") is
+load-bearing: a **partial re-record** where Refine fully replays at `$0` while the newer
+recurse step records fresh cassettes must still certify (a `$0` Refine replay is honest).
+
+So `craw demo --live` now lands a **deterministic PASS** regardless of whether the real haiku
+critic happens to accept within the bound, and the committed on-disk cassette state — a
+`no_progress` Refine draw (`refine (verifier-gated): 5 drafts -> no_progress … spent=$0.00`) —
+**replays to PASS at `$0`** (verified: `uv run craw demo --live --model claude-haiku-4-5` →
+`PASS — 9/9`, exit 0, bit-identical recurse fold sha across re-runs). The acceptance matrix is
+covered by `test_demo_refine.py`: live accepts the three justified stops; a **fresh record**
+with `$0` Refine spend FAILS (`test_fresh_record_requires_metered_refine_spend`); a **`$0`
+replay** PASSES (`test_zero_dollar_replay_passes`); `stuck`/`""`/unbounded/overspend FAIL; mock
+stays strict. The original analysis is retained below for the record.
 
 Of the fresh records taken this session, one PASSED (above) and an earlier one FAILED — not on
 M2, but on the **M1 verifier-gated Refine** step. On the failing draw the live critic rejected
@@ -577,3 +597,88 @@ recorded state).
 > Deterministic `uv run craw demo` always prints `PASS — 9/9` (`recurse: 3 levels -> base_case;
 > folded 3 parts`; `refine … -> satisfied`) and the full suite is green — both the recurse and
 > Refine paths pass off the mock runtime; the live non-determinism is purely the real-critic draw.
+
+### FINAL M2 live certification — RUN BY `verifier-m2` (2026-06-24, `claude-haiku-4-5`, commit `9768030`) — ⚠️ FAIL: `_refine_step_ok` `metered>$0` breaks the `$0` REPLAY of a justified `no_progress`
+
+Ran the final certification against the live-gate fix (commit `9768030`, `fix(demo): live gate
+certifies a justified bounded Refine outcome`). Real `claude -p` (`claude 2.1.187`, authed).
+
+**The intent of the fix WORKS on a fresh record:** this certification draw stopped the Refine
+loop on a *justified `no_progress`* (NOT `satisfied`) — exactly the case that used to FAIL — and
+the **fresh-record run PASSED**:
+
+```
+[9] refine (verifier-gated): 5 drafts -> no_progress (verifier precision=1.00, spent=$0.72, sha f36fdc186b51)
+[9] recurse (bounded): 3 levels -> base_case (<= max_depth 4); folded 3 parts, sha 0213e65c2902
+=== PASS — 9/9 F-foundations exercised end to end ===
+```
+
+Fresh-record total **`$4.250`** (Refine loop `$0.72`), worst_case `$4.32` = budget, `≤` holds.
+Observed refine outcome: **`no_progress`** (the justified-bounded branch — this is the draw we
+wanted to certify).
+
+**BUT the `$0` REPLAY of that same recorded state FAILS:**
+
+```bash
+rm -rf demo/triage-bot/.crawfish/cassettes && mkdir demo/triage-bot/.crawfish/cassettes
+uv run craw demo --live --model claude-haiku-4-5   # FRESH RECORD → PASS (refine no_progress, $4.250)
+uv run craw demo --live --model claude-haiku-4-5   # REPLAY → FAIL (!!)  spend $0.00, refine no_progress
+```
+
+The replay prints `=== FAIL — 9/9 ===`. The recurse, router, isolation, budget, and replay-sha
+properties are all fine on replay; the **only** failing predicate is the Refine step.
+
+#### Defect (new, introduced by the live-gate fix) — `_refine_step_ok` requires `metered > $0`, which a `$0` replay can never satisfy for a `no_progress`/`exhausted` draw — UNRESOLVED
+
+**Root cause** — `demo/triage-bot/self_improve.py`, `DemoResult._refine_step_ok()` (lines
+~165-167):
+
+```python
+if self.live:
+    justified_stop = self.refine_stopped in ("satisfied", "no_progress", "exhausted")
+    metered = self.refine_spent_usd > 0.0  # real model calls cost > $0 on a record
+```
+
+- On the **fresh record**, the Refine loop made real calls → `refine_spent_usd == $0.72 > 0` →
+  `metered == True` → step OK → **PASS**.
+- On the **replay** of that recorded state, the Refine loop replays at **`$0`** (by design — the
+  whole point of the bit-identical $0-replay guarantee) → `refine_spent_usd == $0.00` →
+  `metered == False` → `_refine_step_ok()` returns `False` → **`passed()` is `False` → FAIL**.
+
+So the `metered > $0` clause conflates "this run exercised real calls" with "spend must be
+positive on *every* run." For a `satisfied` draw the recorded cassette state still happens to
+pass other paths, but for a **`no_progress`/`exhausted`** draw the live gate now **fails its own
+$0-replay** — the exact bit-identical-replay property item 6 is supposed to certify. Confirmed
+deterministically: replay `passed=False`, `refine_stopped="no_progress"`, `refine_spent_usd=0.0`,
+all shas bit-identical (refine `f36fdc186b51`, recurse `0213e65c2902`, frozen `9dfc8be045b2`,
+loop `950276dec417`), `refine_resume_spent_usd == recurse_resume_spent_usd == 0.0`.
+
+**Why it didn't show in the prior re-run:** that draw happened to stop on `satisfied` and I
+reported the replay PASS for that recorded state. This certification draw stopped on
+`no_progress`, which is precisely the branch the fix added — and that branch fails on replay.
+
+**Fix direction (for the owner — verifier does not patch source).** The `metered` check should
+not require positive spend on a **replay**: either (a) drop the `> $0` requirement and rely on
+`iters >= 1` (a Refine that ran at least one drafting iteration is "metered" in the sense that
+matters — the operator executed), or (b) gate the `metered` requirement on "this was a real
+record, not a replay" (the backend already exposes `_is_replay`), or (c) assert `refine_iters >=
+1 and refine_spent_usd <= worst_case_usd` and drop the strictly-positive lower bound. The
+acceptance test `test_demo_refine.py` should add a **replay** case (a justified `no_progress`
+with `refine_spent_usd == 0.0`) and assert the live gate still PASSES — that case is the gap
+that let this through (the existing "rejects $0-spend" assertion is backwards for the replay
+path).
+
+**Verdict: ⚠️ FAIL — the live `craw demo --live` PASS is NOT reproducible on $0 replay when the
+real critic justifiably stops on `no_progress`/`exhausted`.** Five of six M2 items hold on every
+draw; the recurse fix (item 2) remains CERTIFIED. The failing predicate is the M1 Refine
+operator gate on replay, not an M2 composition property. Do NOT mark the live gate
+deterministic-PASS until `_refine_step_ok` tolerates a `$0` replay.
+
+| # | M2 evidence item | result | proof |
+|---|------------------|--------|-------|
+| 1 | **Router branched correctly** | ✅ | `router branch: routed 6 tickets -> 3 branches {'billing': 2, 'bug': 2, 'feature': 2}`; `router_branches_hit == 3`. |
+| 2 | **Recurse bounded + folded** | ✅ (certified) | `recurse (bounded): 3 levels -> base_case (<= max_depth 4); folded 3 parts`, sha `0213e65c2902`. Stable across every draw. |
+| 3 | **$0 durable resume** | ✅ | `recurse resume ($0): resume spend=$0.00`; `recurse_resume_spent_usd == 0.0`. |
+| 4 | **Budget respected** | ✅ | `worst=72 calls=$4.320 <= budget=$4.32`; fresh-record total `$4.250 ≤ $4.32`, no `BudgetExceeded`. |
+| 5 | **Tenant isolation** | ✅ | `tenant isolation: org-B gold cases=0`; `org_b_cases == 0`, `org_a_cases == 6`. |
+| 6 | **Bit-identical replay** | ⚠️ | shas reproduce bit-for-bit (refine `f36fdc186b51`, recurse `0213e65c2902`, frozen `9dfc8be045b2`, loop `950276dec417`) AND replay spend is `$0.00` — but the replayed run **FAILs** because `_refine_step_ok` rejects the `$0` `no_progress` replay (defect above). The replay reproduces; the *pass verdict* does not. |
