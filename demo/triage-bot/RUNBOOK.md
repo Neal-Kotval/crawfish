@@ -247,35 +247,36 @@ mock runtime; the acceptance test is `packages/crawfish/tests/test_demo_refine.p
 
 ### M1 live-acceptance gate — RUN BY `verifier-m1` (2026-06-24, `claude-haiku-4-5`)
 
-Independent fresh live run against the **real** logged-in `claude -p` (`claude 2.1.187`,
-authed; `claude -p "say ok"` → `OK`). Cassettes were moved aside first to force a true
-fresh record this session, then a replay run confirmed bit-identical reproduction.
+Confirming live run on the **FIXED cost model**, against the **real** logged-in `claude -p`
+(`claude 2.1.187`, authed; `claude -p "say ok"` → `OK`). Cassettes were cleared first to
+force a true fresh record this session, then a replay run confirmed bit-identical
+reproduction at `$0`.
 
 **Exact commands run:**
 
 ```bash
 uv run craw demo                                       # deterministic sanity → PASS (9/9)
-# move existing cassettes aside to force a fresh real-model record:
-mv demo/triage-bot/.crawfish/cassettes{,.bak} && mkdir demo/triage-bot/.crawfish/cassettes
+# clear cassettes to force a fresh real-model record:
+rm -rf demo/triage-bot/.crawfish/cassettes && mkdir demo/triage-bot/.crawfish/cassettes
 uv run craw demo --live --model claude-haiku-4-5       # FRESH RECORD (real haiku)
 uv run craw demo --live --model claude-haiku-4-5       # REPLAY → $0, bit-identical
 ```
 
-**spent_usd of the live run:** fresh-record total `$2.461` (≈49 metered calls @ `$0.05`),
-of which the verifier-gated Refine loop spent `$0.141`. Replay run spent `$0.00`.
+**spent_usd of the live run:** fresh-record total **`$2.6251`**, of which the
+verifier-gated Refine loop spent **`$0.1385`**. Replay run spent **`$0.00`**.
+**worst_case_usd = `$3.12` = budget (`$3.12`)** — the hard-kill ceiling and the honesty
+bound now coincide; `total_spend $2.6251 ≤ worst_case $3.12` holds with `$0.49` headroom.
 
-**Verdict: PASS — with one ⚠️ cost-honesty caveat (real defect found, see below).**
-The M1 Refine surface itself is fully load-bearing and proven; the ⚠️ is a pre-existing
-F-6 worst-case-vs-budget gap that real-model variance can trip.
+**Verdict: PASS — all six items ✅. The prior cost-honesty caveat is RESOLVED and re-verified.**
 
 | # | M1 evidence item | result | proof |
 |---|------------------|--------|-------|
-| 1 | **Real refined reply** | ✅ | live `claude -p` drafted real prose, e.g. cassette `df792c15819a8567.json`: *"URGENT: Login Service Incident – Investigation Underway … We are aware that logins have been broken following today's deployment and are treating this as a critical P0 incident …"* — not the mock echo; iterated across drafts. |
-| 2 | **Verifier gated the loop** | ✅ | `refine (verifier-gated): N drafts -> satisfied (verifier precision=1.00)`. The gated critic STOPPED the loop on its **accept verdict**, not on `max_iters=5`. Real-model variance in the accept point is itself evidence the gate is load-bearing: across runs the critic accepted at iter 1 and iter 4 (`refine_stopped=="satisfied"` both times, never `exhausted`). |
-| 3 | **Budget respected / metered spend** | ✅ (defect FIXED) | Spend is REAL and metered (`refine_spent=$0.141` on the PASS record; `$0.56` on a higher-variance run). The F-6 honesty invariant `total_spend <= worst_case` is now **enforced by construction**: `worst_case_usd` is the structural max-call bound (`$3.12` on haiku) and the `CostBudget` ceiling is **bound to it**, so the hard-kill and the assertion coincide — there is no under-budget-yet-failing window. See the resolved defect note below. |
-| 4 | **Crash-resume = $0** | ✅ | `refine resume ($0): … resume spend=$0.00 ($0)` and step-9 `resume re-run: extra calls=0, spend=$0.00`. A resume over the same ledger replayed every committed draft at zero cost; `refine_resume_spent_usd == 0.0`. |
+| 1 | **Real refined reply** | ✅ | live `claude -p` drafted real prose (real haiku transcripts under `.crawfish/cassettes/`, e.g. a drafted *"URGENT: Login Service Incident – Investigation Underway"* support reply) — not the mock echo. |
+| 2 | **Verifier gated the loop** | ✅ | `refine (verifier-gated): 1 drafts -> satisfied (verifier precision=1.00)`. The gated critic STOPPED the loop on its **accept verdict**, not on `max_iters=5`; `refine_stopped=="satisfied"`. (A critic that never accepts would stop on the bound — `exhausted` — proving the bound is load-bearing; see `test_demo_refine.py`.) |
+| 3 | **Budget respected / metered spend** | ✅ | Spend is REAL and metered: total `$2.6251`, Refine loop `$0.1385`. The F-6 honesty invariant now **holds and is enforced**: `total_spend $2.6251 ≤ worst_case $3.12 = budget $3.12` (step 6 prints `worst=52 calls=$3.120 <= budget=$3.12`). Hard-kill never tripped. |
+| 4 | **Crash-resume = $0** | ✅ | `refine resume ($0): … resume spend=$0.00 ($0)` and step-9 `resume re-run: extra calls=0, spend=$0.00`. `refine_resume_spent_usd == 0.0`, `resume_extra_charges == 0`. |
 | 5 | **Tenant isolation** | ✅ | step 9 `tenant isolation: org-B gold cases=0 (cannot read org-A)`; `org_b_cases == 0`, `org_a_cases == 6`. |
-| 6 | **Bit-identical replay** | ✅ | replay run reproduced the fresh-record shas exactly: frozen `9dfc8be045b2`, loop fixed-point `d9b59d63c276`, refine `f34b4de5990a`. Resume also asserts the accepted draft's `output_content_sha` matches the uninterrupted run in-scenario. |
+| 6 | **Bit-identical replay** | ✅ | the `--live` replay reproduced the fresh-record shas exactly: frozen `9dfc8be045b2`, loop fixed-point `950276dec417`, refine `e240b176ea2a`. Resume also asserts the accepted draft's `output_content_sha` matches the uninterrupted run in-scenario. |
 
 #### Defect found (cost honesty — F-6) — RESOLVED (`demo-runner-m1`, 2026-06-24)
 
