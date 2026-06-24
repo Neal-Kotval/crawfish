@@ -105,6 +105,86 @@ def test_scenario_pass_predicate_requires_refine(result) -> None:
     assert result.passed(), result.summary()
 
 
+# --- live acceptance: a JUSTIFIED bounded Refine outcome certifies the operator ---
+import dataclasses  # noqa: E402
+
+
+def _live_pass_template(result):
+    """A fully-passing scenario result, marked ``live`` — every non-Refine criterion met.
+
+    Derived from a real mock run (so all the structural fields — gate, shas, resume deltas,
+    tenancy — are internally consistent) then flipped to the live acceptance mode with
+    live-realistic cost fields: a positive worst case (mock prices every call at $0, but a
+    live run prices haiku at a few cents) that bounds a nonzero metered Refine spend (a real
+    fresh record always charges > $0). Individual tests then perturb ONLY the Refine
+    outcome to probe ``passed()``.
+    """
+    return dataclasses.replace(
+        result,
+        live=True,
+        worst_case_usd=4.32,  # the live haiku worst case (72 calls × $0.05 × 1.2)
+        budget_usd=4.32,  # bound to the worst case on the live path
+        total_spend_usd=2.50,  # a real run's total, within the worst case
+        refine_spent_usd=0.10,  # a real fresh-record Refine spends > $0, within budget
+    )
+
+
+@pytest.mark.parametrize("stopped", ["satisfied", "no_progress", "exhausted"])
+def test_live_accepts_any_justified_bounded_refine_stop(module, result, stopped) -> None:
+    """On the LIVE path, a justified bounded Refine stop certifies the operator.
+
+    ``satisfied`` (critic accepted), ``no_progress`` (calibrated stall), and ``exhausted``
+    (hit ``max_iters``) are all CORRECT bounded outcomes under real-model variance — the
+    same precedent as the F-3 gate accepting a justified reject. All three must PASS.
+    """
+    live = dataclasses.replace(_live_pass_template(result), refine_stopped=stopped)
+    assert live.passed(), live.summary()
+
+
+@pytest.mark.parametrize("bad", ["stuck", ""])
+def test_live_rejects_broken_refine_outcomes(module, result, bad) -> None:
+    """A broken Refine still FAILS live: ``stuck`` (dead-letter/abstain) or ``""`` (error).
+
+    An error/exception leaves ``refine_stopped`` at its ``""`` default (``execute`` would
+    have raised before recording a verdict); ``stuck`` is a dead-letter/abstain, not a
+    justified bounded stop. Neither may certify the operator.
+    """
+    live = dataclasses.replace(_live_pass_template(result), refine_stopped=bad)
+    assert not live.passed()
+
+
+def test_live_rejects_unbounded_or_overspending_refine(module, result) -> None:
+    """A Refine that ran past ``max_iters`` or overspent the worst case FAILS live."""
+    base = _live_pass_template(result)
+    unbounded = dataclasses.replace(base, refine_iters=module.REFINE_MAX_ITERS + 1)
+    assert not unbounded.passed()  # iters > max_iters -> not bounded
+    overspend = dataclasses.replace(base, refine_spent_usd=base.worst_case_usd + 1.0)
+    assert not overspend.passed()  # spent > worst_case -> overspend
+
+
+def test_live_requires_metered_refine_spend(module, result) -> None:
+    """On the live path a $0 Refine spend is NOT a real record — it FAILS.
+
+    (A real fresh record always hits the model and charges > $0; a $0 live reading means
+    nothing actually ran, so the operator was not exercised.)
+    """
+    zero = dataclasses.replace(_live_pass_template(result), refine_spent_usd=0.0)
+    assert not zero.passed()
+
+
+def test_mock_still_requires_satisfied(module, result) -> None:
+    """The deterministic (mock) path is UNCHANGED — it still requires ``satisfied``.
+
+    A mock run that stopped on ``no_progress`` / ``exhausted`` would mean the rigged critic
+    failed to accept — a real regression — so the mock gate must stay strict.
+    """
+    assert result.live is False
+    assert result.refine_stopped == "satisfied"
+    for stopped in ("no_progress", "exhausted", "stuck", ""):
+        mutated = dataclasses.replace(result, refine_stopped=stopped)
+        assert not mutated.passed(), f"mock must reject refine_stopped={stopped!r}"
+
+
 # --- determinism: the accepted draft sha is bit-identical across runs ------------
 def test_refine_deterministic_across_runs(module) -> None:
     a = module.run_self_improvement(live=False)
