@@ -369,7 +369,18 @@ from crawfish.visualize import (
     serve_dashboard,
     serve_emission_dashboard,
 )
-from crawfish.workflow import Workflow
+from crawfish.workflow import (
+    Edge,
+    Program,
+    ProgramResult,
+    Recurse,
+    RecurseResult,
+    UnboundedCycleError,
+    UnboundedRecursionError,
+    Workflow,
+    branch,
+    recurse,
+)
 
 __version__ = "0.2.0"
 
@@ -744,4 +755,15 @@ __all__ = [
     "PredicateStop",
     "VerifierStop",
     "feature_loop",
+    # Composition surface — cyclic Program, runnable Router branch, bounded recurse
+    # (CRA-205/206/207/208)
+    "branch",
+    "Program",
+    "Edge",
+    "ProgramResult",
+    "UnboundedCycleError",
+    "recurse",
+    "Recurse",
+    "RecurseResult",
+    "UnboundedRecursionError",
 ]
