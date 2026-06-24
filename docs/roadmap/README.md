@@ -124,6 +124,27 @@ ADR 0017 (decode-knob ownership), ADR 0018 (borrow lifetime semantics), and ADR 
 (content-hash version-bump + migration policy). The normative statistical-conformance gate
 is [`docs/architecture/experiment-design.md`](../architecture/experiment-design.md).
 
+## Milestone 1 — The control plane (shipped)
+
+*Exit: the first headline operators stand on the F foundations — a bounded, metered,
+durable iterate-until-goal loop (`Refine`) gated by a critic that must earn block authority
+(`Verifier`), with `$0` content-hash-verified crash-resume.*
+
+| # | Issue | Title | Status |
+|---|-------|-------|--------|
+| CL-1 | CRA-202 | `Refine` — verifier-gated, bounded/metered iterate-until-goal operator | ✅ |
+| CL-2 | CRA-203 | `Verifier` — gated external-signal critic (fail-closed precision gate) | ✅ |
+| CL-4 | CRA-204 | Durable, crash-resumable `Refine` loops (`$0` resume from the F-2 ledger) | ✅ |
+
+Public surface (all top-level `crawfish` exports): `Refine`, `RefineResult`,
+`StopCondition`, `RubricThreshold`, `PredicateStop`, `VerifierStop`, `feature_loop`,
+`Verifier`, `GatedVerifier`, `Verdict`, `VerifierStage`. Learn it via the
+[Refine & verify guide](../guide/refine-and-verify.md), the
+[control-plane reference](../reference/refine-and-verify.md), and the
+[release notes](../guide/release-notes.md). No content-hash or store-schema bump — reuses
+the F-2 ledger namespace, the F-3 gate algebra, and the existing `Output` taint/lineage
+fields.
+
 ## Per-feature research notes
 
 Researcher findings (reviewed before implementation) live alongside this file as

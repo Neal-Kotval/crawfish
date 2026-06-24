@@ -4,7 +4,7 @@
 statistical gate ships in the Agent-Language epic until it conforms to this spec,
 and every statistical consumer — `calibrate`, `gate` (F-3), `quorum`, `explore`,
 `guard` — **must cite this document** in its design and import its primitives
-from [`crawfish.experiment`](../../packages/crawfish/src/crawfish/experiment.py).
+from `crawfish.experiment`.
 
 The primitives are pure (no model calls, no I/O, no wall-clock, no global
 randomness; any bootstrap is seeded explicitly), so every decision is a
@@ -156,6 +156,5 @@ A gate/consumer conforms to F-8 iff it:
 8. Is **deterministic**: pure arithmetic over recorded scores; any bootstrap is
    explicitly seeded.
 
-See the API and signatures in
-[`crawfish.experiment`](../../packages/crawfish/src/crawfish/experiment.py) and
+See the API and signatures in `crawfish.experiment` and
 the changelog entry `docs/_changelog/F-8.md`.

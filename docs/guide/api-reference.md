@@ -4,7 +4,7 @@
 > Do not edit by hand — regenerate on each release:
 > `uv run python docs/guide/gen_api_reference.py > docs/guide/api-reference.md`.
 
-`crawfish` version: `0.2.0` — 332 public symbols.
+`crawfish` version: `0.2.0` — 343 public symbols.
 
 Everything documented here is importable directly from the top-level package:
 
@@ -348,6 +348,17 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `TrialResult` | class | One scored trial in the search (the ordered audit log). |
 | `TuneResult` | class | The outcome of a tune: the winning Definition + the ordered trial log. |
 | `Tuner` | class | Deterministic search over a mutator's candidates, scored by a Benchmark. |
+| `Verifier` | class | A critic over a closed label set — describes an Output, does not (yet) gate. |
+| `GatedVerifier` | class | A :class:`Verifier` that has EARNED the right to gate (stage ``BLOCK``). |
+| `Verdict` | class | The typed result of one verification: a closed-set label over an Output. |
+| `VerifierStage` | enum | The shadow→warn→block lifecycle of a critic's gating authority. |
+| `Refine` | class | A bounded, metered, durable iterate-until-goal loop over a producing Definition. |
+| `RefineResult` | class | The typed outcome of a :class:`Refine` loop. |
+| `StopCondition` | class | The EXTERNAL stop signal for a :class:`Refine` loop. |
+| `RubricThreshold` | class | Stop when a :class:`~crawfish.metrics.Rubric` metric clears a threshold. |
+| `PredicateStop` | class | Stop on a typed predicate over the frozen ``Output``. |
+| `VerifierStop` | class | Stop when a **gated** :class:`~crawfish.verifier.Verifier` accepts the Output (CL-2). |
+| `feature_loop` | function | Convenience alias matching the vision vocabulary: a feature-improvement loop. |
 
 ### `JSONValue`
 
@@ -566,7 +577,7 @@ TypeRegistry() -> 'None'
 
 *value* — `TypeRegistry`
 
-`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x10b2c0ed0>`
+`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x1075a90d0>`
 
 ### `Version`
 
@@ -672,7 +683,7 @@ Migration(version: 'int', description: 'str', apply: 'Callable[[sqlite3.Connecti
 
 *value* — `int`
 
-`CURRENT_SCHEMA_VERSION = 2`
+`CURRENT_SCHEMA_VERSION = 3`
 
 ### `Engine`
 
@@ -751,13 +762,21 @@ so a directory and its installed package compile byte-identically.
 **Methods**
 
 - `agent(self, role: 'str') -> 'AgentSpec | None'`
+- `content_dict(self) -> 'dict[str, object]'` — The canonical hash payload: the model dump minus the volatile ``version``,
+- `content_sha(self) -> 'str'` — Deterministic 12-char content hash over :meth:`content_dict`.
 - `export(self) -> 'MarketplacePackage'` — Export to a marketplace package shape.
+- `mutable(self, store: 'Store', *, org_id: 'str' = 'local') -> 'AbstractContextManager[Borrow]'` — Acquire an exclusive borrow on this Definition for training/mutation (F-7).
+- `resolved_decode(self, role: 'str | None' = None) -> 'dict[str, float | int]'` — The authoritative decode config for ``role`` (default: lead, else first).
 
 ### `AgentSpec`
 
 *class* — bases: `BaseModel`
 
 One agent in a team. ``prompt`` is compiled from its markdown body.
+
+**Methods**
+
+- `decode_knobs(self) -> 'dict[str, float | int]'` — The non-None tunable decode knobs as a plain dict (hash-stable ordering).
 
 ### `TeamSpec`
 
@@ -1198,13 +1217,26 @@ RecordReplayRuntime(inner: 'AgentRuntime', cassette_dir: 'str | Path', *, record
 
 **Methods**
 
-- `run(self, request: 'RunRequest', ctx: 'RunContext') -> 'RunResult'` — Execute one agent turn to completion and return the typed result.
+- `run(self, request: 'RunRequest', ctx: 'RunContext', *, coordinate: 'ExecutionCoordinate | None' = None) -> 'RunResult'` — Execute one agent turn to completion and return the typed result.
 
 ### `RunRequest`
 
 *class* — bases: `BaseModel`
 
 One agent's turn: a compiled Definition + the inputs bound for this run.
+
+Decode-knob ownership (ADR 0017 / F-5):
+  * The *tunable* knobs (``temperature``/``top_p``/``sample_k``) are owned by the
+    Definition and ENTER its content hash. ``RunRequest`` does NOT carry its own
+    independent temperature — :meth:`resolved_decode` DERIVES it from the resolved
+    Definition. There is exactly one authoritative location.
+  * ``grammar`` and ``decode_seed`` are *per-call* properties, kept OUT of the
+    content hash. ``grammar`` is a provider dialect (degrades gracefully);
+    ``decode_seed`` is folded into the F-1 replay cassette key, not the Definition.
+
+**Methods**
+
+- `resolved_decode(self) -> 'dict[str, float | int]'` — The authoritative decode knobs for this turn, DERIVED from the Definition.
 
 ### `RunResult`
 
@@ -1648,7 +1680,7 @@ Raised when a Run idles on an approval gate (state persisted, no compute spent).
 A set of Runs executed under one Definition, wired from Sources/Outputs.
 
 ```python
-Batch(definition: 'Definition', name: 'str' = 'batch', *, runtime: 'AgentRuntime | None' = None, cost_budget: 'CostBudget | None' = None) -> 'None'
+Batch(definition: 'Definition', name: 'str' = 'batch', *, runtime: 'AgentRuntime | None' = None, cost_budget: 'CostBudget | None' = None, concurrency: 'int' = 1, continue_on_error: 'bool' = False) -> 'None'
 ```
 
 **Methods**
@@ -2056,10 +2088,16 @@ ExecutionLedger(store: 'Store', *, org_id: 'str' = 'local') -> 'None'
 
 **Methods**
 
+- `checkpoint_depth(self, loop_id: 'str', item_id: 'str', depth: 'int', output_ref: 'str') -> 'None'` — The ``recurse`` variant: record completion at a given ``depth`` of the
+- `checkpoint_iteration(self, loop_id: 'str', item_id: 'str', edge_id: 'str', visit: 'int', output_ref: 'str') -> 'None'` — Record that ``visit`` of this loop over this item completed, pinning the
 - `checkpoint_step(self, pipeline_id: 'str', step_index: 'int') -> 'None'`
+- `completed_depths(self, loop_id: 'str', item_id: 'str') -> 'set[int]'` — The recursion depths already recorded for ``(loop_id, item_id)`` in this org.
 - `completed_items(self, pipeline_id: 'str') -> 'set[str]'`
 - `completed_steps(self, pipeline_id: 'str') -> 'set[int]'`
+- `completed_visits(self, loop_id: 'str', item_id: 'str', edge_id: 'str') -> 'set[int]'` — The visit indices already recorded for ``(loop_id, item_id, edge_id)`` in
+- `depth_output_ref(self, loop_id: 'str', item_id: 'str', depth: 'int') -> 'str | None'` — The frozen Output reference recorded at a specific recursion ``depth``.
 - `finish_pipeline(self, pipeline_id: 'str', status: 'ExecState' = <ExecState.DONE: 'done'>) -> 'None'`
+- `iteration_output_ref(self, loop_id: 'str', item_id: 'str', edge_id: 'str', visit: 'int') -> 'str | None'` — The frozen Output reference recorded for a specific completed visit.
 - `mark_item(self, pipeline_id: 'str', item_id: 'str', status: 'ExecState') -> 'None'`
 - `pinned_version(self, pipeline_id: 'str') -> 'str | None'` — The version this pipeline started on — unchanged by any redeploy.
 - `reconcile(self) -> 'dict[str, list[str]]'` — Reconcile orphaned state after an engine restart.
@@ -2304,7 +2342,7 @@ Stop then re-deploy ``name`` with its recorded dir + schedule. Returns success.
 Watch one pipeline: run rules (and an optional LLM judge) on a poll interval.
 
 ```python
-Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x10b5f1620>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
+Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x1078d7ce0>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
 ```
 
 **Methods**
@@ -3056,6 +3094,22 @@ All figures are USD and approximate. ``per_item_usd`` is the predicted spend
 for a single item across the whole team; ``total_usd`` scales that by the
 item count. ``per_model`` breaks the total down by resolved model id so a
 caller can see which model dominates the bill.
+
+The estimate is a **three-number interval** (F-6 / OPT-2):
+
+* ``total_usd`` — the **lower bound** (unchanged semantics): every
+  cost-bearing operator fires exactly once. This field's meaning is frozen;
+  consumers and existing callers may rely on it.
+* ``worst_case_usd`` — the lower bound times the product of every operator's
+  worst-case multiplier (see :class:`CostShape` / :func:`compose_cost`). With
+  no operator wrappers it equals ``total_usd``.
+* ``expected_usd`` — a *measured-rate* band between the two. When no measured
+  rates are supplied it equals ``worst_case_usd`` (never undercount).
+  ``expected_lo_usd`` / ``expected_hi_usd`` carry the CI so the number is a
+  band, never a falsely-precise point.
+
+Invariant (enforced): ``total_usd <= expected_lo_usd <= expected_usd <=
+expected_hi_usd <= worst_case_usd``.
 
 ### `Budget`
 
@@ -4514,7 +4568,7 @@ clean unprivileged primitive and is deferred (ADR 0009) → :class:`UnsupportedP
 *function*
 
 ```python
-registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x10b2c0ed0>) -> 'list[dict[str, object]]'
+registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x1075a90d0>) -> 'list[dict[str, object]]'
 ```
 
 Serialize a registry's records to JSON descriptors for the child.
@@ -4575,13 +4629,13 @@ One typed signal on the append-only ledger. Frozen once created.
 The **closed** taxonomy of signals. Adding a kind is a contract change
 (bump :data:`EMISSION_SCHEMA_VERSION` and extend :data:`REQUIRED_ATTRS`).
 
-Members: `RUN_START` = `'run_start'`, `RUN_FINISH` = `'run_finish'`, `MODEL` = `'model'`, `TOOL` = `'tool'`, `SINK` = `'sink'`, `COMPACTION` = `'compaction'`, `OBSERVER` = `'observer'`, `METRIC` = `'metric'`, `SECRET_LEASE` = `'secret_lease'`, `JAIL_VIOLATION` = `'jail_violation'`
+Members: `RUN_START` = `'run_start'`, `RUN_FINISH` = `'run_finish'`, `MODEL` = `'model'`, `TOOL` = `'tool'`, `SINK` = `'sink'`, `COMPACTION` = `'compaction'`, `OBSERVER` = `'observer'`, `METRIC` = `'metric'`, `SECRET_LEASE` = `'secret_lease'`, `JAIL_VIOLATION` = `'jail_violation'`, `CORRECTION` = `'correction'`
 
 ### `REQUIRED_ATTRS`
 
 *value* — `mappingproxy`
 
-`REQUIRED_ATTRS = mappingproxy({<EmissionKind.RUN_START: 'run_start'>: ('runtime',), <EmissionKind.RUN_FINISH: 'run_finish'>: ('status',), <EmissionKind.MODEL: 'model'>: ('model', 'cost_usd'), <EmissionKind.TOOL: 'tool'>: ('tool',), <EmissionKind.SINK: 'sink'>: ('target', 'committed'), <EmissionKind.COMPACTION: 'compaction'>: ('strategy',), <EmissionKind.OBSERVER: 'observer'>: ('kind', 'severity'), <EmissionKind.METRIC: 'metric'>: ('metric', 'value'), <EmissionKind.SECRET_LEASE: 'secret_lease'>: ('ref', 'node_id'), <EmissionKind.JAIL_VIOLATION: 'jail_violation'>: ('attempt', 'severity')})`
+`REQUIRED_ATTRS = mappingproxy({<EmissionKind.RUN_START: 'run_start'>: ('runtime',), <EmissionKind.RUN_FINISH: 'run_finish'>: ('status',), <EmissionKind.MODEL: 'model'>: ('model', 'cost_usd'), <EmissionKind.TOOL: 'tool'>: ('tool',), <EmissionKind.SINK: 'sink'>: ('target', 'committed'), <EmissionKind.COMPACTION: 'compaction'>: ('strategy',), <EmissionKind.OBSERVER: 'observer'>: ('kind', 'severity'), <EmissionKind.METRIC: 'metric'>: ('metric', 'value'), <EmissionKind.SECRET_LEASE: 'secret_lease'>: ('ref', 'node_id'), <EmissionKind.JAIL_VIOLATION: 'jail_violation'>: ('attempt', 'severity'), <EmissionKind.CORRECTION: 'correction'>: ('correction_type', 'provenance')})`
 
 ### `EMISSION_SCHEMA_VERSION`
 
@@ -5121,4 +5175,198 @@ Tuner(benchmark: 'Benchmark', mutator: 'PromptMutator', *, strategy: 'SearchStra
 **Methods**
 
 - `tune(self, base: 'Definition', ctx: 'RunContext', runtime: 'AgentRuntime', *, seed: 'int' = 0) -> 'TuneResult'` — Search the candidate space; return the benchmark-best (regression-gated).
+
+### `Verifier`
+
+*class*
+
+A critic over a closed label set — describes an Output, does not (yet) gate.
+
+Wraps a critic :class:`~crawfish.definition.types.Definition` (frozen,
+content-hashed) and an optional :class:`~crawfish.metrics.Rubric`. ``labels`` is
+the explicit, closed set the verdict may take and always includes ``default``.
+A bare ``Verifier`` is in :attr:`VerifierStage.WARN` (or ``SHADOW``) — it may
+emit verdicts but has **no authority to stop a loop**. Use :meth:`gated` to earn
+that authority.
+
+```python
+Verifier(definition: 'Definition', *, labels: 'Sequence[str]', default: 'str', accept_label: 'str', rubric: 'Rubric | None' = None, stage: 'VerifierStage' = <VerifierStage.WARN: 'warn'>, name: 'str' = 'verifier', registry: 'TypeRegistry | None' = None) -> 'None'
+```
+
+**Methods**
+
+- `accepts(self, verdict: 'Verdict') -> 'bool'` — Whether ``verdict`` is the accept (stop) label. Pure, no model call.
+- `verdict(self, output: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime') -> 'Verdict'` — Run the critic on ``output`` and return a closed-set :class:`Verdict`.
+
+### `GatedVerifier`
+
+*class* — bases: `Verifier`
+
+A :class:`Verifier` that has EARNED the right to gate (stage ``BLOCK``).
+
+Constructed only by :meth:`Verifier.gated` after clearing the absolute-precision
+bar against a decision :class:`~crawfish.eval.GoldenSet`. As a ``VerifierStop``
+source it may stop a ``Refine`` loop when :meth:`accepts` holds; otherwise its
+verdict feeds forward as FLUID. ``measured_precision`` records the precision it
+cleared (for the ledger / re-gate audit).
+
+```python
+GatedVerifier(definition: 'Definition', *, labels: 'Sequence[str]', default: 'str', accept_label: 'str', measured_precision: 'float', rubric: 'Rubric | None' = None, name: 'str' = 'verifier', registry: 'TypeRegistry | None' = None) -> 'None'
+```
+
+### `Verdict`
+
+*class*
+
+The typed result of one verification: a closed-set label over an Output.
+
+``label`` is always one of the verifier's declared ``labels`` (``default`` when
+the critic's emission did not parse). ``tainted`` carries the lineage of the
+verified Output: a verdict over fluid (untrusted) data is itself tainted, so a
+consequential consumer can refuse to treat a fluid-derived verdict as trusted
+ground truth.
+
+```python
+Verdict(label: 'str', tainted: 'bool', source_output_id: 'str', lineage: 'str | None' = None) -> None
+```
+
+### `VerifierStage`
+
+*class* — bases: `str`, `Enum`
+
+The shadow→warn→block lifecycle of a critic's gating authority.
+
+A critic earns authority by clearing the precision bar (see
+:meth:`Verifier.gated`). Below the bar it stays in ``SHADOW``/``WARN`` and
+**cannot** block a loop; only a :class:`GatedVerifier` reaches ``BLOCK``.
+
+Members: `SHADOW` = `'shadow'`, `WARN` = `'warn'`, `BLOCK` = `'block'`
+
+### `Refine`
+
+*class* — bases: `Node`
+
+A bounded, metered, durable iterate-until-goal loop over a producing Definition.
+
+The body Definition is run, its frozen Output checked against ``until``
+(:class:`StopCondition`), and the loop repeats — feeding the prior attempt back as a
+FLUID input — until the condition is satisfied OR a bound is hit (``max_iters``,
+the shared budget, cooperative cancel, or noise-aware no-progress). It mutates
+nothing: every attempt is a fresh frozen Output, and the body stays frozen.
+
+```python
+Refine(body: 'Definition', until: 'StopCondition', *, max_iters: 'int', feedback_key: 'str' = '_refine_feedback', no_progress_patience: 'int' = 1, rubric_std: 'float' = 0.0, on_stuck: "Literal['abstain', 'escalate', 'return_best']" = 'return_best', edge_id: 'str' = 'refine', name: 'str' = 'refine') -> 'None'
+```
+
+**Methods**
+
+- `execute(self, seed: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime', *, ledger: 'ExecutionLedger | None' = None, resume: 'bool' = False, produce: 'ProduceFn | None' = None) -> 'RefineResult'` — Run the loop on a ``seed`` Output until ``until`` is satisfied or a bound hits.
+
+### `RefineResult`
+
+*class*
+
+The typed outcome of a :class:`Refine` loop.
+
+``output`` is the accepted attempt (or the best-ranked one on exhaustion).
+``refine_iters`` is the number of body executions actually *run this invocation*
+(replayed-on-resume iterations are not re-counted as fresh spend). ``spent_usd`` is
+the *true* delta charged to the shared budget over this invocation (Gap #3 closed).
+``refine_stopped`` records why the loop ended.
+
+```python
+RefineResult(output: 'Output[JSONValue]', refine_iters: 'int', spent_usd: 'float', refine_stopped: "Literal['satisfied', 'exhausted', 'no_progress', 'stuck']", best_progress: 'float') -> None
+```
+
+### `StopCondition`
+
+*class* — bases: `ABC`
+
+The EXTERNAL stop signal for a :class:`Refine` loop.
+
+A stop condition decides whether an iteration's frozen ``Output`` is "good enough"
+(:meth:`satisfied`) and ranks candidates so the loop can return its best attempt on
+exhaustion (:meth:`progress`). It is external on purpose: the generator never
+critiques itself (see :class:`VerifierStop`'s assembly check).
+
+**Methods**
+
+- `progress(self, output: 'Output[JSONValue]') -> 'float'` — A pure ranking score in ``[0, 1]`` — higher is closer to the goal.
+- `satisfied(self, output: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime') -> 'bool'` — Whether ``output`` clears the goal. May run a leaf (``VerifierStop``).
+
+### `RubricThreshold`
+
+*class* — bases: `StopCondition`
+
+Stop when a :class:`~crawfish.metrics.Rubric` metric clears a threshold.
+
+``rubric.score(output)[metric] >= at_least`` satisfies; :meth:`progress` returns the
+same metric clamped to ``[0, 1]``. Pure (the rubric scores frozen Output data),
+so it adds no stochastic leaf — the body ``Run`` remains the only model call.
+
+```python
+RubricThreshold(rubric: 'Rubric', *, metric: 'str', at_least: 'float') -> 'None'
+```
+
+**Methods**
+
+- `progress(self, output: 'Output[JSONValue]') -> 'float'` — A pure ranking score in ``[0, 1]`` — higher is closer to the goal.
+- `satisfied(self, output: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime') -> 'bool'` — Whether ``output`` clears the goal. May run a leaf (``VerifierStop``).
+
+### `PredicateStop`
+
+*class* — bases: `StopCondition`
+
+Stop on a typed predicate over the frozen ``Output``.
+
+The predicate reads the Output as data; ``progress`` defaults to ``1.0`` when the
+predicate holds and ``0.0`` otherwise (override via ``progress`` for finer ranking).
+
+```python
+PredicateStop(predicate: 'StopPredicate', *, progress: 'ProgressFn | None' = None) -> 'None'
+```
+
+**Methods**
+
+- `progress(self, output: 'Output[JSONValue]') -> 'float'` — A pure ranking score in ``[0, 1]`` — higher is closer to the goal.
+- `satisfied(self, output: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime') -> 'bool'` — Whether ``output`` clears the goal. May run a leaf (``VerifierStop``).
+
+### `VerifierStop`
+
+*class* — bases: `StopCondition`
+
+Stop when a **gated** :class:`~crawfish.verifier.Verifier` accepts the Output (CL-2).
+
+Only a :class:`~crawfish.verifier.GatedVerifier` is admitted: a critic must have
+earned the right to block (cleared the absolute-precision bar) before it can stop a
+loop, exactly as a :class:`~crawfish.nodes.sink.Sink` target is consequential. The
+verifier's critic call is the loop's second stochastic leaf per iteration (it
+replays via cassette under a mock/replay runtime).
+
+The critic emission is FLUID and parsed purely as data against the verifier's static
+closed label set — an unparseable emission falls to ``default``, never a silent pass.
+``progress`` is pure: ``1.0`` once a verdict has accepted, else ``0.0`` (the verdict
+is binary; rank with a :class:`RubricThreshold` if a gradient is needed).
+
+```python
+VerifierStop(verifier: 'GatedVerifier') -> 'None'
+```
+
+**Methods**
+
+- `progress(self, output: 'Output[JSONValue]') -> 'float'` — A pure ranking score in ``[0, 1]`` — higher is closer to the goal.
+- `satisfied(self, output: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime') -> 'bool'` — Whether ``output`` clears the goal. May run a leaf (``VerifierStop``).
+
+### `feature_loop`
+
+*function*
+
+```python
+feature_loop(body: 'Definition', *, until: 'StopCondition', max_iters: 'int', **kwargs: 'object') -> 'Refine'
+```
+
+Convenience alias matching the vision vocabulary: a feature-improvement loop.
+
+Identical to constructing :class:`Refine` directly; the keyword-only form reads as
+"loop this feature body until ``until``, but never past ``max_iters``".
 

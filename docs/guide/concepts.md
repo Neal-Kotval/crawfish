@@ -10,6 +10,7 @@ On this page:
 - [The static-vs-fluid boundary](#the-static-vs-fluid-prompt-injection-boundary) — prompt-injection defence
 - [Secrets by reference](#secrets-by-reference) and [safe egress](#safe-egress-the-sink-invariants)
 - [Team coordination](#team-coordination), [Store seams](#the-store-and-artifactstore-seams), and [cost & inspection](#cost-budgets-and-inspection)
+- [The measurement loop](#the-measurement-loop) and [the control plane](#the-control-plane-refine-and-verify) — Refine & Verify
 
 ## The directory model
 
@@ -242,6 +243,43 @@ LLM-as-judge, and gate a candidate against a stored regression baseline. All of 
 deterministic under mock and replay.
 
 See the [evals reference](../reference/evals.md) and [metrics reference](../reference/metrics.md) for the full lifecycle.
+
+## The control plane — Refine and Verify
+
+One primitive in Crawfish is stochastic: a model `Run`. Everything else is
+deterministic, typed, versioned, and taint-tracked. The **control plane** is what wraps
+that single stochastic primitive in a *loop* without giving up any of those properties —
+"keep trying until good enough, but never past N tries or $X, and resume a crash for
+free." `Refine` is that loop; `Verifier` is the critic that can stop it.
+
+**`Refine` generalises the bounded/metered/durable loop.** The framework already had
+three fixed-bound re-run atoms — `EscalatingRuntime` (2×), `Run._repair` (+1),
+`RetryPolicy` (on-exception). `Refine` folds them into one goal-driven operator: run a
+producing body `Definition`, check each frozen `Output` against an **external**
+`StopCondition`, and iterate until satisfied or a bound is hit (`max_iters`, the shared
+`CostBudget`, cooperative cancel, or noise-aware no-progress — **never wall-clock**). It
+mutates nothing: every attempt is a fresh frozen `Output`, the body stays frozen. That is
+`mutable = False` — **eval mode**.
+
+**The stop signal must be external — and a critic must *earn* the authority to stop you.**
+A bare `Verifier` only describes an `Output` (a closed label set with a mandatory
+`default`); it is in `WARN`/`SHADOW` and **cannot** stop a loop. `Verifier.gated(...)` is
+the only path to a `GatedVerifier` with `BLOCK` authority, and it **fails closed**: a
+never-benchmarked critic, or one below `min_precision` against a decision `GoldenSet`,
+raises `VerifierNotGated` rather than being trusted. This is the same discipline as a
+`Sink`: stopping a loop ships the result, so the authority to stop is conferred by a gate,
+not asserted. And a `Refine` whose verifier critic shares the body's `content_sha()` is
+rejected outright — the generator may never critique itself.
+
+**$0 crash-resume falls out of the spine, not a special case.** With an `ExecutionLedger`,
+each completed iteration's frozen `Output` is checkpointed under a **deterministic** loop
+id. On `resume=True` the committed iterations replay through the cassette runtime at zero
+cost, and because each iteration's `produced_by` is the deterministic
+`body.content_sha()#visit` coordinate, the replayed Output's content sha reproduces the
+checkpoint **bit-for-bit** — determinism is *verified*, not trusted. A loop that died at
+iteration 3 of 5 restarts at iteration 4 charging `$0`.
+
+See the [Refine & Verify guide](refine-and-verify.md) for the runnable walkthrough.
 
 ## Next steps
 

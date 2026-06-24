@@ -60,10 +60,12 @@ nav:
       - Getting started: guide/getting-started.md
       - Tutorial: guide/tutorial.md
       - Concepts: guide/concepts.md
+      - Refine & verify: guide/refine-and-verify.md
       - Cookbook: guide/cookbook.md
       - Contributing a connector: guide/contributing-a-connector.md
       - Connector ideas: guide/connector-ideas.md
       - API reference: guide/api-reference.md
+      - Release notes: guide/release-notes.md
   - Operate & Observe:
       - Overview: guide/operations.md
       - Deploy: guide/deploy.md
@@ -102,6 +104,8 @@ nav:
           - Metrics: reference/metrics.md
           - Evals: reference/evals.md
           - Tuner & learning: reference/tuner-and-learning.md
+      - Control plane:
+          - Refine & verify: reference/refine-and-verify.md
       - Secrets & sandboxing:
           - Secrets & consent: reference/secrets-and-consent.md
           - Secret broker: reference/secret-broker.md

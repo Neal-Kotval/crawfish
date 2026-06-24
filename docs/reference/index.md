@@ -26,5 +26,6 @@ Start at the foundations and build outward.
 | **Running & storage** | [Run & engine](run-and-engine.md) · [Batch & execution](batch-and-execution.md) · [Persistence](persistence.md) |
 | **Observability** | [Emission, inspector & visualize](emission-inspector-visualize.md) · [Anomaly](anomaly.md) · [Observer](observer.md) · [Cost, routing & cache](cost-routing-cache.md) |
 | **Evaluation & tuning** | [Metrics](metrics.md) · [Evals](evals.md) · [Tuner & learning](tuner-and-learning.md) |
+| **Control plane** | [Refine & verify](refine-and-verify.md) |
 | **Secrets & sandboxing** | [Secrets & consent](secrets-and-consent.md) · [Secret broker](secret-broker.md) · [Sandbox & jail](sandbox-and-jail.md) |
 | **Operations & tooling** | [Deploy, manage & triggers](operate.md) · [Authoring & config](authoring.md) · [Testing](testing.md) · [Claude Code export](claude-code-export.md) |

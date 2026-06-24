@@ -42,13 +42,30 @@ crash-resume. What's in the box today:
   `craw build` → container; a MkDocs docs site; an API-stability contract (stable /
   experimental / deprecated tiers + semver).
 
-## The agent language — foundations landed (in progress)
+## The agent language — control plane shipped (in progress)
 
 Phase 2 includes a larger bet: an **agent language** where composition operators
 (Refine, Program, Quorum, Escalate) and a Tuner make agents self-improving over your
-data. The first slice — the *foundational primitives* those operators stand on — has
-landed. These are substrate contracts, **not** the headline operators (which are still
-ahead):
+data. The first headline operators — the **control plane** — have now shipped on top of
+the foundational primitives:
+
+- **`Refine` — a bounded, metered, durable iterate-until-goal loop.** Run a producing
+  Definition, check each frozen Output against an *external* stop condition, and iterate
+  until good enough — but never past `max_iters` or a `$X` `CostBudget` (and never on
+  wall-clock). It mutates nothing, and with a ledger a crash mid-loop resumes for **\$0**,
+  content-hash verified. Folds the three fixed-bound re-run atoms into one operator.
+- **`Verifier` — a critic that must *earn* the right to stop you.** A bare `Verifier`
+  only describes an Output and cannot gate; `Verifier.gated(...)` admits a `GatedVerifier`
+  only after the critic clears an absolute-precision bar against a decision golden set,
+  and **fails closed** — a never-benchmarked critic is never trusted to block production.
+  A generator may never critique itself.
+
+See the [Refine & verify guide](docs/guide/refine-and-verify.md), the
+[control-plane reference](docs/reference/refine-and-verify.md), and the
+[release notes](docs/guide/release-notes.md).
+
+These stand on the *foundational primitives* shipped earlier — substrate contracts, not
+operators themselves:
 
 - **A canonical Output content hash** — one content-identity primitive every ledger and
   replay path keys off.
