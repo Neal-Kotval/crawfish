@@ -265,6 +265,79 @@ certifier, zero-cost-worst-case guard, diff surfaces the skill-pin change, clean
 mints a new frozen sha, two-sided divergence is a typed conflict, swap clean-replay-$0 +
 only-dirtied-differs, swap over-budget refusal, and prove admits-well-typed / rejects-miswired).
 
+## Milestone 8 live evidence — injection-rejected-by-construction (ALG-3 build fails closed)
+
+Milestone 8 shipped **CRA-231 / ALG-3** (pulled forward): the conservative, **fail-closed**
+assembly-time **fluid→static-sink rejection**. Where M7's `prove --no-injection` lifts the check to
+a CLI *certificate*, M8 makes it a first-class **assembly gate** (`crawfish.alg3` + the demo-able
+`crawfish.build.assert_build_safe` hook), so a project that wires a `Flow.FLUID` value toward a
+consequential static-only Sink **FAILS CLOSED at build — before any model call**. The cumulative
+scenario now contains a real M8 step (printed as the `build fails closed (ALG-3 assembly gate)` line
+under step 9):
+
+- **The build ADMITS the well-typed wiring (CRA-231).** `assert_no_fluid_to_static_sink` over the
+  well-typed demo variant (consequential egress declared `Flow.STATIC`) passes — the provably-safe
+  project is admitted unchanged.
+- **The build FAILS CLOSED on injection-by-construction.** `assert_build_safe([well_typed,
+  mis_wired])` raises `FluidToStaticSinkError` and names the suspected slot (`output:reply`) — the
+  misbuild is rejected at build, before a single model call. Injection-by-construction is rejected
+  *by type*, not caught at runtime.
+- **The fluid-widening operators are gated (review-m7 S-1 / S3).** A one-sided `STATIC→FLUID` merge
+  widen of a consequential knob raises `FluidWidenError`, and a fluid-derived (agent-backed)
+  classifier that would CHOOSE among distinct consequential Sink targets raises
+  `ConsequentialTargetChoiceError` at `Router` construction (a fluid label may gate **whether** a
+  consequential action fires, never **choose** the egress target).
+
+> **Defense in depth (load-bearing).** ALG-3 is an *additional, earlier* gate — it never replaces
+> the runtime `TargetMustBeStaticError` / `StaticOnlyError` (`nodes/sink.py`, `jail.py`), which still
+> fire at construction/run time. The assembly gate catches the misbuild at *build* time, fail-closed:
+> anything outside the decidable fragment is **rejected**, never silently passed.
+
+> **Scope (honest).** M8 ships the **2-point** fluid→static-sink rejection (CRA-231), default-
+> equivalent to today's runtime behavior — no new `Grade` lattice. The full Property/Capability
+> algebra is **deferred behind a spike**: `Grade` (CRA-232 / ALG-1), `narrow`/attenuation
+> (CRA-233 / ALG-2), the mutability borrow (CRA-234 / ALG-4), the cost coeffect (CRA-235 / ALG-5),
+> `declassify` (CRA-236 / ALG-6), and the `Grade`-dependent non-interference conformance suite
+> (CRA-237 / ALG-7, **not dropped** — ALG-3 here is its base case). See `docs/_changelog/CRA-231.md`.
+
+**Determinism / cost honesty (load-bearing).** The assembly gate is a pure, structural type-discharge
+over the wiring — **no model call** fires — so the M8 step is bit-identical on the mock and live path
+and contributes **zero** metered calls. The F-6 structural worst case is therefore **unchanged**
+(`craw demo` still prints `worst=150 calls` on haiku); `test_demo_alg3.py::
+test_m8_step_adds_nothing_to_cost_worst_case` guards it. There is no live-vs-mock semantic gap to
+certify (unlike Quorum/Refine): the gate is deterministic, so the same assertions hold on both paths.
+
+### Exact command for the M8 live gate
+
+```bash
+claude -p "say ok"                                  # confirm auth
+uv run craw demo --live --model claude-haiku-4-5    # real haiku; records cassettes
+uv run craw demo --live --model claude-haiku-4-5    # re-run: replays, spend $0
+```
+
+### Evidence checklist (verifier fills this in)
+
+Run the command above and confirm, on the M8 line under step 9:
+
+- [ ] **Build fails closed** — `build fails closed (ALG-3 assembly gate)` prints `well-typed wiring
+  ADMITTED; mis-wired project FAILED CLOSED at build (FluidToStaticSinkError on slot 'output:reply')
+  — injection-by-construction rejected before any model call; one-sided merge-widen and fluid-label
+  egress-choice also rejected`.
+- [ ] **Well-typed admitted** — the well-typed variant passed the gate (no exception); only the
+  mis-wired project triggered the typed `FluidToStaticSinkError`.
+- [ ] **Operators gated** — the one-sided `STATIC→FLUID` merge-widen and the fluid-label egress-choice
+  were both rejected (`alg3_merge_widen_rejected` / `alg3_classifier_choice_rejected`).
+- [ ] **Budget respected** — the M8 step makes NO model call; step 6 still prints `worst=150 calls`
+  (M8 added zero metered calls), and the run did not hit `BudgetExceeded`.
+- [ ] **Bit-identical replay** — two `--live` runs print the same M8 line (same error class, same
+  slot); the second run replays $0 (the M8 step itself is model-free either way).
+
+The deterministic path (`uv run craw demo`, `$0`) exercises every one of these (M8 is model-free, so
+the mock and live paths coincide bit-for-bit); the acceptance test is
+`packages/crawfish/tests/test_demo_alg3.py` (4 tests, no live calls — scenario 9/9 + M8 certifier,
+zero-cost-worst-case guard, build admits-well-typed / fails-closed-on-miswired, and merge-widen /
+classifier-choice gating).
+
 ## Milestone 4 live evidence — taming stochasticity (Quorum / abstain / house-guard / grammar)
 
 Milestone 4 stood up the **tameness layer** (CRA-215..218): typed self-consistency

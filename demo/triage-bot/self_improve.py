@@ -67,6 +67,14 @@ from typing import TYPE_CHECKING, cast
 
 from crawfish.abstain import Abstention, abstain_below_calibrated, is_abstention
 from crawfish.agentdiff import DefinitionDiff, MergeConflict, diff, merge
+from crawfish.alg3 import (
+    ConsequentialTargetChoiceError,
+    FluidToStaticSinkError,
+    FluidWidenError,
+    assert_merge_no_fluid_widen,
+    assert_no_fluid_to_static_sink,
+)
+from crawfish.build import assert_build_safe
 from crawfish.cache import CacheStats, CachingRuntime
 from crawfish.core.context import CostBudget, RunContext
 from crawfish.core.types import Flow, JSONValue, Node, NodeKind, Parameter
@@ -93,6 +101,7 @@ from crawfish.learning import StateDict, load_state, state_dict
 from crawfish.ledger import ExecutionLedger, compute_loop_id
 from crawfish.metrics import CalibrationReport, Rubric, calibrate
 from crawfish.nodes import Classifier, Router
+from crawfish.nodes.sink import LinearSink
 from crawfish.output import Output, output_content_sha
 from crawfish.prove import ProofResult, prove_no_injection
 from crawfish.refine import ProduceFn, Refine, RefineResult, VerifierStop
@@ -288,6 +297,41 @@ class DemoResult:
     prove_guarantee: str = ""  # the ALG-3 guarantee name the proof certificate carries
     prove_miswired_rejected: bool = False  # a deliberately mis-wired variant FAILED CLOSED
     prove_violation_slot: str = ""  # the suspected fluid->static-slot the fail-closed proof flagged
+    # --- Milestone-8 ALG-3 step (assembly-time fluid->static-sink rejection, fail-closed). ---
+    alg3_welltyped_built: bool = False  # the well-typed variant PASSED the build gate (admitted)
+    alg3_build_failed_closed: bool = False  # the mis-wired project FAILED CLOSED at build (typed)
+    alg3_build_error: str = ""  # the typed error class name the fail-closed build raised
+    alg3_build_violation_slot: str = ""  # the fluid->static slot the fail-closed build flagged
+    alg3_merge_widen_rejected: bool = False  # a one-sided STATIC->FLUID merge-widen was REJECTED
+    alg3_classifier_choice_rejected: bool = False  # a fluid label CHOOSING egress targets REJECTED
+
+    def _alg3_step_ok(self) -> bool:
+        """Certify the Milestone-8 ALG-3 assembly gate ran correctly (mock + live).
+
+        ALG-3 is a pure, deterministic, model-FREE assembly check (it discharges typed
+        obligations over the wiring before any model call), so — like the M7 prove step it
+        extends — it adds NOTHING to the F-6 worst case and holds bit-identically on both
+        the mock and live path. The step is correct when:
+
+        * the WELL-TYPED demo variant (all-STATIC consequential egress) PASSES the
+          ``assert_no_fluid_to_static_sink`` build gate (admitted unchanged);
+        * a deliberately MIS-WIRED project (a FLUID value toward a static-only Sink) FAILS
+          CLOSED at ``assert_build_safe`` — the build raises ``FluidToStaticSinkError``,
+          naming the suspected slot — so injection-by-construction is rejected at build,
+          never waved through;
+        * the two gated fluid-widening operators also fail closed: a one-sided
+          ``STATIC->FLUID`` merge-widen raises ``FluidWidenError``, and a fluid-derived
+          classifier that would CHOOSE among distinct consequential targets raises
+          ``ConsequentialTargetChoiceError``.
+        """
+        return bool(
+            self.alg3_welltyped_built  # the provably-safe wiring is admitted
+            and self.alg3_build_failed_closed  # ...and the mis-wired project is rejected at build
+            and self.alg3_build_error == "FluidToStaticSinkError"
+            and self.alg3_build_violation_slot  # the rejection names the fluid->static slot
+            and self.alg3_merge_widen_rejected  # a one-sided static->fluid widen is blocked
+            and self.alg3_classifier_choice_rejected  # a fluid label may not choose egress targets
+        )
 
     def _revolutionary_step_ok(self) -> bool:
         """Certify the Milestone-7 REVOLUTIONARY primitives ran correctly (mock + live).
@@ -592,6 +636,11 @@ class DemoResult:
             # and ``prove_no_injection`` PROVED the frozen demo Definition while FAIL-CLOSED-
             # rejecting a deliberately mis-wired variant (the conservative ALG-3 guarantee).
             and self._revolutionary_step_ok()
+            # Milestone-8 ALG-3: the assembly-time fluid->static-sink gate ADMITS the well-typed
+            # demo variant and FAILS CLOSED on a deliberately mis-wired project (injection-by-
+            # construction rejected at build, before any model call), and the two gated fluid-
+            # widening operators (one-sided merge widen / classifier egress choice) also reject.
+            and self._alg3_step_ok()
         )
 
     def summary(self) -> str:
@@ -1962,6 +2011,14 @@ def run_self_improvement(
     # variant is FAIL-CLOSED-rejected (the conservative ALG-3 guarantee).
     _run_revolutionary_step(backend, res, defn, ctx, store, org_id=org_id)
 
+    # --- 9z. Milestone-8 ALG-3: assembly-time fluid->static-sink rejection, fail-closed. ---
+    # The first-class assembly gate (crawfish.alg3 / build.assert_build_safe): the well-typed
+    # demo variant is ADMITTED, a deliberately mis-wired project (FLUID -> static-only Sink) FAILS
+    # CLOSED at build before any model call (injection-by-construction rejected), and the two gated
+    # fluid-widening operators (one-sided merge widen / classifier egress choice) also reject. Pure
+    # and model-FREE, so the F-6 worst case is unchanged and it holds bit-identically on both paths.
+    _run_alg3_step(res, defn)
+
     # --- cross-tenant isolation: org B sees NONE of org A's corpus (security). -
     res.org_b_cases = len(GoldenSet.from_corrections(store, org_id="other-org").cases())
     res.steps.append(
@@ -3275,6 +3332,102 @@ def _run_revolutionary_step(
             f"well-typed variant PROVED injection-free ({clean.guarantee}); mis-wired variant "
             f"FAIL-CLOSED-rejected on slot {res.prove_violation_slot!r} "
             f"(conservative: an unprovable wiring is rejected, never waved through)",
+        )
+    )
+
+
+def _run_alg3_step(
+    res: DemoResult,
+    defn: Definition,
+) -> None:
+    """Run the Milestone-8 ALG-3 step: assembly-time fluid->static-sink rejection, fail-closed.
+
+    Where the M7 prove step (9x-3) lifts ALG-3 to a CLI *certificate*, this step exercises the
+    first-class **assembly gate**: the ``crawfish.alg3`` ``assert_*`` API and the demo-able
+    ``crawfish.build.assert_build_safe`` hook. It is pure, deterministic, and model-FREE (typed
+    obligations are discharged over the wiring before any model call), so it adds NOTHING to the
+    F-6 worst case and reproduces bit-identically on both the mock and live path.
+
+    Three things are shown:
+
+    * **Build admits the well-typed wiring.** ``assert_no_fluid_to_static_sink`` over the
+      well-typed demo variant (all-STATIC consequential egress) PASSES — the provably-safe
+      project is admitted unchanged.
+    * **Build FAILS CLOSED on injection-by-construction.** ``assert_build_safe`` over a project
+      that wires a FLUID value toward a static-only Sink RAISES ``FluidToStaticSinkError`` and
+      names the suspected slot — the misbuild is rejected at build, before a single model call.
+    * **The fluid-widening operators are gated.** A one-sided ``STATIC->FLUID`` merge widen of a
+      consequential knob raises ``FluidWidenError``; a fluid-derived classifier that would CHOOSE
+      among distinct consequential Sink targets raises ``ConsequentialTargetChoiceError`` at
+      ``Router`` construction (a fluid label may gate WHETHER, never CHOOSE egress).
+    """
+    welltyped = _build_provable_variant()
+    miswired = _build_miswired_variant()
+
+    # --- 9z-1. The build ADMITS the well-typed wiring (provably-safe -> passes). -
+    assert_no_fluid_to_static_sink(welltyped)  # does not raise
+    res.alg3_welltyped_built = True
+
+    # --- 9z-2. The build FAILS CLOSED on a mis-wired project (FLUID -> static sink). -
+    try:
+        assert_build_safe([welltyped, miswired])
+    except FluidToStaticSinkError as exc:
+        res.alg3_build_failed_closed = True
+        res.alg3_build_error = type(exc).__name__
+        res.alg3_build_violation_slot = (
+            exc.result.violations[0].slot if exc.result.violations else ""
+        )
+
+    # --- 9z-3. The fluid-widening operators are gated (merge widen / classifier choice). -
+    # A one-sided STATIC->FLUID widen of a consequential knob: the merge would silently widen
+    # the injection boundary, so the gate rejects it.
+    static_base = Definition(
+        id="alg3-widen-base",
+        inputs=[Parameter(name="target", type="str", flow=Flow.STATIC)],
+        outputs=[],
+    )
+    fluid_merged = Definition(
+        id="alg3-widen-merged",
+        inputs=[Parameter(name="target", type="str", flow=Flow.FLUID)],  # widened
+        outputs=[],
+    )
+    try:
+        assert_merge_no_fluid_widen(static_base, static_base, static_base, fluid_merged)
+    except FluidWidenError:
+        res.alg3_merge_widen_rejected = True
+
+    # A fluid-derived (agent-backed) classifier may gate WHETHER a consequential action fires,
+    # but routing to two DISTINCT consequential Sink targets would let a fluid label CHOOSE the
+    # egress destination — rejected at Router construction.
+    agent_clf = Classifier.from_definition(
+        Definition(
+            id="alg3-egress-clf",
+            inputs=[Parameter(name="ticket_body", type="str", flow=Flow.FLUID)],
+            outputs=[],
+        ),
+        labels=["a", "b", "default"],
+        default="default",
+    )
+    try:
+        Router(
+            {
+                "a": LinearSink(name="sink_a"),
+                "b": LinearSink(name="sink_b"),  # a SECOND distinct egress target
+                "default": LinearSink(name="sink_a"),
+            },
+            agent_clf,
+        )
+    except ConsequentialTargetChoiceError:
+        res.alg3_classifier_choice_rejected = True
+
+    res.steps.append(
+        StepResult(
+            9,
+            "build fails closed (ALG-3 assembly gate)",
+            f"well-typed wiring ADMITTED; mis-wired project FAILED CLOSED at build "
+            f"({res.alg3_build_error} on slot {res.alg3_build_violation_slot!r}) — injection-by-"
+            f"construction rejected before any model call; one-sided merge-widen and fluid-label "
+            f"egress-choice also rejected",
         )
     )
 

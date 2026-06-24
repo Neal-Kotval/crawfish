@@ -150,6 +150,22 @@ certifiable, and time-travellable — have now shipped on top of the foundationa
   model/decode change for near-$0 — every unaffected leaf replays bit-for-bit, only the dirtied
   fraction re-executes, and an over-budget dirtied live cascade is **refused** so the blast
   radius stays bounded.
+- **Injection rejected by construction — the boundary the build refuses to violate (ALG-3
+  shipped; algebra remainder deferred).** Where `craw prove --no-injection` is a certificate you
+  run on demand, **CRA-231 / ALG-3** makes the same guarantee a first-class **assembly gate**:
+  `assert_no_fluid_to_static_sink` raises `FluidToStaticSinkError` when a `Flow.FLUID` value could
+  reach a consequential static-only slot, and the demo-able `assert_build_safe(definitions)` runs
+  it over a whole project so an unsafe wiring **fails closed at build, before any model call** —
+  *injection-by-construction is rejected*, never caught at runtime. The fluid-widening operators
+  are gated too: a one-sided `STATIC→FLUID` `merge` widen is a conflict (`assert_merge_no_fluid_widen`
+  → `FluidWidenError`), and a fluid-derived classifier may gate **whether** a consequential action
+  fires but never **choose** among distinct egress targets (`ConsequentialTargetChoiceError`). It is
+  **defense in depth** — an additional, earlier gate that never replaces the runtime
+  `TargetMustBeStaticError` / `StaticOnlyError`. This is the **2-point** rejection only,
+  default-equivalent to today's runtime behavior; the **full Property / Capability algebra**
+  (`Grade` / `narrow` / mutability borrow / cost coeffect / `declassify` / the `Grade`-dependent
+  non-interference conformance suite — CRA-232..237) is **deferred behind a spike** (ALG-3 is the
+  conformance suite's base case).
 
 See the [Refine & verify guide](docs/guide/refine-and-verify.md), the
 [Compose guide](docs/guide/compose.md), the
@@ -158,6 +174,7 @@ See the [Refine & verify guide](docs/guide/refine-and-verify.md), the
 [Drive the language from the CLI guide](docs/guide/optimize-from-the-cli.md), the
 [Agents as variables guide](docs/guide/variables-and-knowledge.md), the
 [Diff, prove & replay guide](docs/guide/diff-prove-replay.md), the
+[Injection rejected by construction guide](docs/guide/injection-rejected-by-construction.md), the
 [CLI reference](docs/guide/cli.md), the
 [control-plane reference](docs/reference/refine-and-verify.md), the
 [Tuner & learning reference](docs/reference/tuner-and-learning.md), and the

@@ -4,7 +4,7 @@
 > Do not edit by hand — regenerate on each release:
 > `uv run python docs/guide/gen_api_reference.py > docs/guide/api-reference.md`.
 
-`crawfish` version: `0.2.0` — 452 public symbols.
+`crawfish` version: `0.2.0` — 458 public symbols.
 
 Everything documented here is importable directly from the top-level package:
 
@@ -468,6 +468,12 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `run_swap` | function | Replay ``cassette_dir`` with one model swapped, counterfactual vs. original. |
 | `parse_swap` | function | Parse ``--swap <from>=<to>``. Fails closed on a malformed spec. |
 | `SwapReport` | class | The counterfactual-vs-original report a swapped replay emits. |
+| `assert_no_fluid_to_static_sink` | function | Fail-closed assembly gate: reject any fluid→static-only-sink wiring. |
+| `assert_merge_no_fluid_widen` | function | Reject a merge that one-sidedly widens a consequential slot STATIC→FLUID. |
+| `assert_classifier_gates_not_chooses` | function | Enforce S3: a fluid label may gate WHETHER, not CHOOSE among consequential targets. |
+| `FluidToStaticSinkError` | class | Raised at assembly when a FLUID value can reach a consequential static-only slot. |
+| `FluidWidenError` | class | Raised when a merge would one-sidedly widen a consequential slot STATIC→FLUID. |
+| `ConsequentialTargetChoiceError` | class | Raised when a fluid-derived label would CHOOSE among distinct consequential targets. |
 
 ### `JSONValue`
 
@@ -686,7 +692,7 @@ TypeRegistry() -> 'None'
 
 *value* — `TypeRegistry`
 
-`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x108b7a150>`
+`default_registry = <crawfish.typesystem.registry.TypeRegistry object at 0x10b4de210>`
 
 ### `Version`
 
@@ -2451,7 +2457,7 @@ Stop then re-deploy ``name`` with its recorded dir + schedule. Returns success.
 Watch one pipeline: run rules (and an optional LLM judge) on a poll interval.
 
 ```python
-Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x108f40400>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
+Observer(watch: 'str', *, poll: 'str | CronSchedule | None' = None, rules: 'Sequence[Rule]' = (), judge: 'Definition | None' = None, judge_runtime: 'AgentRuntime | None' = None, judge_cost_cap_usd: 'float' = 0.5, judge_flag: 'JudgeFlagFn' = <function _default_judge_flag at 0x10b89d300>, org_id: 'str' = 'local', lookback: 'str' = '-24h') -> 'None'
 ```
 
 **Methods**
@@ -4698,7 +4704,7 @@ clean unprivileged primitive and is deferred (ADR 0009) → :class:`UnsupportedP
 *function*
 
 ```python
-registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x108b7a150>) -> 'list[dict[str, object]]'
+registry_descriptors(registry: 'TypeRegistry' = <crawfish.typesystem.registry.TypeRegistry object at 0x10b4de210>) -> 'list[dict[str, object]]'
 ```
 
 Serialize a registry's records to JSON descriptors for the child.
@@ -7316,4 +7322,104 @@ SwapReport(swap: 'SwapSpec', total_leaves: 'int', dirtied_leaves: 'int', deltas:
 **Methods**
 
 - `summary(self) -> 'str'`
+
+### `assert_no_fluid_to_static_sink`
+
+*function*
+
+```python
+assert_no_fluid_to_static_sink(definition: 'object') -> 'None'
+```
+
+Fail-closed assembly gate: reject any fluid→static-only-sink wiring.
+
+Runs the conservative ALG-3 check (:func:`crawfish.prove.prove_no_injection`) over
+``definition`` and RAISES :class:`FluidToStaticSinkError` if any obligation fails to
+discharge — i.e. a ``Flow.FLUID`` input could reach a consequential static-only slot
+(Sink target / idempotency key), or a consequential output is mis-declared FLUID.
+
+Pure and deterministic. This is the "build fails closed" entry point: a project that
+wires FLUID toward a static-only Sink raises here, before a single model call. It is
+an *additional* gate, never a replacement for the runtime ``StaticOnlyError`` /
+``TargetMustBeStaticError`` (defense in depth, invariant 11).
+
+### `assert_merge_no_fluid_widen`
+
+*function*
+
+```python
+assert_merge_no_fluid_widen(base: 'object', a: 'object', b: 'object', merged: 'object') -> 'None'
+```
+
+Reject a merge that one-sidedly widens a consequential slot STATIC→FLUID.
+
+Three-way safety check over the four content payloads (common ancestor ``base``, the
+two descendants ``a`` / ``b``, and the proposed ``merged`` result). A two-sided
+divergence on a ``flow`` path is already surfaced as a
+:class:`~crawfish.agentdiff.MergeConflict`; this closes the **one-sided** gap: if
+exactly one side changed a Parameter's ``flow`` from ``static`` to ``fluid`` and the
+merge would therefore silently adopt the widened (fluid) flow, that is a silent
+widening of the prompt-injection boundary and is REJECTED with
+:class:`FluidWidenError`.
+
+Pure; operates on ``content_dict`` flow leaves only (the security-relevant axis).
+
+### `assert_classifier_gates_not_chooses`
+
+*function*
+
+```python
+assert_classifier_gates_not_chooses(branches: 'object', classifier: 'object') -> 'None'
+```
+
+Enforce S3: a fluid label may gate WHETHER, not CHOOSE among consequential targets.
+
+A Router driven by a Definition-backed (agent / fluid-derived) classifier may route
+to **at most one** distinct consequential Sink target; every other branch must be a
+non-consequential continuation (a further node) or a dead-letter / no-op. If two or
+more branches lead to *distinct* consequential Sink targets, a fluid label would be
+choosing the egress destination — REJECTED with
+:class:`ConsequentialTargetChoiceError`.
+
+A predicate (pure, non-fluid) classifier is exempt: its label is not fluid-derived,
+so it may fan out across targets. Pure structural check over the branch map.
+
+### `FluidToStaticSinkError`
+
+*class* — bases: `ValueError`
+
+Raised at assembly when a FLUID value can reach a consequential static-only slot.
+
+The typed assembly-time analogue of the runtime ``TargetMustBeStaticError`` /
+``StaticOnlyError``: a wiring where a ``Flow.FLUID`` input could reach a Sink target,
+an idempotency key, or any other static-only consequential slot is rejected *before*
+any model call. Carries the :class:`~crawfish.prove.ProofResult` so the caller can
+surface every suspected path.
+
+```python
+FluidToStaticSinkError(result: 'ProofResult') -> 'None'
+```
+
+### `FluidWidenError`
+
+*class* — bases: `ValueError`
+
+Raised when a merge would one-sidedly widen a consequential slot STATIC→FLUID.
+
+The ``merge`` (R1 / agentdiff) gate: a *one-sided* change that turns a Parameter's
+``flow`` from ``static`` to ``fluid`` (or pins a static knob fluid) is a silent
+widening of the prompt-injection boundary. Two-sided divergence is already a
+:class:`~crawfish.agentdiff.MergeConflict`; this closes the one-sided gap (review-m7
+S-1) so a merge can never quietly turn a consequential static knob fluid.
+
+### `ConsequentialTargetChoiceError`
+
+*class* — bases: `ValueError`
+
+Raised when a fluid-derived label would CHOOSE among distinct consequential targets.
+
+The S3 Classifier/Router invariant: a fluid-derived label may gate *whether* a
+consequential action fires (a branch to a Sink vs. a dead-letter / no-op), but it may
+never *choose* among two or more **distinct consequential** Sink targets — that is a
+model-influenced redirection of egress by another name. Rejected at assembly.
 

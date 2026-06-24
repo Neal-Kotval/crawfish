@@ -3,6 +3,49 @@
 Notable, user-facing changes. For the exact public-symbol surface of any release, see the
 [API reference](api-reference.md); for the longer arc, see the [Roadmap](../roadmap/README.md).
 
+## Agent language — Milestone 8: injection rejected by construction (ALG-3)
+
+The prompt-injection boundary M7 lets you *certify* becomes a boundary the **build refuses to let
+you violate**. Milestone 8 ships **CRA-231 / ALG-3** — the conservative, **fail-closed**
+assembly-time **fluid→static-sink rejection** — as first-class public API, importable from the
+top-level `crawfish` package, all deterministic under `MockRuntime` (a pure type-discharge, no
+model call):
+
+- **The fail-closed boundary — `assert_no_fluid_to_static_sink` (CRA-231).** Lifts M7's
+  `craw prove --no-injection` *certificate* into an **assembly gate**. A wiring where a
+  `Flow.FLUID` (untrusted) value can reach a consequential static-only slot (a Sink target, an
+  idempotency key, an instruction slot) **raises `FluidToStaticSinkError`** — and the error carries
+  the `ProofResult` so every suspected fluid→static slot is named. Conservative and fail-closed:
+  anything outside the decidable fragment is rejected, never silently passed. It is the typed,
+  assembly-time analogue of the runtime `TargetMustBeStaticError` — **defense in depth**, an
+  *additional, earlier* gate that **never replaces** the runtime `StaticOnlyError` /
+  `TargetMustBeStaticError`.
+- **Build fails closed — `assert_build_safe(definitions)`.** The demo-able entry point: runs the
+  core gate over every `Definition` in a project, so a project that wires `FLUID` toward a
+  static-only Sink **fails closed at build**, before any model call. *Injection-by-construction is
+  rejected* — the unsafe project never assembles.
+- **The gated fluid-widening operators.** Three operators that could *widen* the fluid/static
+  boundary are now closed: a **one-sided `STATIC→FLUID` `merge` widen** of a consequential knob is a
+  `MergeConflict` (and the helper `assert_merge_no_fluid_widen` raises `FluidWidenError`); and a
+  **fluid-derived classifier** that would *choose* among distinct consequential Sink targets raises
+  `ConsequentialTargetChoiceError` at `Router` construction (a fluid label may gate **whether** a
+  consequential action fires, never **choose** the egress target — the S3 invariant; a pure
+  predicate classifier is exempt). New symbols: `assert_no_fluid_to_static_sink`,
+  `assert_merge_no_fluid_widen`, `assert_classifier_gates_not_chooses`, `FluidToStaticSinkError`,
+  `FluidWidenError`, `ConsequentialTargetChoiceError` (also `assert_build_safe` from
+  `crawfish.build`).
+
+**Scope (honest).** M8 ships the **2-point** fluid→static-sink rejection only — default-equivalent
+to today's runtime behavior, **no new `Grade` lattice**. The full Property / Capability algebra is
+**deferred behind a spike**: `Grade` (CRA-232 / ALG-1), `narrow`/attenuation (CRA-233 / ALG-2), the
+mutability borrow (CRA-234 / ALG-4), the cost coeffect (CRA-235 / ALG-5), `declassify`
+(CRA-236 / ALG-6), and the `Grade`-dependent non-interference conformance suite (CRA-237 / ALG-7,
+**not dropped** — ALG-3 here is its base case). See `docs/_changelog/CRA-231.md` for the rationale.
+
+Learn it: the [Injection rejected by construction guide](injection-rejected-by-construction.md)
+(runnable, mirrors the triage demo's build-fails-closed step) and the M7
+[Diff, prove & replay guide](diff-prove-replay.md#prove-no-injection-craw-prove-no-injection).
+
 ## Agent language — Milestone 7: revolutionary capabilities
 
 The content-addressed agent M6 shipped becomes **reviewable, certifiable, and
