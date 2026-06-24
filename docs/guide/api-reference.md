@@ -359,6 +359,15 @@ from crawfish import Definition, Batch, MockRuntime  # etc.
 | `PredicateStop` | class | Stop on a typed predicate over the frozen ``Output``. |
 | `VerifierStop` | class | Stop when a **gated** :class:`~crawfish.verifier.Verifier` accepts the Output (CL-2). |
 | `feature_loop` | function | Convenience alias matching the vision vocabulary: a feature-improvement loop. |
+| `branch` | function | Construct a runnable :class:`Router` composition step (classify each item, dispatch down the matching branch). |
+| `Program` | class | A :class:`Workflow` whose edges may cycle — a typed directed graph walked per item. |
+| `Edge` | class | A directed edge in a :class:`Program`; a back-edge (target ≤ source) may cycle, bounded by ``max_visits``. |
+| `ProgramResult` | class | The typed outcome of one item's traversal through a :class:`Program`. |
+| `UnboundedCycleError` | class | Raised at assembly when a back-edge has no ``max_visits`` termination bound. |
+| `recurse` | function | Construct a bounded, self-referential :class:`Recurse` over a frozen Definition. |
+| `Recurse` | class | A depth-guarded back-edge re-entering the same frozen Definition, folding the descent children. |
+| `RecurseResult` | class | The typed outcome of one item's bounded recursion. |
+| `UnboundedRecursionError` | class | Raised at assembly when :func:`recurse` is built without a ``max_depth`` bound. |
 
 ### `JSONValue`
 
@@ -5294,6 +5303,22 @@ critiques itself (see :class:`VerifierStop`'s assembly check).
 - `progress(self, output: 'Output[JSONValue]') -> 'float'` — A pure ranking score in ``[0, 1]`` — higher is closer to the goal.
 - `satisfied(self, output: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime') -> 'bool'` — Whether ``output`` clears the goal. May run a leaf (``VerifierStop``).
 
+### `branch`
+
+*function*
+
+Construct a runnable :class:`Router` composition step (C1).
+
+Classify each item with ``classifier`` and dispatch it down the matching ``branches``
+node — through the same step machinery as the branch, so a branch may be a
+``Sink``/``Batch``/``Filter``/``Aggregator``. Totality is enforced at construction (an
+uncovered label raises ``UnroutableLabelError``); the Workflow's ``check_types`` then
+verifies every branch accepts the upstream output.
+
+```python
+branch(classifier: 'Classifier', branches: 'dict[str, Node]', *, name: 'str' = 'router') -> 'Router'
+```
+
 ### `RubricThreshold`
 
 *class* — bases: `StopCondition`
@@ -5356,6 +5381,118 @@ VerifierStop(verifier: 'GatedVerifier') -> 'None'
 
 - `progress(self, output: 'Output[JSONValue]') -> 'float'` — A pure ranking score in ``[0, 1]`` — higher is closer to the goal.
 - `satisfied(self, output: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime') -> 'bool'` — Whether ``output`` clears the goal. May run a leaf (``VerifierStop``).
+
+### `Program`
+
+*class* — bases: `Workflow`
+
+A typed directed graph whose edges may cycle (C2a).
+
+Reuses the :class:`Workflow` kernel (``_run_step``, ``check_types`` adjacency, the F-2
+ledger); the difference is the *driver* — it walks edges per item rather than running
+``for step in steps`` once. Every back-edge is a content-addressed version transition
+(``Output.derive`` mints a fresh sha; no in-place mutation) guarded by a deterministic
+predicate + bound. Cycles are bounded by iteration / shared budget / cancel / calibrated
+no-progress — never wall-clock.
+
+```python
+Program(*, name: 'str' = 'program', runtime: 'AgentRuntime | None' = None, version: 'str' = '0.1') -> 'None'
+```
+
+**Methods**
+
+- `step(self, node: 'Node') -> 'Node'` — Register a step (a graph node) and return it for edge wiring.
+- `edge(self, source: 'Node', target: 'Node', *, when: 'EdgeWhen | None' = None, max_visits: 'int | None' = None, on_stuck: "Literal['dead_letter', 'return_last']" = 'return_last', progress: 'Callable[[Output[JSONValue]], float] | None' = None, rubric_std: 'float' = 0.0, no_progress_patience: 'int' = 1, edge_id: 'str | None' = None) -> 'Edge'` — Wire a directed edge; a back-edge (target earlier than source) may cycle and **requires** ``max_visits`` (else ``UnboundedCycleError``).
+- `run(self, prompt: 'str | None' = None, *, ctx: 'RunContext | None' = None, runtime: 'AgentRuntime | None' = None, resume: 'bool' = False) -> 'list[Output[JSONValue]]'` — Run the program graph per item, walking forward and taking back-edges; ``resume=True`` replays committed iterations from the F-2 ledger at $0.
+
+### `Edge`
+
+*class*
+
+A directed edge in a :class:`Program` graph; a *back*-edge may cycle.
+
+``source``/``target`` are step indices. A back-edge (``target <= source``) re-enters the
+region ``[target .. source]`` while ``when`` holds, bounded by ``max_visits`` (a hard
+ceiling, assembly-required for a back-edge), a shared ``CostBudget``, cooperative cancel,
+and a calibrated no-progress detector. ``on_stuck`` names the terminal action when the
+bound trips without ``when`` going false.
+
+```python
+Edge(source: 'int', target: 'int', when: 'EdgeWhen | None' = None, max_visits: 'int | None' = None, edge_id: 'str' = ..., on_stuck: "Literal['dead_letter', 'return_last']" = 'return_last', progress: 'Callable[[Output[JSONValue]], float] | None' = None, rubric_std: 'float' = 0.0, no_progress_patience: 'int' = 1) -> None
+```
+
+**Properties**
+
+- `is_back_edge` — `True` when ``target <= source`` (the edge re-enters an earlier region).
+
+### `ProgramResult`
+
+*class*
+
+The typed outcome of one item's traversal through a :class:`Program`.
+
+```python
+ProgramResult(output: 'Output[JSONValue]', visits: 'dict[str, int]', stopped: "Literal['converged', 'max_visits', 'budget', 'no_progress', 'stuck']") -> None
+```
+
+### `UnboundedCycleError`
+
+*class* — bases: `ValueError`
+
+Raised at assembly when a back-edge has no termination bound. A cycle that can iterate
+without a ``max_visits`` ceiling could loop forever, so an unbounded back-edge is rejected
+before it can run.
+
+### `recurse`
+
+*function*
+
+Construct a bounded, self-referential :class:`Recurse` over a frozen Definition (C3).
+
+``max_depth`` is mandatory (``None`` ⇒ :class:`UnboundedRecursionError` at construction);
+``base_case`` is a pure predicate that stops descent; ``combine`` folds the descent-order
+children (an existing reducer like ``cw.collect`` works). The descent is whole-tree
+budget-bounded and content-addressed (each level mints a fresh sha).
+
+```python
+recurse(body: 'Definition', *, base_case: 'BaseCase', max_depth: 'int | None', combine: 'Combine', on_stuck: "Literal['dead_letter', 'return_last']" = 'return_last', **kwargs: 'object') -> 'Recurse'
+```
+
+### `Recurse`
+
+*class* — bases: `Node`
+
+A depth-guarded back-edge re-entering the same FROZEN ``Definition`` (C3).
+
+Recursion is a :class:`Program` back-edge into the *same* Definition, pushing a frozen
+version onto a per-item depth stack. Reuses the C2 kernel; the deltas are a **depth bound**
+(``max_depth``, assembly-required) and a pure **base-case predicate**. Each descent
+``derive()``s a fresh content sha; ``combine`` folds the children in descent (depth-first)
+order. The reduced Output is **tainted if ANY child input was tainted** (taint = union; a
+fold never launders taint). Halts on ``base_case`` / ``depth >= max_depth`` / budget /
+cancel / calibrated no-progress — never wall-clock.
+
+**Methods**
+
+- `execute(self, seed: 'Output[JSONValue]', ctx: 'RunContext', runtime: 'AgentRuntime', *, ledger: 'ExecutionLedger | None' = None, resume: 'bool' = False) -> 'RecurseResult'` — Descend the frozen body until the base case / a bound, then fold; ``resume`` replays committed depths at $0.
+
+### `RecurseResult`
+
+*class*
+
+The typed outcome of one item's bounded recursion.
+
+```python
+RecurseResult(output: 'Output[JSONValue]', depth_reached: 'int', stopped: "Literal['base_case', 'max_depth', 'budget', 'no_progress', 'stuck']") -> None
+```
+
+### `UnboundedRecursionError`
+
+*class* — bases: `ValueError`
+
+Raised at assembly when :func:`recurse` is built without a ``max_depth`` bound.
+``max_depth`` is the termination argument (distinct from a loop's ``max_visits``); the
+whole-tree shared budget is the second guard against ``O(b^d)`` fan-out.
 
 ### `feature_loop`
 

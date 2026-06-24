@@ -42,12 +42,12 @@ crash-resume. What's in the box today:
   `craw build` → container; a MkDocs docs site; an API-stability contract (stable /
   experimental / deprecated tiers + semver).
 
-## The agent language — control plane shipped (in progress)
+## The agent language — control plane + composition surface shipped (in progress)
 
 Phase 2 includes a larger bet: an **agent language** where composition operators
 (Refine, Program, Quorum, Escalate) and a Tuner make agents self-improving over your
-data. The first headline operators — the **control plane** — have now shipped on top of
-the foundational primitives:
+data. The first two milestones — the **control plane** and the **composition surface** —
+have now shipped on top of the foundational primitives:
 
 - **`Refine` — a bounded, metered, durable iterate-until-goal loop.** Run a producing
   Definition, check each frozen Output against an *external* stop condition, and iterate
@@ -59,8 +59,18 @@ the foundational primitives:
   only after the critic clears an absolute-precision bar against a decision golden set,
   and **fails closed** — a never-benchmarked critic is never trusted to block production.
   A generator may never critique itself.
+- **`branch` / `Program` / `recurse` — control flow with shape.** `branch(...)` makes a
+  `Router` a runnable step (each branch inherits the same budget/taint/checkpoint
+  guarantees). `Program` is a `Workflow` whose **edges may cycle** — back-edges re-enter
+  a region while a guard holds, bounded by `max_visits` / budget / cancel / no-progress
+  (never wall-clock), and a crash mid-cycle resumes for **\$0**, content-hash verified.
+  `recurse(...)` is a depth-guarded back-edge into the *same frozen Definition*. Cycles
+  and recursion are **assembly-required to be bounded** (`UnboundedCycleError` /
+  `UnboundedRecursionError`); taint carries across every edge, and a fold never launders
+  it.
 
 See the [Refine & verify guide](docs/guide/refine-and-verify.md), the
+[Compose guide](docs/guide/compose.md), the
 [control-plane reference](docs/reference/refine-and-verify.md), and the
 [release notes](docs/guide/release-notes.md).
 

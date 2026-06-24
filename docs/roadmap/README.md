@@ -145,6 +145,30 @@ Public surface (all top-level `crawfish` exports): `Refine`, `RefineResult`,
 the F-2 ledger namespace, the F-3 gate algebra, and the existing `Output` taint/lineage
 fields.
 
+## Milestone 2 — The composition surface (shipped)
+
+*Exit: control flow gains shape — a runnable Router branch, a typed cyclic `Program` with
+durable per-iteration resume, and a bounded `recurse` — all deterministic, taint-tracked,
+and crash-resumable at `$0`, with cycles and recursion assembly-required to be bounded.*
+
+| # | Issue | Title | Status |
+|---|-------|-------|--------|
+| C1 | CRA-205 | `branch` — make `Router` a runnable composition step | ✅ |
+| C2a | CRA-206 | `Program` — cyclic-capable surface + cyclic `check_types` | ✅ |
+| C2b | CRA-207 | Per-iteration ledger versioning + durable `$0` resume | ✅ |
+| C3 | CRA-208 | `recurse` — bounded self-referential Definition invocation | ✅ |
+
+Public surface (all top-level `crawfish` exports): `branch`, `Program`, `Edge`,
+`ProgramResult`, `UnboundedCycleError`, `recurse`, `Recurse`, `RecurseResult`,
+`UnboundedRecursionError`. Learn it via the [Compose guide](../guide/compose.md), the
+[Concepts → composition surface](../guide/concepts.md#the-composition-surface-branch-cycle-recurse),
+and the [release notes](../guide/release-notes.md). No content-hash or store-schema bump —
+reuses the F-2 `ledger_loop` namespace (`checkpoint_iteration`/`completed_visits` and the
+depth-variant `checkpoint_depth`/`completed_depths`), `compute_loop_id`, and the existing
+`Output` taint/lineage fields. The one new derived input is `region_version` (folded
+content shas of a cyclic region's frozen Definitions); a change to its composition shifts
+every loop_id — same migration class as `compute_loop_id`'s own version.
+
 ## Per-feature research notes
 
 Researcher findings (reviewed before implementation) live alongside this file as

@@ -3,6 +3,41 @@
 Notable, user-facing changes. For the exact public-symbol surface of any release, see the
 [API reference](api-reference.md); for the longer arc, see the [Roadmap](../roadmap/README.md).
 
+## Agent language — Milestone 2: the composition surface
+
+The control plane gains *shape*. Agent work that branches, cycles, and recurses is now a
+typed, durable graph — bounded, taint-tracked, and crash-resumable for **\$0**. New, all
+importable from the top-level `crawfish` package:
+
+- **`branch(classifier, branches)`** — makes a `Router` a first-class, **runnable**
+  composition step: each item is classified and dispatched through the same step machinery
+  as its branch, so a branch may be a `Sink`/`Batch`/`Filter`/`Aggregator` and inherits
+  the identical budget / taint / checkpoint guarantees. The label set is closed and
+  totality-checked at construction; `check_types` verifies every branch accepts the
+  upstream output.
+- **`Program`** — a `Workflow` whose **edges may cycle**. Register nodes with `.step(...)`,
+  wire directed edges with `.edge(...)`; a back-edge re-enters its region while a guard
+  predicate holds. Every traversal is a content-addressed version transition (no in-place
+  mutation), metered into one shared `CostBudget`, with taint carried across every edge.
+  Cycles are bounded by `max_visits` / budget / cancel / calibrated no-progress — **never
+  wall-clock** — and a back-edge with no `max_visits` raises **`UnboundedCycleError`** at
+  assembly. `Edge`, `ProgramResult` (`output`, per-edge `visits`, `stopped` reason).
+- **Durable `$0` resume for cycles** — pass a shared `Store` and `resume=True`, and a
+  `Program` that crashes mid-iteration re-derives the committed iterations at `$0`. Resume
+  is content-hash *verified*: each iteration's `produced_by` is the deterministic
+  `{region_version}#{edge_id}#{visit}` coordinate, so the replay reproduces the checkpoint
+  bit-for-bit. Every ledger row carries `org_id`.
+- **`recurse(body, *, base_case, max_depth, combine)`** — bounded self-referential
+  invocation: a depth-guarded back-edge re-entering the same **frozen** `Definition`,
+  folding the descent-order children with an existing reducer. `max_depth` is mandatory
+  (**`UnboundedRecursionError`** otherwise) and the whole-tree shared budget guards the
+  `O(b^d)` fan-out; a fold **never launders taint** (the reduced Output is tainted if any
+  child input was). `Recurse`, `RecurseResult` (`output`, `depth_reached`, `stopped`).
+
+Learn it: the [Compose guide](compose.md) (runnable, mirrors the triage demo's
+branch-by-type and bounded recurse) and the [Concepts → composition
+surface](concepts.md#the-composition-surface-branch-cycle-recurse).
+
 ## Agent language — Milestone 1: the control plane
 
 The first headline operators of the [agent language](../roadmap/README.md#milestone-1-the-control-plane-shipped)

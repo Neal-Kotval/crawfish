@@ -11,6 +11,7 @@ On this page:
 - [Secrets by reference](#secrets-by-reference) and [safe egress](#safe-egress-the-sink-invariants)
 - [Team coordination](#team-coordination), [Store seams](#the-store-and-artifactstore-seams), and [cost & inspection](#cost-budgets-and-inspection)
 - [The measurement loop](#the-measurement-loop) and [the control plane](#the-control-plane-refine-and-verify) — Refine & Verify
+- [The composition surface](#the-composition-surface-branch-cycle-recurse) — branch, cycle, recurse
 
 ## The directory model
 
@@ -280,6 +281,48 @@ checkpoint **bit-for-bit** — determinism is *verified*, not trusted. A loop th
 iteration 3 of 5 restarts at iteration 4 charging `$0`.
 
 See the [Refine & Verify guide](refine-and-verify.md) for the runnable walkthrough.
+
+## The composition surface — branch, cycle, recurse
+
+`Refine` is the control plane for *one* body. The **composition surface** gives the agent
+language its *shape*: control flow that branches, cycles, and recurses — while keeping
+every property the rest of the framework holds. Control flow here is **deterministic,
+versioned, and taint-tracked**, cycles are **bounded and crash-resumable at \$0**, and
+recursion re-enters only **frozen** Definitions. It is the structural keystone the Tuner
+and the rest of Phase 2 compose onto.
+
+**A `Router` becomes a runnable step.** `branch(classifier, branches)` dispatches each
+item through the *same* step machinery as its chosen branch, so a branch may be a
+`Sink`/`Batch`/`Filter`/`Aggregator` and inherits the identical budget / taint /
+checkpoint guarantees. The label set is closed and totality-checked at construction, and
+`check_types` verifies every branch accepts the upstream output — a mistyped or uncovered
+branch fails at **assembly**, before any model call.
+
+**A `Program` is a typed graph whose edges may cycle.** It reuses the `Workflow` kernel;
+the difference is the *driver* — it walks edges per item rather than running the steps
+once. A back-edge re-enters its region while a guard predicate holds, and every traversal
+is a **content-addressed version transition** (`Output.derive` mints a fresh sha; the
+frozen Output rejects in-place edits — this is eval mode). Cycles are bounded by
+iteration / shared budget / cancel / calibrated no-progress — **never wall-clock** — and a
+back-edge with no `max_visits` is rejected with `UnboundedCycleError` at assembly. One
+shared `CostBudget` meters every iteration, and taint carries across every edge.
+
+**Durable \$0 resume falls out of the same ledger, not a special case.** Each iteration is
+checkpointed under a **deterministic** loop id over the F-2 composite-key ledger; on
+`resume=True` the committed iterations replay through the cassette runtime at zero cost,
+and because each iteration's `produced_by` is the deterministic
+`{region_version}#{edge_id}#{visit}` coordinate, the replayed Output's content sha
+reproduces the checkpoint **bit-for-bit** — determinism is *verified*, not trusted. Every
+ledger row carries `org_id`, so a cross-tenant resume is isolated.
+
+**`recurse` re-enters a frozen Definition under a depth bound.** Recursion is a
+depth-guarded `Program` back-edge into the *same* frozen body, pushing a frozen version
+onto a per-item depth stack and folding the descent-order children with an existing
+reducer. `max_depth` is mandatory (`UnboundedRecursionError` otherwise), the whole-tree
+shared budget guards the `O(b^d)` fan-out, and a fold **never launders taint** — the
+reduced Output is tainted if any child input was.
+
+See the [Compose guide](compose.md) for the runnable walkthrough.
 
 ## Next steps
 
