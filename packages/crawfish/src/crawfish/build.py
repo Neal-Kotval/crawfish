@@ -27,12 +27,33 @@ __all__ = [
     "generate_containerfile",
     "plan_build",
     "write_containerfile",
+    "assert_build_safe",
 ]
 
 DEFAULT_PYTHON_VERSION = "3.11"
 
 # Name of the lockfile copied into the image when present.
 LOCKFILE_NAME = "crawfish.lock"
+
+
+def assert_build_safe(definitions: object) -> None:
+    """ALG-3 (CRA-231) build-time fail-closed gate over a project's definitions.
+
+    Runs :func:`crawfish.alg3.assert_no_fluid_to_static_sink` over each Definition in the
+    project so a project that wires a ``Flow.FLUID`` value toward a static-only Sink
+    target / idempotency key FAILS CLOSED at build — before the image is produced and
+    before any model call. ``definitions`` is any iterable of Definitions (e.g. the
+    project's compiled agent-team packages). Raises
+    :class:`~crawfish.alg3.FluidToStaticSinkError` on the first unsafe wiring.
+
+    This is the demo-able "build fails closed" entry point. It is an *additional, earlier*
+    gate — never a replacement for the runtime ``TargetMustBeStaticError`` /
+    ``StaticOnlyError`` (defense in depth, invariant 11).
+    """
+    from crawfish.alg3 import assert_no_fluid_to_static_sink
+
+    for definition in definitions:  # type: ignore[attr-defined]
+        assert_no_fluid_to_static_sink(definition)
 
 
 def _base_image(python_version: str) -> str:

@@ -192,6 +192,15 @@ class Router(Node):
             raise UnroutableLabelError(
                 f"default branch {classifier.default!r} is not in branches {sorted(branches)}"
             )
+        # ALG-3 / S3 (CRA-231): a fluid-derived (agent-backed) classifier label may gate
+        # WHETHER a consequential action fires, but must never CHOOSE among distinct
+        # consequential Sink targets — that is a model-influenced redirection of egress.
+        # Rejected at assembly (an additional, earlier gate over the runtime static-only
+        # Sink enforcement). A pure predicate classifier is exempt (its label is not on
+        # the prompt-injection boundary).
+        from crawfish.alg3 import assert_classifier_gates_not_chooses
+
+        assert_classifier_gates_not_chooses(dict(branches), classifier)
         self.id = new_id()
         self.name = name
         self.kind = NodeKind.ROUTER

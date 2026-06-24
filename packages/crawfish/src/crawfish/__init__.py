@@ -17,6 +17,14 @@ from crawfish.abstain import (
     is_abstention,
 )
 from crawfish.agentdiff import DefinitionDiff, MergeConflict, diff, merge
+from crawfish.alg3 import (
+    ConsequentialTargetChoiceError,
+    FluidToStaticSinkError,
+    FluidWidenError,
+    assert_classifier_gates_not_chooses,
+    assert_merge_no_fluid_widen,
+    assert_no_fluid_to_static_sink,
+)
 from crawfish.anomaly import (
     AnomalyEngine,
     AnomalyRule,
@@ -991,4 +999,11 @@ __all__ = [
     "run_swap",
     "parse_swap",
     "SwapReport",
+    # M8 — ALG-3 assembly-time fluid->static-sink rejection (fail-closed)
+    "assert_no_fluid_to_static_sink",
+    "assert_merge_no_fluid_widen",
+    "assert_classifier_gates_not_chooses",
+    "FluidToStaticSinkError",
+    "FluidWidenError",
+    "ConsequentialTargetChoiceError",
 ]

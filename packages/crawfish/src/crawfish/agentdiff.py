@@ -307,6 +307,25 @@ def merge(base: Definition, a: Definition, b: Definition) -> Definition | MergeC
         # ``resolved is _MISSING`` means the winning side removed the leaf: omit it (a keyed
         # removal), so the rebuilt payload drops it exactly as that side did.
 
+    # ALG-3 (CRA-231) one-sided fluid-widen gate. Two-sided ``flow`` divergence is already
+    # a FieldConflict above; this closes the one-sided gap (review-m7 S-1): a merge that
+    # would silently adopt a STATIC->FLUID widen of a consequential slot is surfaced as a
+    # conflict too, never auto-applied, so a merge can never quietly turn a consequential
+    # static knob fluid. We detect it on the merged leaves directly (a flow leaf that is
+    # ``fluid`` in the result but was not ``fluid`` in base).
+    for path in sorted(merged):
+        if not _is_flow_path(path):
+            continue
+        if merged[path] == "fluid" and fbase.get(path) != "fluid":
+            conflicts.append(
+                FieldConflict(
+                    path=path,
+                    base=None if path not in fbase else fbase[path],
+                    a=fa.get(path),
+                    b=fb.get(path),
+                )
+            )
+
     if conflicts:
         return MergeConflict(conflicts=tuple(conflicts))
 

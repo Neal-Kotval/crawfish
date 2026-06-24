@@ -257,8 +257,13 @@ def test_merge_surfaces_a_flow_collision_rather_than_auto_applying() -> None:
     assert x.required is False and x.default == "d"  # B's changes applied
 
 
-def test_merge_flow_widen_applies_only_one_sided() -> None:
-    """A one-sided fluid→static (or static→fluid) move applies; the other side has no say on it."""
+def test_merge_one_sided_fluid_widen_is_conflicted() -> None:
+    """A one-sided STATIC→FLUID widen is rejected as a conflict (CRA-231 / ALG-3 / S-1).
+
+    The fluid/static boundary may not be *widened* by a silent one-sided merge — that
+    would let a merge quietly turn a consequential static knob fluid. (The opposite
+    direction, a fluid→static *narrowing*, is safe and still applies — see the next test.)
+    """
     base = derive.refreeze(
         Definition(inputs=[Parameter(name="x", type="str", flow=Flow.STATIC)]),
         Definition(inputs=[Parameter(name="x", type="str", flow=Flow.STATIC)]),
@@ -266,14 +271,31 @@ def test_merge_flow_widen_applies_only_one_sided() -> None:
     a = derive.refreeze(
         base, Definition(id=base.id, inputs=[Parameter(name="x", type="str", flow=Flow.FLUID)])
     )
-    # B changes a DIFFERENT leaf (type), so A's flow move is one-sided → applied cleanly.
+    # B changes a DIFFERENT leaf (type), so A's flow widen is one-sided.
     b = derive.refreeze(
         base, Definition(id=base.id, inputs=[Parameter(name="x", type="int", flow=Flow.STATIC)])
     )
     result = merge(base, a, b)
+    assert isinstance(result, MergeConflict)
+    assert any(p.endswith("inputs.x.flow") for p in result.paths)
+
+
+def test_merge_one_sided_fluid_narrow_applies() -> None:
+    """A one-sided FLUID→STATIC narrowing applies cleanly (narrowing is always safe)."""
+    base = derive.refreeze(
+        Definition(inputs=[Parameter(name="x", type="str", flow=Flow.FLUID)]),
+        Definition(inputs=[Parameter(name="x", type="str", flow=Flow.FLUID)]),
+    )
+    a = derive.refreeze(
+        base, Definition(id=base.id, inputs=[Parameter(name="x", type="str", flow=Flow.STATIC)])
+    )
+    b = derive.refreeze(
+        base, Definition(id=base.id, inputs=[Parameter(name="x", type="int", flow=Flow.FLUID)])
+    )
+    result = merge(base, a, b)
     assert isinstance(result, Definition)
     x = next(p for p in result.inputs if p.name == "x")
-    assert x.flow is Flow.FLUID  # A's one-sided widen landed
+    assert x.flow is Flow.STATIC  # A's one-sided narrow landed
     assert x.type == "int"  # B's type change landed
 
 
