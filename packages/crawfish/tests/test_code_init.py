@@ -35,7 +35,7 @@ def test_init_writes_canonical_tree_and_ledger(
 
     # the ledger is opened under .crawfish/ (generated state)
     assert (app / ".crawfish").is_dir()
-    assert payload["ledger"] == {"started": True, "path": ".crawfish/"}
+    assert payload["ledger"] == {"started": True, "preserved": False, "path": ".crawfish/"}
     assert payload["project"] == "my-app"
     assert "crawfish.toml" in payload["scaffolded"]  # type: ignore[operator]
 

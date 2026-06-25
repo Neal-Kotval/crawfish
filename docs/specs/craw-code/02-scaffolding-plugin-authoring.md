@@ -339,9 +339,11 @@ exit: 0 granted · 3 declined (ConsentRequired) · 4 usage
 half-written `definition.py` compiles to the wrong content sha → corrupt run identity
 (§12.3). The fix is an advisory lock so a torn tree is refused, not compiled.
 **Design** — An advisory **read/write lock over the authored tree**, keyed on
-`(org_id, project_dir)`, backed by the Store's borrow/lease primitive (the same exclusive
-borrow `DefinitionStore` train-mode uses — **verify name**; it is tenancy-scoped and
-Store-enforced per SECURITY.md "Mutable borrows"). A writer (`craw code new`, an Edit) takes
+`(org_id, project_dir)`. (Spec correction, 2026-06-25: the "verify name" borrow primitive
+does not exist on the `Store` *protocol* — only `kv_get`/`kv_set` + the transactional
+`claim_idempotency` do; the lock rides `kv_get`/`kv_set` under a dedicated namespace, which
+is equally tenancy-scoped + Store-enforced per SECURITY.md "Mutable borrows", so the product
+model still imports no concrete backend.) A writer (`craw code new`, an Edit) takes
 a short exclusive lease around the write+fsync; a reader (`sync`/`run`/`describe`/`map`)
 takes a shared lease around `load_definition`. If a compile cannot acquire the shared lease
 (a write in flight), it returns `tree_busy` (exit 8) rather than compiling a torn file.
@@ -665,6 +667,12 @@ craw code sync              # exit 1 + craw.error.v1 code="plugin_skew" on incom
 - [ ] The digest computation is deterministic (sorted files, stable exclusions).
 **Test plan** — `packages/crawfish/tests/test_plugin_pin.py`: freeze writes pin; tamper a skill file → doctor flags mismatch; incompatible range → sync `plugin_skew`; digest stability across two runs.
 **Security review notes** — Rule 6 (supply chain). This closes "the plugin's own bundle is unpinned" (§12.2). The digest is the integrity anchor; the range check prevents a stale plugin teaching rules that no longer match the framework's enforcement.
+
+> **Spec correction (M3 build, UNFILED-PIN).** As shipped:
+> - **Pin file.** The plugin pin lives in its own JSON file, **`crawfish.plugin.lock`** (top-level `{ "plugin": { name, version, bundle_sha256, requires_crawfish } }`), *not* in `crawfish.lock`. `crawfish.lock` is already overloaded — `crawfish.build` consumes it as a **pip requirements** file (`pip install --requirement crawfish.lock`), and the resolve-closure lock is the distinct `crawfish.closure.lock`. Writing a JSON document into the pip-requirements file would corrupt the build. The pinned *fields* and fail-closed semantics are exactly as specified; only the filename differs. The helper is `crawfish.code.plugin` (`compute_pin`/`write_pin`/`read_pin`/`verify_bundle`/`requires_satisfied_by`).
+> - **Version alignment.** The framework is at **0.3.0**, so the shipped `plugin.json` pins `version: "0.3.0"` and `requires_crawfish: ">=0.3,<0.4"` (the spec's `0.2.0` / `>=0.2,<0.3` example predated the 0.3.0 release).
+> - **`plugin_skew` exit code.** `craw code sync` surfaces an incompatible range as `craw.error.v1` `code="plugin_skew"`, **exit 1** (`expected_failure`, `retryable:true`) — a recoverable compat finding, *not* a security rejection (it is not in `SECURITY_CODES`). A *tampered* bundle (digest mismatch) is surfaced by `craw doctor` as an `error`, fail-closed.
+> - **Author URL.** `plugin.json` uses the repo's real author URL (`github.com/Neal-Kotval/crawfish`).
 
 ---
 

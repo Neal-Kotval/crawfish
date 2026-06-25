@@ -105,53 +105,139 @@ def _definition_dirs(root: Path) -> list[Path]:
     )
 
 
+def _plugin_skew(root: Path) -> str | None:
+    """The pinned plugin's compat verdict against the installed crawfish (UNFILED-PIN).
+
+    Returns ``None`` when there is no plugin pin (nothing to check) or the pinned
+    ``requires_crawfish`` range admits the installed version. Returns a static, human
+    remediation string when the range **excludes** the installed version — the §12.3
+    plugin-not-lockstepped gap, surfaced fail-closed so a stale plugin can't teach rules the
+    framework no longer enforces.
+    """
+    from crawfish.code.plugin import (
+        installed_crawfish_version,
+        read_pin,
+        requires_satisfied_by,
+    )
+
+    pin = read_pin(root)
+    if pin is None:
+        return None
+    installed = installed_crawfish_version()
+    if requires_satisfied_by(pin.requires_crawfish, installed):
+        return None
+    return (
+        f"plugin bundle requires crawfish {pin.requires_crawfish!r} but {installed} is "
+        f"installed; re-pin with `craw code init --upgrade`"
+    )
+
+
 def _cmd_sync(args: argparse.Namespace) -> int:
-    """Reconcile the tree: components + drift + load-errors + the assembly-gate precondition."""
+    """Reconcile the tree: components + drift + load-errors + the assembly-gate precondition.
+
+    Reads under a CRA-278 **shared** read lease so a compile concurrent with an in-flight
+    write returns ``tree_busy`` (exit 8) rather than a torn (wrong-sha) Definition.
+    """
     as_json: bool = getattr(args, "as_json", False)
     org: str = getattr(args, "org", "local")
     root = Path(args.dir)
 
+    # Plugin compat precondition (UNFILED-PIN): a pinned bundle whose requires_crawfish range
+    # excludes the installed version fails closed before the tree is declared runnable.
+    skew = _plugin_skew(root)
+    if skew is not None:
+        return emit_error(
+            ErrorCode.PLUGIN_SKEW,
+            retryable=True,  # recoverable: re-pin / align versions, then re-run
+            remediation=skew,
+            as_json=as_json,
+        )
+
     components = _components(root)
     drift, ledger = _drift_findings(root)
 
-    # Load each Definition (regenerates definition.lock) and run the assembly gate.
     from crawfish.build import assert_build_safe
-    from crawfish.definition import DefinitionLoadError, load_definition
+    from crawfish.code.consent import regate_definition
+    from crawfish.code.treelock import TreeBusy, TreeLock
+    from crawfish.definition import DefinitionLoadError
+    from crawfish.definition.jailed import load_definition_jailed
+    from crawfish.jail import SandboxPolicy
+    from crawfish.manage import store_for_dir
+    from crawfish.provenance import ConsentRequired
 
     load_errors: list[dict[str, object]] = []
     checked: list[str] = []
     rejected: list[str] = []
-    for d in _definition_dirs(root):
+
+    # The re-gate + lock need the project Store (CRA-277/278). Opened via the factory only.
+    (root / ".crawfish").mkdir(parents=True, exist_ok=True)
+    store = store_for_dir(str(root))
+    lock = TreeLock(store, root, org_id=org)
+    try:
+        # CRA-278: a write in flight (a half-written file) makes the shared read lease fail
+        # closed with tree_busy (exit 8) rather than compiling a torn, wrong-sha Definition.
         try:
-            definition = load_definition(d)
-        except DefinitionLoadError as exc:
-            load_errors.append(
-                {
-                    "component": f"definitions/{d.name}",
-                    "code": "DefinitionLoadError",
-                    "message": str(exc),
-                }
-            )
-            continue
-        # Assembly gate precondition: a fluid->static-sink wiring fails closed here, so the
-        # edit->run loop can never skip it (SECURITY.md rule; the §12.2 gap closed).
+            lock.acquire_read()
+        except TreeBusy:
+            return _tree_busy(as_json)
         try:
-            assert_build_safe([definition])
-            checked.append(d.name)
-        except Exception as exc:  # FluidToStaticSinkError (and any ALG-3 rejection)
-            rejected.append(d.name)
-            return emit_error(
-                ErrorCode.FLUID_TO_STATIC_SINK,
-                remediation="a fluid (untrusted) value is wired toward a static-only sink "
-                "target / idempotency key; consequential sink targets are static-only",
-                detail={
-                    "exit": 7,
-                    "component": f"definitions/{d.name}",
-                    # A static, type-shaped message only — never echo a fluid value back.
-                    "rejection": type(exc).__name__,
-                },
-                as_json=as_json,
-            )
+            for d in _definition_dirs(root):
+                try:
+                    # The project's own Definition dirs are agent-authored/untrusted under the
+                    # craw code threat model, so the compile-time import is JAILED (CRA-267):
+                    # project dir RO+STATIC, allow_net=False, a jail Denial fails closed as
+                    # DefinitionLoadError — a hostile tools/*.py never executes in-process.
+                    # Reuses the CRA-278 shared read lease's store/org (already in scope).
+                    definition = load_definition_jailed(
+                        d, store=store, org_id=org, policy=SandboxPolicy(kind="fake")
+                    ).definition
+                except DefinitionLoadError as exc:
+                    load_errors.append(
+                        {
+                            "component": f"definitions/{d.name}",
+                            "code": "DefinitionLoadError",
+                            "message": str(exc),
+                        }
+                    )
+                    continue
+                # Assembly gate precondition: a fluid->static-sink wiring fails closed here,
+                # so the edit->run loop can never skip it (SECURITY.md rule; §12.2 gap closed).
+                try:
+                    assert_build_safe([definition])
+                    checked.append(d.name)
+                except Exception as exc:  # FluidToStaticSinkError (any ALG-3 rejection)
+                    rejected.append(d.name)
+                    return emit_error(
+                        ErrorCode.FLUID_TO_STATIC_SINK,
+                        remediation="a fluid (untrusted) value is wired toward a static-only "
+                        "sink target / idempotency key; consequential sink targets are static-only",
+                        detail={
+                            "exit": 7,
+                            "component": f"definitions/{d.name}",
+                            # A static, type-shaped message only — never echo a fluid value.
+                            "rejection": type(exc).__name__,
+                        },
+                        as_json=as_json,
+                    )
+                # CRA-277 consent re-gate: a Definition that newly declares an MCP/secret
+                # capability re-enters the consent gate. Non-interactive (the agent loop)
+                # defaults to DenyConsent -> ConsentRequired -> exit 4 (non-retryable); the
+                # human approves via `craw code grant <component> --yes`.
+                try:
+                    regate_definition(definition, store=store, org_id=org)
+                except ConsentRequired:
+                    return emit_error(
+                        ErrorCode.CONSENT_REQUIRED,
+                        remediation=f"definitions/{d.name} newly declares an MCP/secret "
+                        f"capability; run `craw code grant definitions/{d.name} --yes` to "
+                        "consent (generated capabilities are not auto-trusted)",
+                        detail={"exit": 4, "component": f"definitions/{d.name}"},
+                        as_json=as_json,
+                    )
+        finally:
+            lock.release_read()
+    finally:
+        store.close()
 
     payload: dict[str, object] = {
         "components": components,
@@ -171,6 +257,23 @@ def _cmd_sync(args: argparse.Namespace) -> int:
     if drift or load_errors:
         return EXIT_EXPECTED_FAILURE
     return EXIT_OK
+
+
+def _tree_busy(as_json: bool) -> int:
+    """Emit the tree_busy envelope (retryable) and return the CRA-243 process exit (CRA-278).
+
+    The granular code 8 stays in ``detail.exit``; the PROCESS exit is the CRA-243
+    expected-failure family (1, transient contention — retryable), keeping the process-exit
+    table closed at 0-4 (mirrors the approved 5/6 pattern). ``ErrorCode.TREE_BUSY`` already
+    maps to ``EXIT_EXPECTED_FAILURE`` in ``CODE_EXIT``.
+    """
+    return emit_error(
+        ErrorCode.TREE_BUSY,
+        retryable=True,
+        remediation="the authoring tree is being written; retry the sync shortly",
+        detail={"exit": 8, "reason": "tree_busy"},
+        as_json=as_json,
+    )
 
 
 def _print_human(
