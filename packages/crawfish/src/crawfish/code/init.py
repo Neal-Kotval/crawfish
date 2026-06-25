@@ -17,9 +17,10 @@ Three composable steps behind one verb:
    provenance row (``generated_by="craw-code-init"``, ``source_tainted=False``).
 3. **Install the plugin** — copy the shipped ``crawfish/plugin/`` bundle into
    ``<dir>/.claude/plugins/crawfish/`` (disjoint from ``.claude/agents/`` that export
-   owns) when it exists. The bundle and its ``crawfish.lock`` pin (UNFILED-PIN) are an M3
-   deliverable; until the bundle ships this step is a clean no-op, so ``init`` is useful
-   today and gains the plugin install with zero change here.
+   owns) when it exists, and **pin** the bundle (UNFILED-PIN): record its ``bundle_sha256``
+   + ``requires_crawfish`` range in ``crawfish.plugin.lock`` (:mod:`crawfish.code.plugin`)
+   so a tampered or wrong-version bundle is detectable. Until the bundle ships this step is
+   a clean no-op, so ``init`` is useful today and gains the install with zero change here.
 
 A self-registering verb (``register(subparsers)``).
 """
@@ -115,14 +116,23 @@ def _install_plugin(root: Path, *, upgrade: bool = False) -> dict[str, object] |
         # excluded from the sha) so a stale bundle is reconciled to the shipped one.
         shutil.rmtree(dest)
     shutil.copytree(source, dest)
-    # The bundle pin (bundle_sha256 + requires_crawfish in crawfish.lock) is UNFILED-PIN,
-    # an M3 deliverable; recorded here as installed-only until that lands.
+    # Pin the bundle (UNFILED-PIN): compute bundle_sha256 + requires_crawfish range and
+    # record them in the framework's plugin-pin file so a tampered/wrong-version bundle is
+    # detectable (`craw doctor`) and a skewed range fails closed (`craw code sync`).
+    from crawfish.code.plugin import compute_pin, write_pin
+
+    pin = compute_pin(dest)
+    write_pin(pin, root)
     descriptor: dict[str, object] = {
         "installed": True,
-        "name": "crawfish",
+        "name": pin.name,
+        "version": pin.version,
         "path": ".claude/plugins/crawfish/",
+        "bundle_sha256": pin.bundle_sha256,
+        "requires_crawfish": pin.requires_crawfish,
     }
     if upgrade and already:
+        # CRA-279 --upgrade re-copies + re-pins the bundle without rewriting authored files.
         descriptor["upgraded"] = True
     return descriptor
 
