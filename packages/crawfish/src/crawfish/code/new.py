@@ -125,10 +125,14 @@ def _tool_template(name: str) -> str:
 def _policy_template(name: str) -> str:
     """A ``policy`` template — a module-level ``Policy`` instance."""
     return (
-        f'"""The {name!r} policy — a reusable behavioural guard."""\n'
+        f'"""The {name!r} policy — a reusable behavioural guard (a GUARDRAIL Policy)."""\n'
         "from __future__ import annotations\n\n"
-        "from crawfish.core import Policy\n\n"
-        f'{name} = Policy(name="{name}", description="TODO: describe what this guards.")\n'
+        "from crawfish.core import Policy, PolicyKind\n\n"
+        f"{name} = Policy(\n"
+        f'    name="{name}",\n'
+        "    kind=PolicyKind.GUARDRAIL,\n"
+        '    rules={"max_usd": 1.0},   # TODO: what this guards (spend caps, allowed tools)\n'
+        ")\n"
     )
 
 
