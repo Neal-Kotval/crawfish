@@ -16,10 +16,15 @@ local runtime is also packaged in the image.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 from crawfish.config import ProjectManifest
+
+if TYPE_CHECKING:
+    from crawfish.definition.types import Definition
+    from crawfish.store.base import Store
 
 __all__ = [
     "DEFAULT_PYTHON_VERSION",
@@ -28,6 +33,7 @@ __all__ = [
     "plan_build",
     "write_containerfile",
     "assert_build_safe",
+    "assert_run_safe",
 ]
 
 DEFAULT_PYTHON_VERSION = "3.11"
@@ -54,6 +60,39 @@ def assert_build_safe(definitions: object) -> None:
 
     for definition in definitions:  # type: ignore[attr-defined]
         assert_no_fluid_to_static_sink(definition)
+
+
+def assert_run_safe(
+    project_dir: str | Path,
+    *,
+    store: Store,
+    org_id: str = "local",
+) -> Definition:
+    """Run the assembly gate as a **precondition** of ``craw code run`` / ``sync`` (CRA-272).
+
+    :func:`assert_build_safe` already runs the ALG-3 fluid→static-sink check, but today it
+    fires only at **build** time, not in the edit→run loop where ``craw code`` actually
+    iterates. This wires the same gate into the **run path**: compile the project (jailed per
+    CRA-267 when agent-authored), then run :func:`assert_build_safe` over the compiled
+    Definition **before any run** — the exact moment an agent-authored wiring would otherwise
+    slip a fluid value toward a static-only sink slot.
+
+    A :class:`~crawfish.alg3.FluidToStaticSinkError` fails closed (the CLI surfaces it as the
+    CRA-270 envelope ``code="fluid_to_static_sink"``, ``retryable=false``, exit ``4``) **before
+    any model call**. This is defense in depth atop the runtime ``StaticOnlyError`` /
+    ``TargetMustBeStaticError`` (SECURITY.md invariant 8), moved early so the agent sees the
+    rejection before spending a run. Returns the compiled :class:`Definition` so the caller
+    (the run verb) can proceed without recompiling on the safe path.
+    """
+    from crawfish.definition.jailed import load_definition_jailed
+    from crawfish.jail import SandboxPolicy
+
+    compiled = load_definition_jailed(
+        project_dir, store=store, org_id=org_id, policy=SandboxPolicy(kind="fake")
+    )
+    # Fail closed before any run: a fluid→static-sink wiring raises FluidToStaticSinkError.
+    assert_build_safe([compiled.definition])
+    return compiled.definition
 
 
 def _base_image(python_version: str) -> str:

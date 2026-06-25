@@ -99,3 +99,30 @@ def test_each_craw_code_injection_is_blocked(attack: RedTeamAttack) -> None:
     (result,) = run_redteam([attack])
     assert result.blocked, f"craw code injection NOT blocked on {attack.name}: {result.how}"
     assert result.how
+
+
+# -- craw code (M1) — the CLI legibility fluid surfaces (CRA-271 / CRA-272) -----
+# `describe` feeds a component's projection into the agent's context, and the run-path
+# assembly gate is the moment an agent-authored wiring would slip fluid toward a sink. Each
+# must be refused by construction: describe surfaces capability KIND only (CRA-271), and the
+# run-path gate rejects a fluid→static-sink wiring before any run (CRA-272).
+_CRAW_CODE_M1_SURFACES = {"describe_redaction", "run_assembly_gate"}
+
+
+def test_craw_code_m1_surfaces_have_redteam_coverage() -> None:
+    """Each M1 craw code CLI fluid surface carries at least one injection payload."""
+    surfaces = {a.surface for a in redteam_attacks()}
+    missing = _CRAW_CODE_M1_SURFACES - surfaces
+    assert not missing, f"missing craw code M1 red-team coverage for {missing}"
+
+
+@pytest.mark.parametrize(
+    "attack",
+    [a for a in redteam_attacks() if a.surface in _CRAW_CODE_M1_SURFACES],
+    ids=lambda a: a.name,
+)
+def test_each_craw_code_m1_injection_is_blocked(attack: RedTeamAttack) -> None:
+    """Every M1 craw code CLI injection is refused by its named spine control."""
+    (result,) = run_redteam([attack])
+    assert result.blocked, f"craw code M1 injection NOT blocked on {attack.name}: {result.how}"
+    assert result.how
