@@ -50,9 +50,10 @@ _LOCK_DIR = Path(".crawfish") / "locks"
 class TreeBusy(RuntimeError):
     """Raised when a lease cannot be acquired because the tree is being written.
 
-    Maps to the spec's ``tree_busy`` (exit 8, ``retryable:true`` — a transient contention,
-    safe to retry): a compile concurrent with an in-flight write returns this rather than
-    compiling a torn (wrong-sha) Definition.
+    Surfaced as the spec's ``tree_busy`` (granular code 8 in ``detail.exit``,
+    ``retryable:true`` — a transient contention, safe to retry) with the PROCESS exit on the
+    CRA-243 expected-failure family (1): a compile concurrent with an in-flight write returns
+    this rather than compiling a torn (wrong-sha) Definition.
     """
 
 

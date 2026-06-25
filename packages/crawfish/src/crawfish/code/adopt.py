@@ -80,15 +80,16 @@ def _cmd_adopt(args: argparse.Namespace) -> int:
     org: str = getattr(args, "org", "local")
     root = Path(args.dir)
 
-    # (1) Detect an existing project (crawfish.toml present) — else not_a_project (exit 9).
+    # (1) Detect an existing project (crawfish.toml present) — else not_a_project. The
+    # granular code 9 stays in detail.exit; the PROCESS exit is the CRA-243 usage family (2),
+    # keeping the process-exit table closed at 0-4 (mirrors the approved 5/6 pattern).
     if not (root / "crawfish.toml").exists():
-        emit_error(
+        return emit_error(
             ErrorCode.NOT_FOUND,
             remediation="not a Crawfish project (no crawfish.toml); run `craw code init` first",
             detail={"exit": 9, "reason": "not_a_project", "dir": str(root)},
             as_json=as_json,
         )
-        return 9
 
     # (2) Install the plugin + start the ledger ONLY IF absent (reconcile via CRA-279 init).
     from crawfish.code.init import _install_plugin, _open_store, _record_init_provenance

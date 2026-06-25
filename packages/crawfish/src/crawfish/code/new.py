@@ -343,15 +343,19 @@ def _cmd_new(args: argparse.Namespace) -> int:
 
 
 def _tree_busy(as_json: bool) -> int:
-    """Emit the tree_busy envelope (retryable) and return the spec's exit 8 (CRA-278)."""
-    emit_error(
+    """Emit the tree_busy envelope (retryable) and return the CRA-243 process exit (CRA-278).
+
+    The granular code 8 stays in ``detail.exit``; the PROCESS exit is the CRA-243
+    expected-failure family (1, transient contention — retryable), keeping the process-exit
+    table closed at 0-4 (mirrors the approved 5/6 pattern).
+    """
+    return emit_error(
         ErrorCode.TREE_BUSY,
         retryable=True,
         remediation="the authoring tree is being written; retry shortly",
         detail={"exit": 8, "reason": "tree_busy"},
         as_json=as_json,
     )
-    return 8
 
 
 def _open_store(root: Path) -> Store:

@@ -1,9 +1,9 @@
 """CRA-278 acceptance: the authoring-tree advisory lock (read-during-edit consistency).
 
 Deterministic — the lease primitive is driven directly (no real thread races). A writer's
-exclusive lease makes a concurrent reader (sync) fail closed with ``tree_busy`` (exit 8,
-retryable); the lock is tenancy-scoped (org A's lock never blocks org B), Store-enforced
-(survives a fresh Store handle), and its marker lives under ``.crawfish/locks/``.
+exclusive lease makes a concurrent reader (sync) fail closed with ``tree_busy`` (process
+exit 1 / detail.exit 8, retryable); the lock is tenancy-scoped (org A's lock never blocks
+org B), Store-enforced (survives a fresh Store handle), marker under ``.crawfish/locks/``.
 """
 
 from __future__ import annotations
@@ -41,7 +41,9 @@ def test_writer_lease_blocks_a_concurrent_reader(
         rc = run_code(["sync", "--dir", str(app), "--json"])
         cap = capsys.readouterr()
         payload = json.loads((cap.out.strip() or cap.err.strip()).splitlines()[-1])
-        assert rc == 8
+        # PROCESS exit stays inside the CRA-243 closed table (1 = expected-failure, the
+        # transient/retryable family); the granular tree_busy code (8) is in detail.exit.
+        assert rc == 1
         assert payload["code"] == "tree_busy"
         assert payload["retryable"] is True
         assert payload["detail"]["exit"] == 8

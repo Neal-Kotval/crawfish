@@ -84,11 +84,13 @@ def test_adopt_namespaces_are_disjoint(
         assert not (plugins / "agents").exists()
 
 
-def test_not_a_project_exits_9(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_not_a_project_is_usage_exit(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """not_a_project: PROCESS exit is the CRA-243 usage family (2); granular 9 in detail.exit."""
     empty = tmp_path / "empty"
     empty.mkdir()
     rc, payload = _adopt_json(capsys, empty)
-    assert rc == 9
+    assert rc == 2  # closed 0-4 table
+    assert payload["detail"]["exit"] == 9  # type: ignore[index]
     assert payload["detail"]["reason"] == "not_a_project"  # type: ignore[index]
 
 
