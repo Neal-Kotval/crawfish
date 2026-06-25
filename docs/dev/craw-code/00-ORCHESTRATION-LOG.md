@@ -86,6 +86,8 @@ Updated as waves complete. See git log on `craw-code/integration` for the author
 
 | Wave | Milestone | Branch | Built | Integration suite | Gate (sec/arch/qa) |
 | --- | --- | --- | --- | --- | --- |
+| 4 | M3a per-file authoring skills + validation eval verb (CRA-258..265, UNFILED-OPT) | `craw-code/m3a` → merged | ✓ | ✓ 1592 passed | gating |
+| 4 | M4 dashboard — seam/XSS/cost + ADR 0011 (CRA-252/253/254, UNFILED-SEAM/XSS/COST) | `craw-code/m4` → merged | ✓ | ✓ 1592 passed | gating |
 | 1 | foundation (CRA-266/267/268/269/270/243, ADR 0010) | `craw-code/foundation` → merged `e2a37c5` | ✓ | ✓ 1325 passed | gated ✓ (all PASS) |
 | 2 | M1 describe/estimate/contracts (CRA-244/271/272/273/274/275) | `craw-code/m1` → merged `1e101f1` (+seam fix) | ✓ | ✓ 1382 passed | gated ✓ (all PASS) |
 | 2 | M2-core init/new/sync (CRA-245/246/247) | `craw-code/m2` → merged | ✓ | ✓ 1382 passed | gated ✓ (all PASS) |
