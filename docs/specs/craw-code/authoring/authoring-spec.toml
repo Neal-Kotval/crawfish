@@ -1,0 +1,126 @@
+# Machine-checkable authoring spec (CRA-256).
+#
+# The structured form of authoring/README.md + its per-file sections. Loaded by
+# packages/crawfish/tests/test_authoring_spec.py and the CRA-265 validation eval so the
+# rules teaching and checking share one source. Each [[file]] entry names one Definition
+# file kind, the skill it feeds, the prose section it derives from, and the security-spine
+# requirements that must hold for an authored file of that kind.
+#
+# `requires_spine` lists rule tags the section MUST state inline (asserted against the prose
+# section body). `golden_asset` is the DefinitionAssets surface the golden example must
+# populate to exercise this file kind.
+
+version = 1
+golden = "demo/craw-code-golden"
+
+[[file]]
+kind = "definition.py"
+section = "definition-py.md"
+skill = "crawfish-authoring-definition-py"
+cra = 258
+requires_spine = ["fluid-is-data", "consequential-static-only"]
+# the consequential output is declared Flow.STATIC so the assembly gate discharges it
+golden_must = ["one_static_param", "one_fluid_param", "consequential_output_static"]
+
+[[file]]
+kind = "instructions.md"
+section = "instructions-agents.md"
+skill = "crawfish-authoring-instructions-agents"
+cra = 259
+requires_spine = ["fluid-is-data"]
+golden_must = ["lead_with_delegates", "real_delegate_roles"]
+
+[[file]]
+kind = "agents/*.md"
+section = "instructions-agents.md"
+skill = "crawfish-authoring-instructions-agents"
+cra = 259
+requires_spine = ["fluid-is-data"]
+golden_must = ["subagent_per_role"]
+
+[[file]]
+kind = "tools/*.py"
+section = "tools-py.md"
+skill = "crawfish-authoring-tools-py"
+cra = 260
+requires_spine = ["taint-propagates", "jailed-compile"]
+golden_must = ["callable_name_equals_stem"]
+
+[[file]]
+kind = "mcp/*.py"
+section = "mcp-py.md"
+skill = "crawfish-authoring-mcp-py"
+cra = 261
+requires_spine = ["secrets-by-reference", "consent-regate"]
+golden_must = ["mcp_auth_by_reference", "mcp_tools_allowlist"]
+
+[[file]]
+kind = "policies/*.py"
+section = "policies-skills.md"
+skill = "crawfish-authoring-policies-skills"
+cra = 262
+requires_spine = ["consequential-static-only"]
+golden_must = ["module_level_policy", "agent_binds_policy"]
+
+[[file]]
+kind = "skills/*.md"
+section = "policies-skills.md"
+skill = "crawfish-authoring-policies-skills"
+cra = 262
+requires_spine = []
+golden_must = ["skill_discovered"]
+
+[[file]]
+kind = "knowledge"
+section = "knowledge.md"
+skill = "crawfish-authoring-knowledge"
+cra = 263
+requires_spine = ["knowledge-is-tainted", "pinned-by-hash"]
+golden_must = ["wiki_with_page", "with_context_readonly"]
+
+[[file]]
+kind = "fixtures"
+section = "fixtures-evals.md"
+skill = "crawfish-authoring-fixtures-evals"
+cra = 264
+requires_spine = ["determinism-mock-default"]
+golden_must = ["fixture_inputs_shape"]
+
+# The spine rule tags, with the canonical phrase each section must contain inline. The test
+# asserts the phrase appears in the section body (drift guard) and the eval asserts the
+# golden honors the rule structurally.
+[spine.fluid-is-data]
+phrase = "fluid"
+rule = "A Flow.FLUID value reaches the model as data, never as instructions."
+
+[spine.consequential-static-only]
+phrase = "static-only"
+rule = "Consequential sink targets, idempotency keys, and consequential outputs are static-only."
+
+[spine.secrets-by-reference]
+phrase = "reference"
+rule = "A secret is an env-var name (auth=\"GITHUB_TOKEN\"), never an inline value."
+
+[spine.taint-propagates]
+phrase = "taint"
+rule = "A value derived from a fluid input stays tainted and never becomes a static sink target."
+
+[spine.jailed-compile]
+phrase = "jailed"
+rule = "Agent-authored import-bearing code compiles through the jail (CRA-267), fail-closed."
+
+[spine.consent-regate]
+phrase = "consent"
+rule = "A new MCP/dependency re-enters the consent gate (craw code grant, CRA-277)."
+
+[spine.knowledge-is-tainted]
+phrase = "tainted"
+rule = "Summoned knowledge is tainted data, never an instruction surface."
+
+[spine.pinned-by-hash]
+phrase = "pinned"
+rule = "Knowledge is summoned by pinned content hash; the body never enters the export checksum."
+
+[spine.determinism-mock-default]
+phrase = "mock"
+rule = "Fixtures run mock-by-default; randomness is carried in --seed."
