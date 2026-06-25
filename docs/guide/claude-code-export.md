@@ -53,6 +53,18 @@ prompt) into a Crawfish Definition directory as `instructions.md`, or as an entr
 tools author agents the same way, front-matter over a Markdown prompt, so a team moves
 between them without a rewrite.
 
+## Adopting an existing project (`craw code adopt`)
+
+`craw code adopt` brings a pre-`craw code` project into the agent loop in one step: it
+installs the `crawfish-*` plugin and the `.crawfish/` ledger (reconcile-only, never
+clobbering authored files), **runs this export for each Definition**, then validates the
+tree with `craw code map` + `craw code sync`. Adopt *subsumes* `craw export --claude-code`
+as its export step, with **disjoint `.claude/` namespaces** — the plugin lives under
+`.claude/plugins/crawfish/`, the per-Definition subagents under `.claude/agents/`. Both are
+excluded from the Definition content sha, so adoption never shifts a replay key. See
+[ADR 0012](../architecture/decisions/0012-export-relationship-adopt-subsumes-export.md) for
+the rationale and the rejected alternatives.
+
 ## Next steps
 
 - [Run a pipeline in the background](operations.md) covers the rest of the operate layer.
