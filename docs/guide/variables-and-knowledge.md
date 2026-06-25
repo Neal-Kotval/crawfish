@@ -1,141 +1,104 @@
-# Agents as variables — compose, version, and summon knowledge
+# Compose, version, and summon knowledge
 
-The tunable-ML half made an agent a **model with tunable weights**. This page makes it a
-**variable**: a content-addressed value you compose from parts, give a *name*, and move
-through a version log — *git for agents*. Alongside it, knowledge becomes something you
-**summon** by reference into a loop, so it reaches the model as **data**, never as
-instructions.
+You can build an agent from parts, give it a name, and move that name through a version log, the way you use git for code. You can also attach knowledge to an agent and read it at run time as data. This page shows three tasks: compose a variant, name and version it, and summon a knowledge unit.
 
-Three moves, all real public API importable from the top-level `crawfish` package, all
-deterministic under `MockRuntime`:
+Crawfish is a programming language for agents, and an agent is a value in that language. A *Definition* is a compiled agent: a typed, frozen, content-addressed object. Content-addressed means its identity is a hash of its contents, so two agents with the same contents have the same hash, and any change produces a new hash.
 
-- **Compose** a variant with copy-on-write operators — `with_skill`, `with_context`,
-  `with_agent`. Each returns a **new frozen** Definition; the receiver is never mutated.
-- **Version** it by name — `DefinitionStore.save` / `recall`, then `modify` / `reset`
-  over the append-only version log. A name is a *mutable pointer* into an *immutable,
-  content-addressed object store* — git's exact ergonomic.
-- **Summon** knowledge — a `Wiki` is a versioned, content-hashed knowledge unit you pin by
-  sha and `consult()` as tainted context.
+Everything here is public API from the top-level `crawfish` package, and every example is deterministic under `MockRuntime`.
 
-On this page:
+You will learn how to:
 
-- [Compose a variant — `with_*`](#compose-a-variant-with_)
-- [Name and version it — `save` / `recall`](#name-and-version-it-save-recall)
-- [`modify` / `reset` — the remaining git verbs](#modify-reset-the-remaining-git-verbs)
-- [Summon knowledge — the `Wiki`](#summon-knowledge-the-wiki)
-- [What stays static (the security spine)](#what-stays-static-the-security-spine)
+- Build a variant with the `with_*` operators.
+- Name and version a Definition with `DefinitionStore`.
+- Move a name pointer with `modify` and `reset`.
+- Attach and read knowledge with a `Wiki`.
 
-## Compose a variant — `with_*`
+## Build a variant with `with_*`
 
-A compiled `Definition` is `Freezable`. The `with_*` operators are **copy-on-write**: each
-takes a base, makes a deep unfrozen copy, applies one structural edit, and re-seals it with
-a **fresh content hash**. The base is never touched, and the returned value is already
-frozen (eval-mode).
+The `with_*` operators take a Definition, apply one edit, and return a new frozen Definition with a fresh content hash. The original is never changed. This is copy-on-write: each operator makes a copy, edits the copy, and seals it.
 
 ```python
 import crawfish as cw
 
-base = cw.eval(cw.Definition.from_package("demo/triage-bot"))   # eval() == freeze
+base = cw.eval(cw.Definition.from_package("demo/triage-bot"))   # eval() freezes the agent
 
-# Acquire a skill by version pin (reference-not-embed: folded into dependencies).
+# Add a skill, pinned to a version.
 variant = cw.with_skill(base, cw.SkillRef(id="label-taxonomy", version="1.0"))
 
-# Add a team agent (replace=True swaps a same-role agent instead of adding).
+# Add a team agent (replace=True swaps a same-role agent instead of adding one).
 variant = cw.with_agent(variant, reviewer_agent)
 
-assert variant.frozen                       # the result is sealed
-assert variant.content_sha() != base.content_sha()   # one knob moved → a new sha
-assert base.content_sha() == base.content_sha()       # the base is unchanged
+assert variant.frozen                                  # the result is sealed
+assert variant.content_sha() != base.content_sha()     # one change, a new hash
+assert base.content_sha() == base.content_sha()        # the base is unchanged
 ```
 
-Two structurally identical compositions collapse to **one** sha (idempotent); any knob diff
-diverges it. Because every op routes through the single content-hash path, un-versioned
-mutation is impossible — `with_*` on a frozen receiver copies first (never raises
-`FrozenError`), but mutating the **returned** frozen object does.
+Two variants built from the same edits share one hash, so building the same agent twice is the same agent. Any difference produces a different hash. Every operator runs through the same content-hash path, so you cannot edit a Definition without producing a new version. Calling `with_*` on a frozen Definition copies first, so it never raises `FrozenError`, but editing the returned frozen object in place does.
 
-The available operators:
+The operators:
 
 | Operator | Adds |
 | --- | --- |
-| `with_skill(base, SkillRef)` | a skill by version pin |
-| `with_agent(base, agent, *, replace=False)` | a team agent (or swaps a same-role one) |
-| `with_context(base, summonable, *, mode=SummonMode.READONLY)` | a summoned knowledge unit, pinned by version |
-| `with_inputs(base, *params)` | widens the typed input surface (never widens fluidity) |
+| `with_skill(base, SkillRef)` | a skill, pinned to a version |
+| `with_agent(base, agent, *, replace=False)` | a team agent, or swaps a same-role one |
+| `with_context(base, summonable, *, mode=SummonMode.READONLY)` | a knowledge unit, pinned to a version |
+| `with_inputs(base, *params)` | new typed inputs (never widens fluidity) |
 | `with_policy(base, policy)` | a static consequential policy |
 
-`with_context` takes anything `Summonable` (structural typing — see
-[Concepts → the static-vs-fluid boundary](concepts.md#the-static-vs-fluid-prompt-injection-boundary));
-a `Wiki` is the built-in one, covered [below](#summon-knowledge-the-wiki).
+`with_context` accepts anything that is `Summonable`. A `Wiki` is the built-in option, covered [below](#summon-knowledge-with-a-wiki). For the boundary that decides what counts as trusted, see [Static versus fluid](concepts.md#static-versus-fluid).
 
-## Name and version it — `save` / `recall`
+## Name and version it with `DefinitionStore`
 
-Composition gives content **hashes** but no **names**. `DefinitionStore` is the name
-registry — a `Store`-backed, append-only, org-scoped `name → hash` pointer over an
-immutable object store.
+Composition gives you content hashes but no names. `DefinitionStore` maps a name to a hash. It is backed by a `Store`, append-only, and scoped to an org.
 
 ```python
 from crawfish.store import SqliteStore
 
 ds = cw.DefinitionStore(SqliteStore("agents.db"), org_id="local")
 
-sha = ds.save("triage", base)               # requires a frozen (eval-mode) Definition
-assert ds.recall("triage").content_sha() == sha   # recall the latest
+sha = ds.save("triage", base)                       # requires a frozen Definition
+assert ds.recall("triage").content_sha() == sha     # recall the latest
 
-ds.save("triage", variant, parent=sha)      # move the name pointer to the variant
-assert len(ds.log("triage")) == 2           # the append-only lineage, oldest→newest
+ds.save("triage", variant, parent=sha)              # move the name to the variant
+assert len(ds.log("triage")) == 2                   # the version log, oldest to newest
 assert ds.head("triage") == variant.content_sha()
 ```
 
-`save` does exactly one mutation — it moves the name pointer — then appends a
-`DefinitionVersion` lineage event carrying the `parent` edge. The body is stored
-**content-addressed**, so two byte-identical saves dedup the object but still record two
-pointer events. `recall` is **pure**: it reads a stored object, re-seals it frozen, and
-**never mints a new sha**. A historical version stays reachable by pin:
+`save` moves the name pointer and records one version event carrying the `parent` edge. The body is stored by content hash, so two byte-identical saves store one object but record two events. `recall` reads a stored object and re-seals it frozen. It never produces a new hash. A historical version stays reachable by its hash:
 
 ```python
 old = ds.recall("triage", sha=sha)          # or recall("triage@<sha>"), or a bare sha
-assert old.content_sha() == sha             # reachable after the pointer moved on
+assert old.content_sha() == sha             # still reachable after the name moved on
 ```
 
-Saving an *unfrozen* (train-mode) Definition raises `UnfrozenDefinitionError` — a training
-artifact has no stable identity to key the registry. An unknown name (or a name in another
-org — tenancy is enforced) raises `UnknownNameError`.
+Saving an unfrozen (train-mode) Definition raises `UnfrozenDefinitionError`, because a training artifact has no stable identity to key the registry. An unknown name, or a name in another org, raises `UnknownNameError`. Tenancy is enforced: a name in one org is never visible to another.
 
-## `modify` / `reset` — the remaining git verbs
+## Move the name pointer with `modify` and `reset`
 
-Two free functions compose the store verbs into the git checkout/commit pair.
+`modify` and `reset` are the commit and checkout verbs over the version log.
 
 ```python
-# modify: recall → fn → save(parent=old_sha). fn composes via the with_* operators,
-# each returning a new frozen Definition, so modify just seals the lineage edge.
+# modify: recall, apply a function, save with parent set to the old hash.
+# The function composes with the with_* operators, so each step returns a new
+# frozen Definition and modify records the lineage edge.
 new_sha = cw.modify(ds, "triage",
                     lambda d: cw.with_skill(d, cw.SkillRef(id="severity", version="0.1")))
 assert len(ds.log("triage")) == 3           # the pointer advanced, parent edge recorded
 
-# reset: a pure pointer move (git checkout). Mints no object, no lineage event.
+# reset: move the name back to an earlier hash. Creates no object, no event.
 cw.reset(ds, "triage", sha)                 # rewind to the original
 assert ds.recall("triage").content_sha() == sha
 ```
 
-`modify` is **train-mode only** in spirit: it routes through the same `with_*` content-hash
-law as composition (no in-place edit, no model call). An `fn` that edits a recalled frozen
-Definition in place raises `FrozenError`; one that returns an unfrozen draft raises
-`UnfrozenDefinitionError`.
+`modify` runs through the same content-hash rule as `with_*`: no in-place edit, no model call. A function that edits a recalled frozen Definition in place raises `FrozenError`. One that returns an unfrozen draft raises `UnfrozenDefinitionError`.
 
-`reset` is a **pure pointer move** — it mints nothing, is reversible, and refuses a `to`
-that isn't in `log(name)` (`UnreachableShaError`). It never prunes orphans, so an earlier
-sha stays recallable and `craw share` reproducibility holds. (Three-way `merge` is deferred
-to the typed-diff work.)
+`reset` moves a name to an earlier hash. It creates nothing, is reversible, and refuses a target that is not in `log(name)` (`UnreachableShaError`). It never prunes old versions, so an earlier hash stays recallable and `craw share` stays reproducible. Three-way `merge` is covered in [Diff, prove, and replay](diff-prove-replay.md).
 
-This is the whole git model: a **mutable name pointer** (`save`/`reset` move it) over an
-**append-only, immutable, content-addressed object store** (every frozen Definition is its
-own sha).
+Together these give you the git model for agents: a name pointer you move with `save` and `reset`, over an append-only store of immutable, content-addressed Definitions.
 
-## Summon knowledge — the `Wiki`
+## Summon knowledge with a `Wiki`
 
-A `Wiki` is a versioned, content-hashed, **summonable** knowledge unit. Its `content_sha`
-is a **Merkle over page leaves**, so a re-hash only re-derives the page you changed, and two
-structurally identical Wikis collapse to one sha.
+A *Wiki* is a versioned, content-hashed knowledge unit you can attach to an agent. Its content hash is a Merkle hash over its pages, so re-hashing only re-derives the page you changed, and two identical Wikis share one hash.
 
 ```python
 arch = (
@@ -147,61 +110,44 @@ arch = (
 )
 ```
 
-`with_page` is copy-on-write — a **new frozen** Wiki with a distinct sha; the receiver is
-unchanged, and replacing a title overwrites only that page. Pages are **tainted by default**
-and stay tainted across a CoW edit. Every page carries a `TrustTier`
-(`TRUSTED` / `COMMUNITY` / `UNTRUSTED`, default untrusted) so a low-trust corpus is never
-silently trusted like `repo/src`; the tier only ever **raises** suspicion — it never lowers
-taint.
+`with_page` is copy-on-write: it returns a new frozen Wiki with a distinct hash, the receiver is unchanged, and reusing a title overwrites only that page. Pages are *tainted* by default, meaning they are treated as untrusted data, and they stay tainted across an edit. Each page carries a `TrustTier` (`TRUSTED`, `COMMUNITY`, or `UNTRUSTED`, default untrusted). The tier can only raise suspicion. It never lowers taint, so a low-trust corpus is never silently trusted like your own source.
 
-Summon it into a Definition by **pinned snapshot**:
+Attach a Wiki to a Definition by pinned snapshot:
 
 ```python
 agent = cw.with_context(base, arch, mode=cw.SummonMode.READONLY)
 ```
 
-`readonly()` returns a `SummonRef` carrying the unit id + **pinned content sha**, never the
-body — so `export()["checksum"]` tracks the pin and the page values never appear in the
-export payload. `mutable()` is the train-mode edit handle and is **rejected on a frozen
-(eval-mode) Wiki**, mirroring `train()`/`eval()`: knowledge edits are copy-on-write only.
+`readonly()` returns a `SummonRef` that carries the unit id and the pinned content hash, never the body. So `export()["checksum"]` tracks the pin, and the page values never appear in the export. `mutable()` is the train-mode edit handle and is rejected on a frozen Wiki, mirroring `train()` and `eval()`: knowledge edits are copy-on-write only.
 
-When a step needs the knowledge, `consult()` materialises it as `Context` whose entries are
-**tainted (fluid)** — so summoned knowledge flows through the fluid-data block and can never
-reach an instruction slot or a static-only Sink target. It is a pure `(wiki) -> Context`
-with no model call:
+When a step needs the knowledge, `consult()` turns the Wiki into a `Context` whose entries are tainted (fluid). Summoned knowledge reaches the model as data, never as instructions, so it can never reach an instruction slot or a static-only sink target. `consult()` is pure: it takes a Wiki and returns a `Context`, with no model call.
 
 ```python
 ctx = arch.consult()
 assert all(entry.tainted for entry in ctx.entries)   # data, never instructions
 ```
 
-Persistence rides the `Store` seam (`persist()` / `load()`), tenancy-scoped by `org_id`; a
-`ScrubbingStore` redacts secrets on the write, so no secret body lands unredacted, and a
-Wiki in one org never loads under another.
+Persistence uses the `Store` seam (`persist()` and `load()`), scoped by `org_id`. A `ScrubbingStore` redacts secrets on write, so no secret body is stored unredacted, and a Wiki saved in one org never loads under another.
 
-!!! note "`Rag` is the deferred half"
+!!! note "Retrieval (`Rag`) ships as a seam only"
 
-    The larger retrieval half — `Rag`, retrieval over a content-hashed corpus snapshot —
-    ships as a **seam only** (`RagSeam` protocol + `RagDeferred` marker). The seam locks in
-    two properties now so the deferred impl can't regress them: embeddings route through the
-    secret-scrubbing seam, and retrieved hits are tainted by default and carry the source
-    page's trust tier. Calling it today raises `RagDeferred`.
+    `Rag`, retrieval over a content-hashed corpus snapshot, ships as a seam: the `RagSeam`
+    protocol plus a `RagDeferred` marker. The seam fixes two properties so a later
+    implementation cannot regress them: embeddings route through the secret-scrubbing seam,
+    and retrieved hits are tainted by default and carry the source page's trust tier. Calling
+    it today raises `RagDeferred`.
 
-## What stays static (the security spine)
+## What stays static
 
-Composing, versioning, and summoning never widen the
-[security spine](../architecture/SECURITY.md):
+Composing, versioning, and summoning never widen the security boundary described in [Security](../architecture/SECURITY.md):
 
-- **Consequential knobs stay static.** Model, policies, and Sink targets are author config —
-  `with_*` never derives them from a fluid value.
-- **Summoned knowledge is data.** A summon enters identity by its **pinned sha** (the body is
-  never carried in the ref or the checksum), and `consult()` entries are **tainted**, so they
-  can never reach an instruction slot or a static-only Sink.
-- **Acting is eval-only.** `save` requires a frozen Definition; `mutable()` is rejected on a
-  frozen Wiki. Only sealed, content-addressed, eval-mode values touch the world — the same
-  boundary as the prompt-injection one.
+- Consequential settings stay static. The model, policies, and sink targets are author config. `with_*` never derives them from a fluid value.
+- Summoned knowledge is data. A summon enters an agent's identity through its pinned hash, the body is never carried in the reference or the checksum, and `consult()` entries are tainted, so they can never reach an instruction slot or a static-only sink.
+- Acting requires eval mode. `save` requires a frozen Definition, and `mutable()` is rejected on a frozen Wiki. Only sealed, content-addressed, eval-mode values touch the outside world.
 
-See the [Concepts → agents as variables](concepts.md#the-agents-as-variables-half-compose-version-summon)
-section for the mental model, and the
-[Definition reference](../reference/definition.md) and
-[persistence reference](../reference/persistence.md) for exact signatures.
+## Next steps
+
+- [Diff, prove, and replay](diff-prove-replay.md) covers `diff`, `merge`, and counterfactual replay.
+- [Definition reference](../reference/definition.md) has the exact signatures for the `with_*` operators.
+- [Persistence reference](../reference/persistence.md) covers `DefinitionStore`, `Wiki`, and the `Store` seam.
+- [Static versus fluid](concepts.md#static-versus-fluid) explains the trust boundary in full.

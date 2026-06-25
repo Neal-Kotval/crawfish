@@ -1,7 +1,7 @@
 # Runtimes
 
-The swappable backend that actually runs an agent's turn. Everything above this layer says
-*what* an agent should do; a runtime decides *how* it executes — via the local `claude -p`
+The swappable backend that runs an agent's turn. The layers above a runtime say
+*what* an agent should do; a runtime decides *how* it runs: through the local `claude -p`
 CLI, a hosted API, a recorded cassette, or a deterministic mock. These live in
 `crawfish.runtime` and are the one place the model SDK or CLI is touched.
 
@@ -10,120 +10,121 @@ CLI, a hosted API, a recorded cassette, or a deterministic mock. These live in
 `RoutingRuntime` · `ProviderRuntime` · `ProviderFailover` · `expand_candidates` ·
 `get_runtime`
 
-A **runtime** executes one agent's turn. You hand it a request — which agent to run and the
-data to feed it — and it runs the agent loop to completion and hands back a typed result.
-`AgentRuntime` is the abstract contract; concrete runtimes are interchangeable
+A *runtime* runs one agent's turn. You hand it a request (which agent to run and the
+data to feed it), it runs the agent loop to completion, and it hands back a typed result.
+`AgentRuntime` is the abstract contract. Concrete runtimes are interchangeable
 implementations of it.
 
 On this page:
 
-- [The seam, and the two data shapes that cross it](#the-seam)
+- [The runtime boundary and the two data shapes that cross it](#the-seam)
 - [The concrete runtimes](#the-concrete-runtimes)
 - [The contract: `AgentRuntime`](#the-contract)
-- [Determinism — how tests and docs avoid live calls](#determinism)
+- [How tests and docs avoid live calls](#determinism)
 - [Failover and routing](#failover-and-routing)
 - [Profile selection with `get_runtime`](#profile-selection)
 
-## The seam, and the two data shapes that cross it {#the-seam}
+## The runtime boundary and the two data shapes that cross it {#the-seam}
 
-This is the key seam in Crawfish. The product model — the nodes, the pipeline, the team —
-never imports a specific model backend. It only ever talks to the `AgentRuntime` interface.
-Swapping the local CLI for a hosted API, or for a fake used in tests, just means constructing
-a different runtime; no node code changes. That is one of the **three swappable seams** the
-architecture is built on ([ADR 0001](../architecture/decisions/0001-three-swappable-seams.md)).
+The product model (the nodes, the pipeline, the team)
+never imports a specific model backend. It only talks to the `AgentRuntime` interface.
+Swapping the local CLI for a hosted API, or for a fake used in tests, means constructing
+a different runtime, with no node code changes. This is one of the three swappable seams the
+architecture is built on. See the [architecture overview](../architecture/ARCHITECTURE.md).
 
 Two small data shapes cross the interface:
 
-- A **`RunRequest`** is the input: a compiled **Definition** (an agent-team package — see
-  [Definition](definition.md)) plus the `inputs` bound for this run, and optional knobs
+- A `RunRequest` is the input: a compiled [Definition](definition.md) (an agent-team
+  package) plus the `inputs` bound for this run, and optional knobs
   for which agent `role` to run, which `model` to pin, and a `session_id` to resume.
-- A **`RunResult`** is the output: the agent's final `text`, the `cost_usd` it incurred,
+- A `RunResult` is the output: the agent's final `text`, the `cost_usd` it incurred,
   the `model` that answered, the resumable `session_id`, and the list of `events` that
   occurred along the way.
 
-A **`RuntimeEvent`** is one step inside the turn — a chunk of model text, a tool call, a
-tool result, the final result, or an error. A runtime can stream these as they happen;
-by default it just replays them after the turn finishes.
+A `RuntimeEvent` is one step inside the turn: a chunk of model text, a tool call, a
+tool result, the final result, or an error. A runtime can stream these as they happen.
+By default it replays them after the turn finishes.
 
 ## The concrete runtimes
 
 The runtimes you pick from:
 
-- **`MockRuntime`** — a pure function of the request. No model call, zero cost, fully
+- `MockRuntime`: a pure function of the request. No model call, zero cost, fully
   deterministic. This is what `craw dev` and every doc example here use.
-- **`CommandRuntime`** — the zero-key reference backend. Shells out to `claude -p`, so
+- `CommandRuntime`: the zero-key reference backend. It shells out to `claude -p`, so
   `pip install crawfish` plus the Claude CLI runs a real pipeline with nothing hosted.
-- **`ClientRuntime`** / **`ManagedRuntime`** — stubs for the hosted-API and managed-cloud
+- `ClientRuntime` and `ManagedRuntime`: stubs for the hosted-API and managed-cloud
   backends that land in later phases.
-- **`RecordReplayRuntime`** — wraps any runtime and replays a saved transcript (a
+- `RecordReplayRuntime`: wraps any runtime and replays a saved transcript (a
   *cassette*) instead of calling the model again.
-- **`ProviderRuntime`** — runs across a list of model providers, failing over to the next
+- `ProviderRuntime`: runs across a list of model providers, failing over to the next
   when one is denied by policy or errors.
-- **`RoutingRuntime`** — picks which model a step should run *before* delegating to an
+- `RoutingRuntime`: picks which model a step should run *before* delegating to an
   inner runtime.
 
-`get_runtime` is the selector: given a resolved profile (`dev`, `prod`, …) it constructs
-the runtime that profile names. Switching profile is a runtime swap, not a code change.
+`get_runtime` is the selector: given a resolved profile (`dev`, `prod`, and so on) it
+constructs the runtime that profile names. Switching profile is a runtime swap, not a
+code change.
 
 ## The contract: `AgentRuntime` {#the-contract}
 
 ### One required method
 
-`AgentRuntime` is an abstract base class — it carries behaviour, so it is an ABC, not a
+`AgentRuntime` is an abstract base class. It carries behaviour, so it is an ABC, not a
 Pydantic model (the project-wide convention; see [core types](core-types.md)). The only
-method a subclass *must* implement is `run`: execute one agent turn and return a
-`RunResult`. `stream` has a default — run to completion, then yield the result's events
-one by one — so a runtime that has no real streaming still satisfies the interface. A
+method a subclass must implement is `run`: execute one agent turn and return a
+`RunResult`. `stream` has a default (run to completion, then yield the result's events
+one by one), so a runtime that has no real streaming still satisfies the interface. A
 class-level `name` string identifies the runtime in telemetry.
 
 The base class also provides `_emit_telemetry`, a static helper every concrete runtime
 calls after a run. It writes a compact summary (model, cost, event count, session id,
-runtime name) to the Store's event ledger through the typed emission layer — so
-observability is written once, the same way, regardless of which backend answered.
+runtime name) to the Store's event ledger through the typed emission layer, so
+observability is written once, the same way, whichever backend answered.
 
 ### Why the model SDK lives only here
 
 !!! warning "Nodes never import a backend"
 
     `crawfish.runtime` is the only place the model CLI or SDK is touched. Nodes import the
-    `AgentRuntime` protocol, never a concrete backend. That seam is what keeps dev→prod a
-    runtime swap rather than a rewrite ([ADR 0001](../architecture/decisions/0001-three-swappable-seams.md)).
+    `AgentRuntime` protocol, never a concrete backend. That boundary is what keeps the move
+    from dev to prod a runtime swap rather than a rewrite.
 
-That is what makes dev→prod a runtime swap: `CommandRuntime` (`claude -p`, zero key) →
-`ClientRuntime` (API key) → `ManagedRuntime` (managed cloud) are interchangeable behind the
-one interface.
+That is what makes the move from dev to prod a runtime swap. `CommandRuntime` (`claude -p`,
+zero key), `ClientRuntime` (API key), and `ManagedRuntime` (managed cloud) are
+interchangeable behind the one interface.
 
-### The model type stays universal, the runtime ships Claude-first
+### The model type stays universal, the runtime ships Claude first
 
-A `RunRequest.model` (and an agent's pinned model) is a plain string and may be *any*
-model id — the type system makes no vendor assumption. But the default backend resolves
+A `RunRequest.model` (and an agent's pinned model) is a plain string and may be any
+model id: the type system makes no vendor assumption. The default backend resolves
 unpinned agents to a Claude model (`CommandRuntime.DEFAULT_MODEL` is `"claude-opus-4-8"`),
-and `claude -p` is the reference loop. This is the **claude-first, model-universal**
-stance: Claude is the default and best-supported path, but pinning another model is a
-config change, not a code change ([ADR 0005](../architecture/decisions/0005-claude-first-universal-model-type.md)). The provider
-layer hardcodes *no* vendor default — `ClientRuntime`'s placeholder is the literal
+and `claude -p` is the reference loop. This is the Claude-first, model-universal
+stance: Claude is the default and best-supported path, and pinning another model is a
+config change, not a code change. The provider
+layer hardcodes no vendor default. `ClientRuntime`'s placeholder is the literal
 `"unset"` until a `ModelsConfig` or agent model supplies one.
 
-## Determinism — how tests and docs avoid live calls {#determinism}
+## How tests and docs avoid live calls {#determinism}
 
-Three runtimes give you live-call-free runs:
+Three runtimes give you runs with no live call:
 
-- **`MockRuntime`** is a pure function of the request. Its default responder returns
-  `[{role}] processed: {fluid inputs as sorted JSON}` — note it includes only the
+- `MockRuntime` is a pure function of the request. Its default responder returns
+  `[{role}] processed: {fluid inputs as sorted JSON}`. It includes only the
   **fluid** inputs (untrusted per-item data), never the **static** ones (trusted
-  per-batch config), mirroring the prompt-injection boundary. You can pass your own
+  per-batch config), which mirrors the prompt-injection boundary. You can pass your own
   `responder` to return any canned string. Cost is always `0.0`.
-- **`CommandRuntime`** takes an injected `transport` — the callable that would spawn the
+- `CommandRuntime` takes an injected `transport`, the callable that would spawn the
   subprocess. Tests inject one that returns canned `stream-json` text, so the parser runs
   with no actual `claude -p` process.
-- **`RecordReplayRuntime`** replays a saved `RunResult` from a cassette file keyed by a
-  hash of the request. A replay charges **zero cost** and makes no model call; a cache
+- `RecordReplayRuntime` replays a saved `RunResult` from a cassette file keyed by a
+  hash of the request. A replay charges zero cost and makes no model call. A cache
   miss either records (if `record=True`) or raises `CassetteMiss`.
 
 !!! note "Good to know"
 
     `MockRuntime` is the default for `craw dev` and every doc example here. Its reply is a
-    pure function of the request, so the same call yields the same bytes every run — which
+    pure function of the request, so the same call yields the same bytes every run. That
     is what makes the `▶ Output` blocks reproducible.
 
 ## Failover and routing {#failover-and-routing}
@@ -133,13 +134,13 @@ Three runtimes give you live-call-free runs:
 `ProviderRuntime` wraps one or more `Provider` backends and fails over across a list of
 candidate models. For a request it builds an ordered candidate list with
 `expand_candidates` (alias-expanding friendly names to concrete ids, de-duplicated). Then
-for each candidate it walks the providers in registration order and asks the **first** one
-that is (a) *permitted* by the active `ProviderPolicy` and (b) `supports` that model to
-run it. The first success returns; cost and telemetry are charged once for whoever
+for each candidate it walks the providers in registration order and asks the first one
+that is (a) permitted by the active `ProviderPolicy` and (b) `supports` that model to
+run it. The first success returns. Cost and telemetry are charged once for whoever
 answered.
 
-Two failure modes differ deliberately. A provider raising `NotImplementedError` — an
-unwired stub, e.g. a `ClientProvider` with no injected caller — is a **configuration**
+Two failure modes differ deliberately. A provider raising `NotImplementedError` (an
+unwired stub, for example a `ClientProvider` with no injected caller) is a configuration
 error and propagates immediately rather than failing over. Any other exception is treated
 as a transient backend failure and the loop tries the next provider. If every candidate is
 exhausted, `ProviderFailover` is raised, carrying the `(model, reason)` pairs so you can
@@ -147,9 +148,9 @@ see why each was skipped or failed.
 
 ### Routing happens once, upstream
 
-`RoutingRuntime` applies a `RoutingPolicy` to decide which model a step runs, **pins that
-model on the request**, then hands off to an inner runtime. It does not re-resolve the
-model itself — pinning an already-resolved concrete id means the inner runtime's own model
+`RoutingRuntime` applies a `RoutingPolicy` to decide which model a step runs, pins that
+model on the request, then hands off to an inner runtime. It does not re-resolve the
+model itself: pinning an already-resolved concrete id means the inner runtime's own model
 resolution is a no-op pass-through. An explicit per-run `request.model` override wins over
 routing untouched. The decision is made once, through the same shared resolver the cost
 estimator uses, so a run can't drift from its preview.
@@ -164,9 +165,9 @@ config is forwarded so unpinned agents resolve to `config.default` instead of th
 
 ## Example
 
-A deterministic run with `MockRuntime` — no model call, no network, no cost. Note the
-result text includes only the **fluid** input (`ticket`), not the **static** one (`repo`):
-the mock responder mirrors the prompt-injection boundary.
+A deterministic run with `MockRuntime`: no model call, no network, no cost. The
+result text includes only the **fluid** input (`ticket`), not the **static** one (`repo`).
+The mock responder mirrors the prompt-injection boundary.
 
 ```python
 import asyncio
@@ -215,7 +216,7 @@ print(result.session_id == f"mock-{ctx.run_id}")
 
 ### `AgentRuntime`
 
-`class AgentRuntime(ABC)` — the swappable agent-loop backend. Class attribute
+`class AgentRuntime(ABC)`: the swappable agent-loop backend. Class attribute
 `name: str = "abstract"`.
 
 ```python
@@ -244,7 +245,7 @@ Store's event ledger via the typed emission layer.
 
 ### `RunRequest`
 
-`class RunRequest(BaseModel)` — one agent's turn: a compiled Definition plus the inputs
+`class RunRequest(BaseModel)`: one agent's turn, a compiled Definition plus the inputs
 bound for this run. (`model_config` allows arbitrary types so it can hold a `Definition`.)
 
 | Field | Type | Default | Notes |
@@ -257,7 +258,7 @@ bound for this run. (`model_config` allows arbitrary types so it can hold a `Def
 
 ### `RunResult`
 
-`class RunResult(BaseModel)` — the typed outcome of a turn.
+`class RunResult(BaseModel)`: the typed outcome of a turn.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -269,7 +270,7 @@ bound for this run. (`model_config` allows arbitrary types so it can hold a `Def
 
 ### `RuntimeEvent`
 
-`class RuntimeEvent(BaseModel)` — one step inside a turn.
+`class RuntimeEvent(BaseModel)`: one step inside a turn.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -294,7 +295,7 @@ bound for this run. (`model_config` allows arbitrary types so it can hold a `Def
 
 ### `CommandRuntime`
 
-`class CommandRuntime(AgentRuntime)` — `name = "command"`. The zero-key reference backend
+`class CommandRuntime(AgentRuntime)`: `name = "command"`. The zero-key reference backend
 via `claude -p`.
 
 ```python
@@ -317,7 +318,7 @@ budget, and emits telemetry.
 
 ### `MockRuntime`
 
-`class MockRuntime(AgentRuntime)` — `name = "mock"`. A deterministic, zero-cost backend; a
+`class MockRuntime(AgentRuntime)`: `name = "mock"`. A deterministic, zero-cost backend, a
 pure function of the request.
 
 ```python
@@ -331,8 +332,8 @@ and a single `RESULT` event.
 
 ### `ClientRuntime`
 
-`class ClientRuntime(AgentRuntime)` — `name = "client"`. API-key backend behind the
-provider layer; delegates to a `ProviderRuntime`.
+`class ClientRuntime(AgentRuntime)`: `name = "client"`. API-key backend behind the
+provider layer. Delegates to a `ProviderRuntime`.
 
 ```python
 def __init__(
@@ -348,22 +349,22 @@ def __init__(
 ```
 
 `caller` is the injected egress dependency. While it is `None` (the current default), a run
-raises `NotImplementedError` rather than reaching any vendor — no live egress and no
+raises `NotImplementedError` rather than reaching any vendor: no live egress and no
 credential read until the sidecar broker lands.
 
 ### `ManagedRuntime`
 
-`class ManagedRuntime(AgentRuntime)` — `name = "managed"`. The managed-cloud (CMA) stub.
+`class ManagedRuntime(AgentRuntime)`: `name = "managed"`. The managed-cloud (CMA) stub.
 
 ```python
 def __init__(self, *, endpoint: str | None = None) -> None
 ```
 
-`run` raises `NotImplementedError` — it ships in the managed/cloud phase.
+`run` raises `NotImplementedError`. It ships in the managed/cloud phase.
 
 ### `RecordReplayRuntime`
 
-`class RecordReplayRuntime(AgentRuntime)` — `name = "replay"`. Deterministic runs from
+`class RecordReplayRuntime(AgentRuntime)`: `name = "replay"`. Deterministic runs from
 cassettes.
 
 ```python
@@ -373,13 +374,13 @@ def __init__(
 ```
 
 On a cache hit (a cassette file keyed by a hash of the request exists), replay the recorded
-`RunResult` at **zero cost** — no budget charge, no model call. On a miss with
+`RunResult` at zero cost: no budget charge, no model call. On a miss with
 `record=True`, call `inner`, persist the cassette, and return. On a miss with
 `record=False`, raise `CassetteMiss`.
 
 ### `RoutingRuntime`
 
-`class RoutingRuntime(AgentRuntime)` — `name = "routing"`. Apply a `RoutingPolicy`, pin the
+`class RoutingRuntime(AgentRuntime)`: `name = "routing"`. Apply a `RoutingPolicy`, pin the
 chosen model on the request, then delegate to `inner`.
 
 ```python
@@ -400,7 +401,7 @@ before the inner run.
 
 ### `ProviderRuntime`
 
-`class ProviderRuntime(AgentRuntime)` — `name = "provider"`. Fails over across providers,
+`class ProviderRuntime(AgentRuntime)`: `name = "provider"`. Fails over across providers,
 policy-gated.
 
 ```python
@@ -422,7 +423,7 @@ propagates immediately instead of failing over.
 
 ### `ProviderFailover`
 
-`class ProviderFailover(RuntimeError)` — raised when no permitted provider could serve any
+`class ProviderFailover(RuntimeError)`: raised when no permitted provider could serve any
 candidate.
 
 ```python
@@ -464,7 +465,7 @@ and the factory is `CommandRuntime`, the config is forwarded so unpinned agents 
 
 ## See also
 
-- [Providers](providers.md) — the model backends `ProviderRuntime` fails over across, and
+- [Providers](providers.md): the model backends `ProviderRuntime` fails over across, and
   `resolve_model`.
-- [Definition](definition.md) — the compiled package a `RunRequest` carries.
-- [Core types](core-types.md) — `Parameter`, `Flow`, and the ABC-vs-model convention.
+- [Definition](definition.md): the compiled package a `RunRequest` carries.
+- [Core types](core-types.md): `Parameter`, `Flow`, and the ABC-vs-model convention.

@@ -1,9 +1,8 @@
 # Type system
 
-The engine that decides whether two ports can connect. It turns a parameter's string type
-name (`"str"`, `"list[PR]"`) into a resolved type, then answers the one question wiring
-rests on: *can a value of the producer's type flow into the consumer's port?* It lives in
-`crawfish.typesystem`.
+Decides whether two ports can connect. It turns a parameter's string type name (`"str"`,
+`"list[PR]"`) into a resolved type, then answers the question wiring rests on: can a value
+of the producer's type flow into the consumer's port? It lives in `crawfish.typesystem`.
 
 `TypeKind` · `TypeDef` · `TypeRegistry` · `default_registry`
 
@@ -11,19 +10,19 @@ rests on: *can a value of the producer's type flow into the consumer's port?* It
 
 Every [parameter](core-types.md#parameter) on a node carries a `type` as a **string name**,
 not a Python type object. The type system does two jobs with those strings: it **resolves** a
-name into a structured description, and it decides **compatibility** — whether one resolved
-type can satisfy another.
+name into a structured description, and it decides **compatibility** (whether one resolved
+type can satisfy another).
 
 Compatibility is **structural**, never by spelling. Two types match because of their *shape*,
 not because their names happen to be equal. The system understands four shapes (`TypeKind`):
 
-- **Primitive** — an atom like `str`, `int`, `bool`. The built-ins are `str`, `int`, `float`,
+- **Primitive**: an atom like `str`, `int`, `bool`. The built-ins are `str`, `int`, `float`,
   `bool`, `null`, and `json` (any JSON value). Any unregistered bare name is also treated as a
-  primitive, matched by name — so `"PR"` works without setup.
-- **Record** — a named bundle of fields, each field itself a type name (`Ticket` =
+  primitive, matched by name, so `"PR"` works without setup.
+- **Record**: a named bundle of fields, each field itself a type name (`Ticket` =
   `{id: str, body: str}`). You register these explicitly.
-- **List** — a homogeneous sequence, written `list[X]`.
-- **Optional** — a value that may be absent, written `X?` or `Optional[X]`.
+- **List**: a homogeneous sequence, written `list[X]`.
+- **Optional**: a value that may be absent, written `X?` or `Optional[X]`.
 
 A `TypeRegistry` holds the named records and primitives and answers these questions.
 `default_registry` is the single process-wide registry the rest of the framework uses unless
@@ -33,16 +32,15 @@ you hand it your own.
 
 The headline rule for records is **width subtyping**: a producer record satisfies a consumer
 record when it carries *at least* every field the consumer asks for, each one compatible. A
-richer record can always stand in for a narrower one — extra fields are harmless. The reverse
-fails: a record missing a field the consumer requires cannot satisfy it.
+richer record can always stand in for a narrower one, since extra fields are harmless. The
+reverse fails: a record missing a field the consumer requires cannot satisfy it.
 
 ## Structural, not nominal
 
 Compatibility never depends on Python class identity or string equality. The desktop console
 and the unit registry must read a node's port shapes *without importing Python*, so the answer
-has to be decidable from the type names alone. That is the structural-registry decision in
-[ADR 0002](../architecture/decisions/0002-structural-type-registry.md): types compare by shape,
-resolved through a registry, never by `==` on the strings. This is what lets
+has to be decidable from the type names alone. Types compare by shape, resolved through a
+registry, never by `==` on the strings. This is what lets
 [`parameters_compatible`](core-types.md#parameters_compatible) wire `"list[PR]"` to a record
 with the right fields.
 
@@ -50,20 +48,20 @@ with the right fields.
 
 `resolve` is a small recursive-descent parser over the type string, tried in this order:
 
-1. A trailing `?` (`"str?"`) → an **Optional** wrapping the inner name.
-2. A generic `list[...]` or `Optional[...]` → a **List** (item validated by recursing) or an
-   **Optional**.
-3. A bare name that is a registered record → that **Record**'s `TypeDef`.
-4. Any other bare name → a nominal **Primitive** named for the string.
+1. A trailing `?` (`"str?"`) becomes an **Optional** wrapping the inner name.
+2. A generic `list[...]` or `Optional[...]` becomes a **List** (item validated by recursing)
+   or an **Optional**.
+3. A bare name that is a registered record becomes that **Record**'s `TypeDef`.
+4. Any other bare name becomes a nominal **Primitive** named for the string.
 
-Step 4 is the ergonomic fallthrough: an unknown name like `"PR"` resolves to a primitive
+Step 4 is the convenient fallthrough: an unknown name like `"PR"` resolves to a primitive
 matched by name, so authoring a pipeline needs no registration until you want field-subset
-rules. Registering a record with `register_record` is precisely what unlocks width subtyping
-for that name.
+rules. Registering a record with `register_record` is what unlocks width subtyping for that
+name.
 
 !!! note "Good to know"
 
-    An unregistered name still *resolves* — nominally, as a primitive matched by name. It just
+    An unregistered name still *resolves*, nominally, as a primitive matched by name. It just
     can't do field-subset checks until you register it as a record. So `is_registered("PR")`
     can be `False` while `resolve("PR")` succeeds.
 
@@ -72,18 +70,18 @@ for that name.
 `is_compatible(producer, consumer)` resolves both names and walks the shapes. The directional
 rules, in the order they are checked:
 
-- **Optional consumer** — a plain (non-optional) producer may feed an `Optional` consumer;
+- **Optional consumer**: a plain (non-optional) producer may feed an `Optional` consumer.
   `Optional[A]` feeds `Optional[B]` iff `A` feeds `B`.
-- **Optional producer into a required consumer** — rejected. A maybe-absent value cannot
+- **Optional producer into a required consumer**: rejected. A maybe-absent value cannot
   satisfy a port that demands a value.
-- **Lists are covariant** — `list[A]` feeds `list[B]` iff `A` feeds `B`. A list on one side and
+- **Lists are covariant**: `list[A]` feeds `list[B]` iff `A` feeds `B`. A list on one side and
   a non-list on the other never match.
-- **Records use width subtyping** — for every field the consumer needs, the producer must have
+- **Records use width subtyping**: for every field the consumer needs, the producer must have
   that field and its type must be compatible. A record never matches a non-record.
 - **Primitives** match by canonical name (this is where nominal primitives like `PR` compare).
 
 `explain(producer, consumer)` returns `None` when compatible, otherwise a one-line structural
-reason — useful for surfacing *why* a wire was rejected.
+reason, useful for surfacing why a wire was rejected.
 
 ## JSON-Schema round-trip
 
@@ -105,7 +103,7 @@ is passed. Construct your own `TypeRegistry` for isolation (tests, a sandboxed t
 ## Example
 
 Register a narrow record and a wider one, resolve a generic, and watch width subtyping decide
-compatibility — extra fields satisfy a port needing fewer; a missing field does not.
+compatibility. Extra fields satisfy a port needing fewer; a missing field does not.
 
 ```python
 import json
@@ -166,7 +164,7 @@ print(type(default_registry).__name__)
 
 ### `TypeKind`
 
-`class TypeKind(str, Enum)` — the four shapes a resolved type can take.
+`class TypeKind(str, Enum)`: the four shapes a resolved type can take.
 
 | Member | Value | Meaning |
 | --- | --- | --- |
@@ -177,19 +175,19 @@ print(type(default_registry).__name__)
 
 ### `TypeDef`
 
-`class TypeDef(BaseModel)` — a resolved type. Built by the registry, not authored directly.
+`class TypeDef(BaseModel)`: a resolved type. Built by the registry, not authored directly.
 `frozen=True`, so an instance rejects mutation.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `name` | `str` | — (required) | Canonical name, e.g. `"str"`, `"PR"`, `"list[PR]"`. |
-| `kind` | `TypeKind` | — (required) | Which of the four shapes this is. |
+| `name` | `str` | (required) | Canonical name, e.g. `"str"`, `"PR"`, `"list[PR]"`. |
+| `kind` | `TypeKind` | (required) | Which of the four shapes this is. |
 | `fields` | `dict[str, str]` | `{}` | Records only: field name → type name. |
 | `item` | `str \| None` | `None` | List/optional only: the element type name. |
 
 ### `TypeRegistry`
 
-`class TypeRegistry` — holds named types and answers structural compatibility. A fresh registry
+`class TypeRegistry`: holds named types and answers structural compatibility. A fresh registry
 starts with the six built-in primitives (`str`, `int`, `float`, `bool`, `null`, `json`) and no
 records.
 
@@ -239,16 +237,16 @@ def explain(self, producer: str, consumer: str) -> str | None
 def json_schema(self, type_str: str) -> dict[str, object]
 ```
 
-Emit a JSON-Schema fragment for the resolved type — primitives, `array`, `anyOf … null`, or
+Emit a JSON-Schema fragment for the resolved type: primitives, `array`, `anyOf … null`, or
 `object` with `properties` + `required`.
 
 ### `default_registry`
 
-`default_registry: TypeRegistry` — the single process-wide registry instance created at import
+`default_registry: TypeRegistry`: the single process-wide registry instance created at import
 time. Plugins register types into it via the `crawfish.types` entry-point group; it is the
 fallback registry for [`parameters_compatible`](core-types.md#parameters_compatible).
 
 ## See also
 
-- [Core types](core-types.md) — where `Parameter.type` strings come from and how wiring uses them.
-- [Output & wiring](output-and-wiring.md) — connecting one node's output to the next.
+- [Core types](core-types.md): where `Parameter.type` strings come from and how wiring uses them.
+- [Output & wiring](output-and-wiring.md): connecting one node's output to the next.

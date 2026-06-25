@@ -1,23 +1,22 @@
 # Reference
 
-The explained reference. Every public symbol in `crawfish.__all__` is covered here
-with worked examples — this is the layer the [flat API dump](../guide/api-reference.md)
-links into, not a replacement for it.
+Look-up pages for the Crawfish API. Every public symbol in `crawfish.__all__` is covered
+here with worked examples. The [flat API list](../guide/api-reference.md) links into these
+pages.
 
 ## How a page reads
 
-Each page covers one cluster of related symbols. It opens with a plain-English
-explanation, deepens only as far as the topic needs, shows a runnable example, and ends
-with an API reference table for every symbol. Stop at whatever depth answers your
-question.
+Each page covers one cluster of related symbols. It opens with a short explanation, shows
+a runnable example, and ends with an API reference table for every symbol. Read to
+whatever depth answers your question.
 
-Every example is deterministic — it runs on pure functions or
-[`MockRuntime`](runtimes.md#mockruntime), never a live model — so the output in the
-collapsible **▶ Output** blocks never drifts.
+Every example is deterministic. It runs on pure functions or
+[`MockRuntime`](runtimes.md#mockruntime), never a live model, so the output in the
+collapsible **▶ Output** blocks does not drift.
 
 ## The map
 
-Start at the foundations and build outward.
+Start at the foundations and work outward.
 
 | Group | Pages |
 | --- | --- |

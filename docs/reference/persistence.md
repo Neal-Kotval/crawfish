@@ -1,7 +1,7 @@
 # Persistence
 
-How Crawfish remembers things across runs. Two swappable backends — one for small typed
-records and key/value state, one for large blobs — plus the agent-facing memory handle
+How Crawfish remembers things across runs. It has two swappable backends, one for small typed
+records and key/value state, one for large blobs, plus the agent-facing memory handle
 and the schema-upgrade machinery that keeps an old database readable.
 
 `Store` · `SqliteStore` · `StoreMigrationError` · `Migration` ·
@@ -9,67 +9,65 @@ and the schema-upgrade machinery that keeps an old database readable.
 `LocalArtifactStore` · `offload_if_large`
 
 A pipeline needs to remember things: which items it already handled, the telemetry of a
-run, the outputs it produced. Crawfish routes all of that through two **seams** —
+run, the outputs it produced. Crawfish routes all of that through two *seams*,
 interchangeable backends the rest of the framework talks to through a contract, never by
 importing a specific database.
 
 ## The Store: small typed data
 
-The **`Store`** is the first seam. It holds small, structured data: typed **records** (a
-JSON blob filed under a `kind` and an `id`), a **key/value** store for working state, an
-**idempotency** table for "have I done this exactly once?", and an **event ledger** — an
-append-only log of what happened during a run. `SqliteStore` is the local implementation,
+The `Store` is the first seam. It holds small, structured data: typed *records* (a
+JSON blob filed under a `kind` and an `id`), a *key/value* store for working state, an
+*idempotency* table that answers "have I done this exactly once?", and an *event ledger*,
+an append-only log of what happened during a run. `SqliteStore` is the local implementation,
 backed by an on-disk SQLite file (or an in-memory database for tests).
 
-Every `Store` row carries an **`org_id`** — a tenant key that defaults to `"local"`. Two
-tenants can use the same namespace and key without seeing each other's data; the `org_id`
+Every `Store` row carries an `org_id`, a tenant key that defaults to `"local"`. Two
+tenants can use the same namespace and key without seeing each other's data. The `org_id`
 keeps them in separate partitions.
 
 !!! note "Good to know"
 
     On a single laptop everything lands in `org_id="local"` and you never think about it.
-    In the cloud the same code serves many tenants by passing a different `org_id` —
-    tenancy is a key, not a separate schema (see [tenancy](#tenancy-is-a-key) below).
+    In the cloud the same code serves many tenants by passing a different `org_id`.
+    Tenancy is a key, not a separate schema (see [tenancy](#tenancy-is-a-key) below).
 
 ## The ArtifactStore: large blobs
 
-The **`ArtifactStore`** is the second seam, for **blobs** — files, images, big JSON that
+The `ArtifactStore` is the second seam, for *blobs*: files, images, big JSON that
 has no business sitting inline in a record. Instead of the bytes, a record carries an
-**`ArtifactRef`**: a small pointer holding a content hash, a URI, and a size. The bytes
+`ArtifactRef`, a small pointer holding a content hash, a URI, and a size. The bytes
 live in the artifact store, addressed by their SHA-256 hash, so identical content is
 stored once. `LocalArtifactStore` is the local implementation, writing files under a
-directory. **`offload_if_large`** is the bridge: hand it a value and an artifact store,
+directory. `offload_if_large` is the bridge: hand it a value and an artifact store,
 and if the value is too big it spills the bytes to the store and hands you back an
 `ArtifactRef` instead.
 
 ## Memory: the agent-facing handle
 
-A **`Memory`** is the agent-facing handle over a `Store`. It scopes get/set to one
-namespace and offers cross-run deduplication — `already_processed` / `mark_processed` to
+A `Memory` is the agent-facing handle over a `Store`. It scopes get/set to one
+namespace and offers cross-run deduplication: `already_processed` / `mark_processed` to
 remember handled items, and `claim` to win an item exactly once even under concurrency.
 
 ## Migrations keep old databases readable
 
 When a newer Crawfish opens an older database, the schema may need upgrading.
-**`Migration`** is one forward schema step; **`CURRENT_SCHEMA_VERSION`** is the version
-this build writes; **`StoreMigrationError`** is raised when a database can't be safely
-upgraded — most importantly when it was written by a *newer* binary than the one trying
-to open it.
+`Migration` is one forward schema step. `CURRENT_SCHEMA_VERSION` is the version
+this build writes. `StoreMigrationError` is raised when a database can't be safely
+upgraded, most importantly when a newer binary wrote it than the one trying to open it.
 
 ## A protocol, never a backend
 
 `Store` and `ArtifactStore` are typed `Protocol`s. Nodes, the engine, and `Memory`
-depend on the *protocol*, so swapping SQLite for Postgres, or local disk for S3, is
-a driver swap rather than a rewrite. The discipline that makes this hold: **no raw
-SQL appears at any call site** — it all lives inside `SqliteStore` — and **no
-filesystem layout leaks out of `LocalArtifactStore`**. See
-[ADR 0003](../architecture/decisions/0003-sqlite-wal-store.md) for the SQLite-WAL store decision.
+depend on the protocol, so swapping SQLite for Postgres, or local disk for S3, is
+a driver swap rather than a rewrite. The discipline that makes this hold: no raw
+SQL appears at any call site (it all lives inside `SqliteStore`), and no
+filesystem layout leaks out of `LocalArtifactStore`.
 
 ## Tenancy is a key, not a schema {#tenancy-is-a-key}
 
 Every method on both seams takes a keyword-only `org_id: str = "local"`. In the
 `Store` it is part of the primary key of every table (`records`, `kv`,
-`idempotency`, `events`); in `LocalArtifactStore` it is a path prefix
+`idempotency`, `events`). In `LocalArtifactStore` it is a path prefix
 (`root/<org_id>/<sha[:2]>/<sha>`). Multi-tenancy is therefore data partitioning,
 not a migration: the same schema serves one tenant or thousands.
 
@@ -84,12 +82,12 @@ statement, so there is no window for two concurrent callers to both "win".
 
     This is what makes `if mem.claim(id): process(id)` safe to run from many workers at
     once. The same `only_items`/idempotency machinery is what makes a crashed run
-    resumable — redoing handled work is a no-op, not a duplicate side effect.
+    resumable: redoing handled work is a no-op, not a duplicate side effect.
 
 ## WAL mode and the process lock
 
 On a file-backed database, `SqliteStore` sets `PRAGMA journal_mode=WAL` so readers
-never block writers — many fan-out workers can append telemetry and claim
+never block writers, so many fan-out workers can append telemetry and claim
 idempotency keys concurrently. (WAL is skipped for `:memory:`, where it does not
 apply.) A `threading.RLock` serializes access within a single process, and SQLite's
 own file lock guards across processes. `PRAGMA synchronous=NORMAL` is set in both
@@ -106,35 +104,34 @@ both the max-lookup and the ordered read fast on large ledgers.
 ## Migrate-on-open, and the refusal to downgrade
 
 The schema version lives in SQLite's built-in `PRAGMA user_version` (a transactional
-integer in the database header — no extra table). On open, `apply_migrations` reads
+integer in the database header, no extra table). On open, `apply_migrations` reads
 it and applies every `Migration` whose `version` exceeds the on-disk value, each in
 its own explicit `BEGIN`/`COMMIT` transaction, then stamps the new `user_version`.
-A fresh database is at version 0; **migration 1 is the baseline** (the original table
-set, written with `CREATE TABLE IF NOT EXISTS`) so a brand-new database and a
+A fresh database is at version 0. Migration 1 is the baseline (the original table
+set, written with `CREATE TABLE IF NOT EXISTS`), so a brand-new database and a
 pre-versioning database converge to the same state. Opening is idempotent: a
 fully-migrated database applies nothing.
 
-If the on-disk `user_version` *exceeds* `CURRENT_SCHEMA_VERSION`, a newer binary
+If the on-disk `user_version` exceeds `CURRENT_SCHEMA_VERSION`, a newer binary
 wrote this database, and `apply_migrations` raises `StoreMigrationError` rather than
-risk corrupting it by running old code against a newer schema. See
-[ADR 0014](../architecture/decisions/0014-store-schema-versioned-migrations.md) for the versioned-migration decision.
+risk corrupting it by running old code against a newer schema.
 
 !!! warning "A newer database is never opened by an older build"
 
     If the on-disk `user_version` exceeds `CURRENT_SCHEMA_VERSION`, a newer Crawfish wrote
     the database. `apply_migrations` raises `StoreMigrationError` and refuses to open it,
     rather than risk corruption by running old code against a newer schema. Downgrades are
-    a hard stop, not a best-effort.
+    a hard stop, not a best effort.
 
-Migrations alter *structure*; they do not rewrite every stored JSON blob. When a
-record `kind`'s envelope shape changes, a read-path **up-converter** (registered in
+Migrations alter structure. They do not rewrite every stored JSON blob. When a
+record `kind`'s envelope shape changes, a read-path *up-converter* (registered in
 `RECORD_UPCONVERTERS`) lifts a single legacy row to the current shape lazily on
 read in `get_record` / `list_records`. The registry is empty today (identity for
 every kind).
 
 ## Why DDL needs an explicit `BEGIN`
 
-Python's stdlib `sqlite3` driver auto-opens a transaction before DML but **not**
+Python's stdlib `sqlite3` driver auto-opens a transaction before DML but not
 before `CREATE`/`ALTER`/`DROP`. A bare `with conn:` would let each DDL statement
 autocommit, so a multi-statement migration that failed midway would leave a
 half-applied schema. `apply_migrations` issues an explicit `BEGIN` so the whole
@@ -148,9 +145,9 @@ whose `uri` and `sha256` derive from that hash. Putting identical bytes twice wr
 one file. `gc` sweeps a tenant's subtree and deletes any blob whose filename (its
 sha) is not in the supplied `live_refs` set, returning the count removed.
 
-`offload_if_large` serializes the value to JSON, and if the encoded form exceeds
+`offload_if_large` serializes the value to JSON. If the encoded form exceeds
 `threshold` (default 65536 bytes) it stores the bytes with `content_type`
-`application/json` and returns the `ArtifactRef`; otherwise it returns the value
+`application/json` and returns the `ArtifactRef`. Otherwise it returns the value
 unchanged. This keeps large Output payloads out of the `Store` record while small
 values stay inline.
 
@@ -208,7 +205,7 @@ store.close()
 
 ### `Store`
 
-`class Store(Protocol)` — the persistence contract: typed records, KV/working
+`class Store(Protocol)`: the persistence contract, holding typed records, KV/working
 memory, idempotency, and the event ledger. Every method takes a keyword-only
 `org_id: str = "local"`.
 
@@ -242,7 +239,7 @@ def close(self) -> None
 
 ### `SqliteStore`
 
-`class SqliteStore` — the local `Store`, backed by SQLite.
+`class SqliteStore`: the local `Store`, backed by SQLite.
 
 ```python
 def __init__(self, path: str | Path = ":memory:") -> None
@@ -255,7 +252,7 @@ the on-disk schema is newer than this build.
 
 ### `Memory`
 
-`class Memory` — a `Store`-backed KV/dedup handle scoped to `(namespace, org_id)`.
+`class Memory`: a `Store`-backed KV/dedup handle scoped to `(namespace, org_id)`.
 
 ```python
 def __init__(self, store: Store, namespace: str, *, org_id: str = "local") -> None
@@ -278,7 +275,7 @@ idempotency key so different stages don't shadow one another.
 
 ### `ArtifactStore`
 
-`class ArtifactStore(Protocol)` — the blob contract: content-addressed,
+`class ArtifactStore(Protocol)`: the blob contract, content-addressed,
 tenant-scoped, GC-able. Every method takes keyword-only `org_id: str = "local"`.
 
 ```python
@@ -301,7 +298,7 @@ def gc(self, live_refs: set[str], *, org_id: str = "local") -> int
 
 ### `ArtifactRef`
 
-`class ArtifactRef(BaseModel)` — a content-addressed pointer carried by an Output
+`class ArtifactRef(BaseModel)`: a content-addressed pointer carried by an Output
 instead of inline bytes.
 
 | Field | Type | Default | Notes |
@@ -313,7 +310,7 @@ instead of inline bytes.
 
 ### `LocalArtifactStore`
 
-`class LocalArtifactStore` — the local `ArtifactStore`, writing files under a root.
+`class LocalArtifactStore`: the local `ArtifactStore`, writing files under a root.
 
 ```python
 def __init__(self, root: str | Path) -> None
@@ -337,12 +334,12 @@ def offload_if_large(
 
 Returns an `ArtifactRef` (`content_type` `application/json`) when `value`'s JSON
 encoding exceeds `threshold` bytes; otherwise returns `value` unchanged. The
-comparison is `len(data) <= threshold` — a value exactly at the threshold stays
+comparison is `len(data) <= threshold`, so a value exactly at the threshold stays
 inline.
 
 ### `Migration`
 
-`@dataclass(frozen=True) class Migration` — one forward schema step, applied exactly
+`@dataclass(frozen=True) class Migration`: one forward schema step, applied exactly
 once in a transaction when the database's `user_version` is below `version`.
 
 | Field | Type | Notes |
@@ -353,19 +350,19 @@ once in a transaction when the database's `user_version` is below `version`.
 
 ### `CURRENT_SCHEMA_VERSION`
 
-`CURRENT_SCHEMA_VERSION: int` — the schema version this build writes. Equals the
-highest migration version; currently **`2`** (baseline + an `events` index). A
+`CURRENT_SCHEMA_VERSION: int`: the schema version this build writes. Equals the
+highest migration version, currently `2` (baseline plus an `events` index). A
 database whose `user_version` exceeds this is a downgrade and is refused.
 
 ### `StoreMigrationError`
 
-`class StoreMigrationError(RuntimeError)` — raised by `apply_migrations` when a
-database cannot be safely migrated on open. The load-bearing case is a downgrade:
-the on-disk `user_version` is greater than `CURRENT_SCHEMA_VERSION`, so a newer
+`class StoreMigrationError(RuntimeError)`: raised by `apply_migrations` when a
+database cannot be safely migrated on open. The main case is a downgrade: the
+on-disk `user_version` is greater than `CURRENT_SCHEMA_VERSION`, so a newer
 Crawfish wrote the database and this build refuses to open it.
 
 ## See also
 
-- [Run & engine](run-and-engine.md) — the runs and events this `Store` persists.
-- [Batch & execution](batch-and-execution.md) — the `ExecutionLedger` built on the `Store`.
-- [Core types](core-types.md) — `JSONValue` and the data shapes records carry.
+- [Run & engine](run-and-engine.md): the runs and events this `Store` persists.
+- [Batch & execution](batch-and-execution.md): the `ExecutionLedger` built on the `Store`.
+- [Core types](core-types.md): `JSONValue` and the data shapes records carry.

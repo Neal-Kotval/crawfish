@@ -1,6 +1,6 @@
 # Claude Code export
 
-Render a Crawfish [`Definition`](definition.md) — a self-contained agent team — into Claude
+Render a Crawfish [`Definition`](definition.md), a self-contained agent team, into Claude
 Code's own on-disk formats. A team you author in Crawfish then runs as a native Claude Code
 teammate. This lives in `crawfish.ccexport`.
 
@@ -9,32 +9,31 @@ teammate. This lives in `crawfish.ccexport`.
 
 ## Two on-disk shapes
 
-A **Definition** is Crawfish's packaged agent team — the agents, their prompts, the tools
-they may use, and the model each is pinned to. Claude Code (the CLI) describes an agent on
-disk in one of two shapes:
+A *Definition* is Crawfish's packaged agent team: the agents, their prompts, the tools they
+may use, and the model each is pinned to. Claude Code (the CLI) describes an agent on disk in
+one of two shapes:
 
-- A **subagent** is a single Markdown file at `.claude/agents/<name>.md`. The top of the
-  file is **YAML front-matter** — a small `key: value` header fenced by `---` lines —
-  carrying the agent's `name`, `description`, `model`, and `tools`. Everything below the
-  header is the **body**: the system prompt the agent runs with.
-- A **skill** is a slash-command wrapper at `.claude/skills/<name>/SKILL.md`. Invoking it
-  hands the task to the exported subagent.
+- A *subagent* is a single Markdown file at `.claude/agents/<name>.md`. The top of the file
+  is *YAML front-matter*, a small `key: value` header fenced by `---` lines, carrying the
+  agent's `name`, `description`, `model`, and `tools`. Everything below the header is the
+  *body*: the system prompt the agent runs with.
+- A *skill* is a slash-command wrapper at `.claude/skills/<name>/SKILL.md`. Invoking it hands
+  the task to the exported subagent.
 
 This module is the translator. `definition_to_cc_agent` turns one Definition into a
-`ClaudeCodeAgent` (the in-memory shape of that subagent file). `export_claude_code` writes
-the file(s) to disk under a project's `.claude/` directory. Two helpers do the field-level
-mapping: `map_tools` builds the tool allowlist, and `model_alias` picks the Claude Code
-model name.
+`ClaudeCodeAgent` (the in-memory shape of that subagent file). `export_claude_code` writes the
+files to disk under a project's `.claude/` directory. Two helpers do the field-level mapping:
+`map_tools` builds the tool allowlist, and `model_alias` picks the Claude Code model name.
 
 !!! note "Good to know"
 
-    **MCP** (Model Context Protocol) is the standard by which an agent reaches an external
-    tool server. A Crawfish Definition can declare MCP connections; each exposes a set of
-    named tools the agent may call.
+    *MCP* (Model Context Protocol) is the standard by which an agent reaches an external tool
+    server. A Crawfish Definition can declare MCP connections; each exposes a set of named
+    tools the agent may call.
 
 !!! warning "The export carries no secrets"
 
-    A Definition names its credentials by reference — an MCP connection stores an
+    A Definition names its credentials by reference: an MCP connection stores an
     environment-variable *name* (like `GITHUB_TOKEN`), never the token itself. The export
     emits tool *names* only, never the auth reference or any credential. The generated files
     are safe to commit and share.
@@ -55,29 +54,27 @@ single-agent team emits its prompt bare, with no heading. Empty prompts are skip
 
 ## The tools allowlist
 
-`map_tools` produces the subagent's `tools` allowlist as the **union** of every agent's
-declared tools and every MCP-exposed tool. An MCP tool is rendered in Claude Code's
-qualified form `mcp__<server>__<tool>` — for a connection named `github` exposing
-`search_issues`, the entry is `mcp__github__search_issues`. A bare MCP tool name listed
-on an agent's own allowlist is dropped in favour of that qualified form (no duplicates).
-The result is **sorted and de-duplicated** so the same Definition always yields the same
-file. The MCP connection's `auth` reference is never emitted.
+`map_tools` produces the subagent's `tools` allowlist as the union of every agent's declared
+tools and every MCP-exposed tool. An MCP tool is rendered in Claude Code's qualified form
+`mcp__<server>__<tool>`. For a connection named `github` exposing `search_issues`, the entry
+is `mcp__github__search_issues`. A bare MCP tool name listed on an agent's own allowlist is
+dropped in favour of that qualified form (no duplicates). The result is sorted and
+de-duplicated so the same Definition always yields the same file. The MCP connection's `auth`
+reference is never emitted.
 
 ## Model mapping
 
-A Crawfish agent's `model` is **model-universal by default** — `None` means "let the
-platform pick". `model_alias` maps whatever is pinned to one of Claude Code's three
-aliases (`opus` / `sonnet` / `haiku`) by substring match, case-insensitively, so
-`"claude-opus-4"` resolves to `opus` and `"haiku-3.5"` to `haiku`. A **list** of models
-(a universal pin with preferences) resolves on its **first** entry. Anything
-unrecognised — `"mock"`, an unknown id, or `None` — resolves to `inherit` (the platform
-decides).
+A Crawfish agent's `model` is model-universal by default: `None` means "let the platform
+pick". `model_alias` maps whatever is pinned to one of Claude Code's three aliases (`opus`,
+`sonnet`, `haiku`) by substring match, case-insensitively, so `"claude-opus-4"` resolves to
+`opus` and `"haiku-3.5"` to `haiku`. A list of models (a universal pin with preferences)
+resolves on its first entry. Anything unrecognised (`"mock"`, an unknown id, or `None`)
+resolves to `inherit` (the platform decides).
 
 !!! note "Good to know"
 
-    `model_alias` never raises, so an export always produces a runnable file. The
-    Claude-first runtime with a universal model type is [ADR
-    0005](../architecture/decisions/0005-claude-first-universal-model-type.md).
+    `model_alias` never raises, so an export always produces a runnable file. The Claude-first
+    runtime treats the model as a universal type, so an agent need not pin one.
 
 `definition_to_cc_agent` reads the model from the **lead** (or `"main"`) agent if that
 agent has one pinned; otherwise it falls back to the first agent that pins any model;
@@ -94,13 +91,13 @@ kebab-case (Claude Code requires it).
 
 `export_claude_code` always writes `.claude/agents/<name>.md`, creating parent
 directories as needed. With `skill=True` it **also** writes
-`.claude/skills/<name>/SKILL.md` — a `ClaudeCodeSkill` whose body tells Claude Code to
-invoke the exported subagent. It returns the list of written paths.
+`.claude/skills/<name>/SKILL.md`, a `ClaudeCodeSkill` whose body tells Claude Code to invoke
+the exported subagent. It returns the list of written paths.
 
 ## Example
 
 Build a small two-agent Definition with one MCP connection, convert it to a
-`ClaudeCodeAgent`, and read the mapped fields — all in memory, nothing written to disk.
+`ClaudeCodeAgent`, and read the mapped fields. All in memory, nothing written to disk.
 
 ```python
 from crawfish.definition.types import (
@@ -171,7 +168,7 @@ print("model_alias(None):", model_alias(None))
 
 ### `ClaudeCodeAgent`
 
-`class ClaudeCodeAgent(BaseModel)` — a Claude Code subagent: front-matter + body.
+`class ClaudeCodeAgent(BaseModel)`: a Claude Code subagent, front-matter plus body.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -187,13 +184,13 @@ comma-joined list if non-empty) followed by the stripped body.
 
 ### `ClaudeCodeSkill`
 
-`class ClaudeCodeSkill(BaseModel)` — a slash-command wrapper invoking the subagent.
+`class ClaudeCodeSkill(BaseModel)`: a slash-command wrapper invoking the subagent.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `name` | `str` | — (required) | Skill name (matches the agent name). |
 | `description` | `str` | `""` | One-line front-matter description; omitted if empty. |
-| `body` | `str` | `""` | Skill body — instructions to invoke the subagent. |
+| `body` | `str` | `""` | Skill body: instructions to invoke the subagent. |
 
 `to_markdown() -> str` renders `.claude/skills/<name>/SKILL.md`: a `---`-fenced header
 (`name`, then `description` if set) followed by the stripped body.
@@ -242,10 +239,9 @@ a bare MCP tool name on an agent's allowlist is replaced by that qualified form.
 def model_alias(model: str | list[str] | None) -> str
 ```
 
-Map a pinned model to a Claude Code alias. A list resolves on its first entry; the
-string is matched case-insensitively against `opus` / `sonnet` / `haiku` by substring.
-`mock`, an unrecognised id, or `None` resolves to `inherit`. Never raises. See
-[ADR 0005](../architecture/decisions/0005-claude-first-universal-model-type.md).
+Map a pinned model to a Claude Code alias. A list resolves on its first entry; the string is
+matched case-insensitively against `opus`, `sonnet`, or `haiku` by substring. `mock`, an
+unrecognised id, or `None` resolves to `inherit`. Never raises.
 
 | Input | Result |
 | --- | --- |
@@ -257,6 +253,6 @@ string is matched case-insensitively against `opus` / `sonnet` / `haiku` by subs
 
 ## See also
 
-- [Definition](definition.md) — the agent team this export renders.
-- [Providers](providers.md) — how a model id resolves before `model_alias` maps it.
-- [Authoring](authoring.md) — the project layout the `.claude/` files land in.
+- [Definition](definition.md): the agent team this export renders.
+- [Providers](providers.md): how a model id resolves before `model_alias` maps it.
+- [Authoring](authoring.md): the project layout the `.claude/` files land in.

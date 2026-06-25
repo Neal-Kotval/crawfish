@@ -2,10 +2,10 @@
 
 `craw manage` shows every [deployed](deploy.md) pipeline in one view. It reads three
 things: the deploy registry (what is running), the execution ledger (run history), and the
-cost meter (what you've spent). From there you can stop, restart, or tail any pipeline by
+cost meter (what you have spent). From there you stop, restart, or tail any pipeline by
 name.
 
-## Command
+## Run the command
 
 ```bash
 craw manage                       # list every deployed pipeline
@@ -14,18 +14,15 @@ craw manage restart <name>        # restart the supervisor (re-reads schedule)
 craw manage logs    <name>        # tail the supervisor + run logs
 ```
 
-Run `craw manage` with no arguments. Each pipeline gets a row: name, status, uptime,
-last run, next fire (for a cron deploy), and $ today.
+Run `craw manage` with no arguments to list deployed pipelines. Each pipeline gets a row:
+name, status, uptime, last run, next fire (for a cron deploy), and $ today.
 
-!!! note "Good to know"
-    `craw manage` only reads. It never re-runs a pipeline to answer a query — every
-    number comes from a Store-backed surface.
+`craw manage` only reads. It never re-runs a pipeline to answer a query. Every number
+comes from a Store-backed surface.
 
-## Worked example
+## See and control a fleet by name
 
-See a live fleet, watch one pipeline, then control it — all by name.
-
-After deploying the triage bot (see [deploy](deploy.md)):
+After deploying the triage bot (see [deploy](deploy.md)), list the fleet:
 
 ```bash
 craw manage
@@ -34,8 +31,8 @@ craw manage
 # triage-drain             running   01:09:55  18:21 (ok)      —           $0.07
 ```
 
-`$ TODAY` comes from the cost meter, so you can watch spend add up per pipeline without
-opening the dashboard. `NEXT FIRE` is blank for a continuous deploy.
+`$ TODAY` comes from the cost meter, so you watch spend add up per pipeline without opening
+the dashboard. `NEXT FIRE` is blank for a continuous deploy.
 
 Tail a pipeline to watch cycles fire and observer events land:
 
@@ -59,29 +56,28 @@ craw manage restart crawfish/triage-bot
 `craw manage` only reads. It pulls from three Store-backed sources and never re-runs a
 pipeline to answer a query:
 
-| Column           | Source                                                  |
-| ---------------- | ------------------------------------------------------- |
-| status, uptime   | deploy registry (the supervisor's PID entry)            |
-| last run, next fire | execution ledger + the supervisor's schedule         |
-| $ today          | cost meter (`CostMeter`, the live spend accumulator)    |
+| Column              | Source                                                  |
+| ------------------- | ------------------------------------------------------- |
+| status, uptime      | deploy registry (the supervisor's PID entry)            |
+| last run, next fire | execution ledger + the supervisor's schedule            |
+| $ today             | cost meter (`CostMeter`, the live spend accumulator)    |
 
-This is the same ledger that backs `craw inspect` / `craw logs`, so deployed and
+This is the same ledger that backs `craw inspect` and `craw logs`, so deployed and
 foreground runs share one history.
 
-## Security
+## Why tailing logs is safe
 
 `craw manage` reads scrubbed surfaces only. The registry, ledger, and cost meter hold no
-secret values, because secrets are resolved by reference at run time and never stored.
+secret values, because secrets resolve by reference at run time and are never stored.
 `logs` tails the supervisor and run logs, which are already scrubbed. Every row is scoped
 by `org_id`.
 
-!!! note "Good to know"
-    There is no secret value to leak through `craw manage logs`. Logs are scrubbed before
-    they're written, so tailing them is always safe.
+There is no secret value to leak through `craw manage logs`. Logs are scrubbed before they
+are written, so tailing them is always safe.
 
-## See also
+## Next steps
 
-- [Deploy — always-on pipelines](deploy.md) — start the supervisors `craw manage` lists.
-- [Operations overview](operations.md) — how manage fits with deploy, observers, and the
-  dashboard.
-- [SECURITY.md](../architecture/SECURITY.md) — the full security spine.
+- [Deploy a pipeline](deploy.md) starts the supervisors `craw manage` lists.
+- [Run a pipeline in the background](operations.md) shows how manage fits with deploy,
+  observers, and the dashboard.
+- [SECURITY.md](../architecture/SECURITY.md) covers the full security spine.

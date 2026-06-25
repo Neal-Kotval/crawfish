@@ -1,6 +1,6 @@
 # Output & wiring
 
-An `Output` is the typed envelope of data crossing a node boundary — the value a node
+An `Output` is the typed envelope of data crossing a node boundary: the value a node
 produced, its schema, and which node emitted it. The wiring checks decide whether one
 node's `Output` can feed the next node's required inputs.
 
@@ -12,7 +12,7 @@ A **node** is one step in a pipeline (a source, a batch, an aggregator). When a 
 finishes, it hands the next node an **`Output`**: a small envelope holding the *value*
 it produced, the *schema* of that value (a list of [`Parameter`](core-types.md)s naming
 and typing each slot), and the *id of the node that produced it*. The downstream node
-reads only the `Output` — never the producer's internals.
+reads only the `Output`, never the producer's internals.
 
 Two nodes wire together only when the upstream `Output` can supply every input the
 downstream node *requires*. That is a **structural check**, not a name-only one: each
@@ -22,12 +22,12 @@ be compatible (see [structural compatibility](type-system.md) and
 
 Two functions answer the wiring question. They differ only in *how they report*:
 
-- **`output_satisfies_inputs`** returns a plain `bool` — `True` if the wire is valid,
+- **`output_satisfies_inputs`** returns a plain `bool`: `True` if the wire is valid,
   `False` if not. Use it when you want to test a wire and branch on the result.
 - **`check_wire`** returns nothing on success and **raises `WireError`** on failure.
-  Use it to *enforce* a wire — to fail loudly at build time rather than silently.
+  Use it to *enforce* a wire, to fail loudly at build time rather than silently.
 
-An `Output` is **frozen** — immutable once produced. A node that transforms a value
+An `Output` is **frozen**: immutable once produced. A node that transforms a value
 (a filter, say) does not mutate the upstream `Output`; it calls `derive` to mint a
 *fresh* one, leaving the original intact for audit.
 
@@ -35,28 +35,28 @@ An `Output` is **frozen** — immutable once produced. A node that transforms a 
 
 Beyond the value and its schema, an `Output` threads two pieces of provenance:
 
-- **`lineage`** — a stable per-item identity carried unchanged through the pipeline, so
+- **`lineage`**: a stable per-item identity carried unchanged through the pipeline, so
   that idempotency keys (the keys that make a re-run skip work it already did) come out
   the same every time. It is distinct from `id`, which is a fresh UUID minted per
   `Output` instance.
-- **`tainted`** — `True` when the value derives from **fluid** input. *Fluid* means
-  untrusted session data that streams in per item (a ticket body, a PR diff) — the
+- **`tainted`**: `True` when the value derives from **fluid** input. *Fluid* means
+  untrusted session data that streams in per item (a ticket body, a PR diff), the
   prompt-injection boundary from [core types](core-types.md#flow).
 
 Both propagate through `derive`: a value derived from a tainted `Output` stays tainted
 and keeps the upstream lineage unless you explicitly override them.
 
-!!! warning "Taint propagates — and gates consequential targets"
+!!! warning "Taint propagates and gates consequential targets"
 
     A value derived from fluid input stays `tainted` all the way down. A tainted value must
     never become a sink target or an idempotency key, per the
-    [security spine](../architecture/SECURITY.md). `derive` carries taint forward by default,
+    [security model](../architecture/SECURITY.md). `derive` carries taint forward by default,
     so you can't quietly launder untrusted data into a trusted slot.
 
 ## Why `Output` is frozen, and how `derive` works
 
 `Output` sets `model_config = {"frozen": True}`, so any attempt to mutate a field after
-construction raises. Transforms therefore use `derive(...)` — a keyword-only method that
+construction raises. Transforms therefore use `derive(...)`, a keyword-only method that
 copies the current `Output` into a new one with a new `value` and `produced_by`, carrying
 `output_schema`, `tainted`, and `lineage` forward unless overridden. Keeping every
 intermediate `Output` immutable means the upstream value survives for audit and re-runs
@@ -68,7 +68,7 @@ The check is name-matched and required-aware. It indexes the output's schema by 
 name, then walks each downstream input:
 
 - If the input has **no matching field** in the output schema: it fails only when that
-  input is **required and has no default** — an optional or defaulted input may go
+  input is **required and has no default**. An optional or defaulted input may go
   unfilled.
 - If there **is** a matching field: the two must pass
   [`parameters_compatible`](core-types.md#parameters_compatible) in the producer →
@@ -76,12 +76,11 @@ name, then walks each downstream input:
 
 Only required, undefaulted inputs can break a wire by absence; type compatibility is
 checked for every name that *does* match. Both checks resolve type strings through the
-structural [type registry](type-system.md) ([ADR 0002](../architecture/decisions/0002-structural-type-registry.md)),
-never by string equality.
+structural [type registry](type-system.md), never by string equality.
 
 !!! note "Good to know"
 
-    `WireError` subclasses `TypeError`, not bare `Exception` — wiring failures *are* type
+    `WireError` subclasses `TypeError`, not bare `Exception`. Wiring failures *are* type
     errors, so callers that already catch `TypeError` catch these too. `check_wire` is a thin
     wrapper: it calls `output_satisfies_inputs` and, on `False`, raises a `WireError` whose
     message lists the output's schema field names and the inputs that wanted filling.
@@ -89,7 +88,7 @@ never by string equality.
 ## Example
 
 A compatible wire passes both checks; an incompatible one raises `WireError`. Pure,
-no runtime needed — `derive` shows taint propagating while the upstream stays frozen.
+no runtime needed. `derive` shows taint propagating while the upstream stays frozen.
 
 ```python
 from crawfish.output import Output, output_satisfies_inputs, check_wire, WireError
@@ -136,15 +135,15 @@ print("tainted propagated:", child.tainted)
 
 ### `Output`
 
-`class Output(BaseModel, Generic[T])` — the unit of data flowing between nodes. Frozen
+`class Output(BaseModel, Generic[T])`: the unit of data flowing between nodes. Frozen
 once produced (`model_config = {"frozen": True}`).
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `id` | `str` | `new_id()` | Fresh UUID4 per `Output` instance. |
-| `output_schema` | `list[Parameter]` | `[]` | The shape of `value` — one `Parameter` per slot. |
-| `value` | `T` | — (required) | The produced value. |
-| `produced_by` | `str` | — (required) | Id of the node that emitted this `Output`. |
+| `output_schema` | `list[Parameter]` | `[]` | The shape of `value`, one `Parameter` per slot. |
+| `value` | `T` | (required) | The produced value. |
+| `produced_by` | `str` | (required) | Id of the node that emitted this `Output`. |
 | `lineage` | `str \| None` | `None` | Stable per-item identity for deterministic idempotency keys; distinct from `id`. |
 | `tainted` | `bool` | `False` | `True` when derived from fluid (untrusted) input. Never allowed as a sink target or idempotency key. |
 
@@ -205,12 +204,12 @@ Enforcing form of the check: returns `None` when the wire is valid, otherwise ra
 
 ### `WireError`
 
-`class WireError(TypeError)` — raised when an upstream `Output` cannot wire into a
+`class WireError(TypeError)`: raised when an upstream `Output` cannot wire into a
 downstream node's inputs. The message reports the output's schema field names and the
 inputs that went unsatisfied.
 
 ## See also
 
-- [Core types](core-types.md) — `Parameter`, `Flow`, and `parameters_compatible`, the atoms a schema is built from.
-- [Type system](type-system.md) — how the `type` strings resolve and compare by shape.
-- [Validation](validation.md) — checking a node's actual output against the schema it declared.
+- [Core types](core-types.md): `Parameter`, `Flow`, and `parameters_compatible`, the atoms a schema is built from.
+- [Type system](type-system.md): how the `type` strings resolve and compare by shape.
+- [Validation](validation.md): checking a node's actual output against the schema it declared.

@@ -1,285 +1,209 @@
-# Crawfish Architecture
+# Architecture
 
-How Crawfish turns a directory of files into typed, swappable runtime parts.
+Crawfish is a programming language for agents. You write an agent as a directory of files
+and Crawfish compiles that directory into typed runtime objects you can run, test, and
+version. This page explains how the system is built and which parts you can swap.
 
 ## The model
 
-An **agent is a directory**. Write markdown (instructions and skills) and Python (tools,
-typed IO); the framework **compiles** the directory into typed runtime objects. The
-control-flow model:
+An agent is a directory. You write markdown for instructions and skills, and Python for
+tools and typed inputs and outputs. Crawfish compiles the directory into typed runtime
+objects and runs them as a pipeline:
 
-```
+```text
 Source → Filter → Batch(Definition) → Aggregator → Router → Sink
-              ├─ fan-out:    one Run per item        (map)
-              ├─ Aggregator: N Outputs → one         (reduce)
-              └─ Router:      branch by label         (branch)
+              ├─ fan-out:    one Run per item   (map)
+              ├─ Aggregator: N Outputs → one     (reduce)
+              └─ Router:      branch by label    (branch)
 ```
+
+A *source* reads data in. A *batch* fans the data out to one run per item. An
+*aggregator* reduces many outputs to one. A *router* branches on a label. A *sink* writes
+the result to the outside world.
 
 ## Three swappable seams
 
-The product model imports **none** of these directly — only their protocols. That is what
-makes moving to cloud and scale a driver swap, not a rewrite.
+Crawfish has three parts you can replace without touching pipeline code. The product
+model imports their protocols, never a concrete backend. That is what keeps the move to
+cloud and scale a configuration change rather than a rewrite.
 
-| Seam | Protocol | Local default | Later |
-|------|----------|---------------|-------|
-| `AgentRuntime` | the agent loop/backend | CommandRuntime (`claude -p`) | ClientRuntime / ManagedRuntime (CMA) |
+| Seam | What it does | Local default | Later |
+|------|--------------|---------------|-------|
+| `AgentRuntime` | runs the agent loop against a backend | `CommandRuntime` (`claude -p`) | `ClientRuntime` / `ManagedRuntime` |
 | `Store` | persistence | `SqliteStore` (WAL) | Postgres |
-| `ArtifactStore` | blobs | local filesystem | S3 |
+| `ArtifactStore` | blob storage | local filesystem | S3 |
 
-## Foundation (M0, shipped)
+As long as the product model imports only these protocols, moving from your machine to a
+managed backend is a runtime swap. Breaking that rule is what turns a swap into a rewrite.
 
-- **`crawfish.core`** — typed-IO atoms: `Flow` (STATIC/FLUID), `Parameter`, `Node`,
-  `NodeKind`, `Policy`, `RunContext` (with `CostBudget` + `CancelToken`), and
-  `parameters_compatible`. `crawfish.core.context.RunContext` carries the `org_id`
-  tenancy key, defaulted `"local"`.
-- **`crawfish.typesystem`** — a structural `TypeRegistry`: `Parameter.type` resolves
-  to a registered type (primitive / record / `list[X]` / `Optional[X]`), with
-  covariance, record width-subtyping, and JSON-Schema export.
-- **`crawfish.versioning`** — `Version` (`0.1-sha` / `0.2`) + `Freezable`; a frozen
-  artifact rejects mutation.
-- **`crawfish.store`** — the `Store` protocol + `SqliteStore` (WAL, tenancy key,
-  transactional `INSERT OR IGNORE` idempotency, append-only event ledger).
-- **`crawfish.engine`** — the bootstrap that runs a pipeline of steps end to end
-  under one `RunContext` (a no-op pipeline is valid). The richer typed `Workflow`
-  builds on this.
-- **`crawfish.config`** — `crawfish.toml` manifest + profile resolution
-  (`dev`→command, `prod`→managed).
+## Core types
 
-## Emission stream (Phase 2 observability)
+`crawfish.core` holds the typed atoms everything else builds on: `Flow` (`STATIC` or
+`FLUID`), `Parameter`, `Node`, `NodeKind`, `Policy`, `RunContext` (with `CostBudget` and
+`CancelToken`), and `parameters_compatible`. `RunContext` carries the `org_id` tenancy
+key, which defaults to `"local"`. Every `Store` row carries an `org_id`, so the same
+database can hold more than one tenant.
 
-- **`crawfish.emission`** — one typed signal, `Emission`. Every producer writes it onto
-  the append-only event ledger, and every consumer (inspector, dashboard, anomaly engine)
-  reads it. It rides the existing `Store.append_event` transport, so there is no new
-  persistence seam and `ScrubbingStore` redaction still applies on write.
-- The envelope and the **closed** `EmissionKind` taxonomy (10 kinds: `run_start`,
-  `run_finish`, `model`, `tool`, `sink`, `compaction`, `observer`, `metric`,
-  `secret_lease`, `jail_violation`) are a frozen contract — see
-  [`emission-taxonomy.md`](emission-taxonomy.md) and
-  [ADR 0013](decisions/0013-emission-taxonomy-and-inline-output-value.md). Each kind's
-  required `attrs` keys are pinned in `REQUIRED_ATTRS`; `EMISSION_SCHEMA_VERSION` lets
-  the ledger evolve.
-- `emit(store, e, *, max_per_run=...)` writes an emission (with a lightweight per-run
-  volume cap as a flood/DoS guard); `read_emissions(store, run_id)` reads them back.
-  `Emission.from_event` is a **back-compat shim**: it lifts both new typed emissions
-  *and* the legacy loose telemetry dicts older runs wrote (mapping `runtime.run` →
-  `model`, run-lifecycle spans → `run_start`/`run_finish`, `sink.write` → `sink`,
-  `context.compaction` → `compaction`, `ObserverEvent` dumps → `observer`; anything
-  unrecognized lifts into a generic `metric` carrying the raw payload), so old runs
-  stay inspectable.
-- **Security:** `tainted` carries the fluid/untrusted marker across the emission
-  boundary. Every emit site that holds an Output sets it from the producing
-  `Output.tainted`. Emissions never carry secret values — `secret_lease` carries the
-  `ref` only, and the ledger is written through `ScrubbingStore`.
+`crawfish.typesystem` is a structural type registry. A `Parameter.type` resolves to a
+registered type (a primitive, a record, `list[X]`, or `Optional[X]`), with covariance,
+record width-subtyping, and JSON-Schema export. Two nodes wire together when their shapes
+match, not when their type names are equal.
 
-## Typed outputs & validation (Phase 2)
+`crawfish.versioning` gives every agent a content-addressed `Version` (such as `0.1-sha`
+or `0.2`) and a `Freezable` base. A frozen artifact rejects mutation, so a side effect is
+always attributable to one reproducible hash.
 
-- **`crawfish.validation`** turns a Definition's declared `outputs` / `inputs`
-  (`list[Parameter]`) into a real type contract. `validate_output(text, outputs, reg)`
-  parses the model's text and validates it against the schema; `validate_inputs(values,
-  schema, reg)` checks bound input *values* (not just presence, which `run.validate()`
-  did); `structural_diff(before, after)` is the order-canonical diff eval scoring and the
-  tuner key off of. Validation is **registry-driven** — it walks the resolved `TypeDef`
-  (PRIMITIVE / RECORD / LIST / OPTIONAL) from `crawfish.typesystem`, so there is **no new
-  runtime dependency** (no `jsonschema`).
-- **Extraction (parse-from-text).** `claude -p` (CommandRuntime) has no JSON mode and
-  returns free text, so `validate_output` extracts JSON *out of* the text. It strips
-  Markdown code fences and isolates the outermost `{...}` / `[...]` span before decoding.
-  A single `str`-typed output (or a Definition with **no** declared outputs) is a
-  pass-through: the raw text becomes `Output.value`, which keeps back-compat with the
-  string-output era. Otherwise the parsed value is **canonicalised** (record keys
-  sorted) so golden-set equality and diffs are deterministic under record/replay.
-- **`Output.value` is the typed value, not a string.** On completion `run.py` builds
-  `Output(value=<typed>, output_schema=definition.outputs, ...)` — a RECORD output yields
-  a validated `dict`, a LIST a `list`, etc. (ADR 0013: the value is inline). `Metric`s
-  and the inspector read it directly.
-- **Failure reasons vs the action policy are distinct.** `ValidationFailure` is the
-  **closed set of reasons** (`NOT_JSON`, `MISSING_FIELD`, `TYPE_MISMATCH`, `EXTRA_FIELD`,
-  `EMPTY_SCHEMA`, `CONSTRAINT`) carried on each `ValidationError`. `ValidationAction`
-  (`RETRY` / `REPAIR` / `DEAD_LETTER`) is the separate *policy* a `Run` applies when an
-  output fails: `RETRY` re-runs via the existing `RetryPolicy`; `REPAIR` re-prompts the
-  model **once** with the schema error fed back as fluid data (a metered extra call that
-  respects `ctx.cost_budget` / `ctx.cancel_token`); `DEAD_LETTER` (default) gives up.
-  The value is never silently coerced.
-- **Security / taint.** The typed value is untrusted model output → `tainted=True` when
-  any input was fluid **or** the run consumed any `tool_result` event (a malicious tool
-  output is an injection vector). A wrong-typed input is rejected *before* any model call.
-  Callers that deliberately over-bind (the `Router`'s classifier) opt out via
-  `validate_input_types=False` / `validate_output_schema=False`.
+`crawfish.store` defines the `Store` protocol and `SqliteStore`. The store uses WAL mode,
+carries the tenancy key, runs check-then-write idempotency as a single transaction
+(`INSERT OR IGNORE`), and keeps an append-only event ledger.
 
-## Schema migrations (Phase 2)
+`crawfish.engine` runs a pipeline of steps end to end under one `RunContext`. An empty
+pipeline is valid. `crawfish.config` reads the `crawfish.toml` manifest and resolves
+profiles (`dev` maps to the command runtime, `prod` to the managed runtime).
 
-An older `.crawfish` database must upgrade cleanly when a newer binary opens it. The
-schema version lives in SQLite's built-in `PRAGMA user_version`. `SqliteStore.__init__`
-runs `crawfish.store.migrations.apply_migrations` under its lock: it applies every forward
-migration whose version exceeds the on-disk version (each in its own transaction), then
-stamps `user_version`. See ADR 0014.
+## Observability
 
-- **Migration 1 is the baseline** — the original table set, written `CREATE TABLE IF NOT
-  EXISTS`. So a brand-new DB and an existing *pre-versioning* DB (tables already present,
-  `user_version=0`) both converge. Re-opening a current DB applies nothing (idempotent).
-- **Downgrade is refused.** If `user_version` exceeds `CURRENT_SCHEMA_VERSION`, a newer
-  binary wrote the DB; `apply_migrations` raises `StoreMigrationError` rather than risk
-  corruption.
-- **Concurrency** is safe: migrations run under the store lock and SQLite's file lock; a
-  second opener sees the bumped `user_version` and applies nothing.
+Every producer writes one typed signal, an `Emission`, onto the append-only event ledger,
+and every consumer (the inspector, the dashboard, the anomaly engine) reads it back.
+Emissions ride the existing `Store.append_event` transport, so there is no separate
+persistence path and the same redaction applies on write.
 
-**Migration-authoring contract.** Phase-2 work that persists a new shape does two things:
-(1) **append a `Migration`** in `store/migrations.py` with the next ascending `version`
-and bump `CURRENT_SCHEMA_VERSION`; keep the body additive/idempotent (`IF NOT EXISTS`,
-additive `ALTER TABLE`) so it is safe on a DB at any older version. (2) If the new shape
-changes how a stored record *kind* is interpreted, **register a read-path up-converter**
-in `RECORD_UPCONVERTERS` (keyed by `kind`); it lifts an individual legacy row's JSON
-envelope to the current shape lazily on read in `get_record` / `list_records` — the
-record analogue of CRA-171's `Emission.from_event`. A migration fixes the table; the
-up-converter fixes a row, without a bulk rewrite. (Emission retention/rotation and
-`max_per_run` are a separate concern, deliberately out of scope here.)
+The set of emission kinds is closed: `run_start`, `run_finish`, `model`, `tool`, `sink`,
+`compaction`, `observer`, `metric`, `secret_lease`, and `jail_violation`. Each kind pins
+the attributes it must carry. A schema version lets the ledger evolve, and a back-compat
+shim lifts older loose telemetry into the typed shape so old runs stay inspectable.
 
-## Agent-language foundations (Milestone F)
+Two safety rules hold across the ledger. Every emission carries a `tainted` marker that
+follows untrusted (fluid) data across the boundary, and emissions never carry secret
+values. A `secret_lease` carries only the reference, and the ledger is written through a
+scrubbing layer.
 
-Milestone F lays the *substrate primitives* the agent-language operators (Refine, Program,
-Quorum, Escalate, the Tuner) build on. The operators themselves are not shipped; what
-shipped are the contracts below. All identity additions are forward-compatible and
-*fold-only-when-non-default* — see [ADR 0019](decisions/0019-content-hash-version-bump-and-migration.md).
+## Typed outputs
 
-### Output content hash — the canonical content identity
+`crawfish.validation` turns a Definition's declared `outputs` and `inputs` into a real
+type contract. `validate_output(text, outputs, reg)` parses the model's text and checks
+it against the schema. `validate_inputs(values, schema, reg)` checks bound input values,
+not only that they are present. `structural_diff(before, after)` produces the
+order-canonical diff that scoring and the tuner key off of. Validation walks the resolved
+type from `crawfish.typesystem`, so it adds no new runtime dependency.
 
-- **`crawfish.output.output_content_sha(o) -> str`** is the single content-hash primitive:
-  a lowercase hex SHA-256 over the **canonical JSON** of the structural-equality fields
-  (`output_schema`, `value`, `produced_by`, `lineage`, `tainted`). The per-instance `id`
-  is **excluded** — it is a fresh UUID, so including it would make every Output hash
-  unique; excluding it makes two structurally-equal Outputs hash equal regardless of `id`.
-  The `Output` model is unchanged (still frozen, no `sha` field). A `_CONTENT_SHA_VERSION`
-  is folded into the payload; bumping it re-keys any ledger persisted on the sha. Every
-  consumer that needs "an Output's content identity" (ledger `output_ref`, no-progress-by-sha)
-  reads this one function.
+`claude -p` returns free text rather than JSON, so `validate_output` extracts JSON out of
+the text: it strips Markdown code fences and isolates the outermost `{...}` or `[...]`
+span before decoding. A single `str`-typed output, or a Definition with no declared
+outputs, passes the raw text straight through, which keeps back-compat with the
+string-output era. Otherwise the parsed value is canonicalised (record keys sorted) so
+equality and diffs are deterministic under record and replay.
 
-### Replay cassette key = the execution coordinate (F-1)
+`Output.value` is the typed value, not a string. A record output yields a validated
+`dict`, a list yields a `list`. When an output fails validation, a `Run` applies one
+policy: `RETRY` re-runs, `REPAIR` re-prompts the model once with the schema error fed
+back as fluid data (a metered call that respects the cost budget and cancel token), and
+`DEAD_LETTER` (the default) gives up. The value is never silently coerced. A wrong-typed
+input is rejected before any model call.
 
-- `runtime/replay.py`'s `_key(request, *, org_id="local", coordinate=None)` is the
-  versioned **execution-coordinate / run-identity contract**. Beyond the legacy core
-  (`id`, `version`, `role`, `model`, `inputs`, `session_id`) it folds three components
-  **only when non-default**: an `ExecutionCoordinate` (frozen dataclass with
-  `sample_index` / `iter_index` / `visit_count` / `depth` axes, each `Optional[int]`),
-  `org_id` (when `!= "local"`), and `decode_seed`. An all-`None` coordinate folds nothing.
-- **Back-compat is pinned:** with no coordinate, `org_id == "local"`, and no decode field,
-  `_key` reproduces the exact pre-F-1 key (legacy cassettes still resolve). Every operator
-  that re-runs a leaf (quorum, Refine, MCTS, recurse) **must stamp its coordinate axis** so
-  each re-run gets a distinct cassette instead of colliding into one.
+The typed value is untrusted model output, so it is tainted when any input was fluid or
+the run consumed any tool result. A malicious tool output is an injection vector, so it
+taints the same way.
 
-### Loop / program ledger — a composite key space (F-2)
+## Schema migrations
 
-- The linear pipeline ledger (`checkpoint_step` / `completed_steps`) is unchanged. F-2 adds
-  an **explicit extended key space** alongside it under a new `ledger_loop` record kind (no
-  new table): loop/back-edge visits keyed `(loop_id, item_id, edge_id, visit) -> output_ref`,
-  and a recurse-depth variant `(loop_id, item_id, depth) -> output_ref`. Each iteration pins
-  the F-0 `output_content_sha` of its frozen `Output` as the `output_ref`.
-- `compute_loop_id(body_version_sha, item_lineage, edge_id)` is **deterministic** — a
-  length-prefixed, version-tagged (`_LOOP_ID_VERSION`) SHA, **never** `new_id()` — so two
-  process invocations of the same loop over the same item re-derive the same id and resume
-  re-charges \$0 for already-recorded iterations. Migration 3 adds an `(org_id, kind)` index
-  to keep the completed-iteration scans sargable; the pipeline ledger is untouched
-  (see [ADR 0019](decisions/0019-content-hash-version-bump-and-migration.md)).
+An older `.crawfish` database upgrades cleanly when a newer binary opens it. The schema
+version lives in SQLite's `PRAGMA user_version`. On open, `SqliteStore` applies every
+forward migration whose version exceeds the on-disk version, each in its own transaction,
+then stamps the new version.
 
-### AgentRuntime determinism tier + decode-knob ownership (F-5)
+Migration 1 is the baseline, written with `CREATE TABLE IF NOT EXISTS`, so a brand-new
+database and an existing pre-versioning one both converge. Re-opening a current database
+applies nothing. Downgrade is refused: if the on-disk version is higher than the binary's
+current version, a newer binary wrote the database and the open raises rather than risk
+corruption. Migrations run under the store lock and SQLite's file lock, so concurrent
+opens are safe.
 
-- The `AgentRuntime` contract advertises a **determinism capability tier**:
-  `DeterminismTier((str, Enum))` = `HONORS_SEED` / `BEST_EFFORT` / `NONE`, with
-  `AgentRuntime.determinism_tier` defaulting to `BEST_EFFORT`. This separates model
-  stochasticity from infra-nondeterminism: `cw.calibrate` attributes a `BEST_EFFORT`/`NONE`
-  backend's residual variance to infra (a variance floor), not to the Definition.
-- **Decode-knob ownership** (ADR 0017): the tunable knobs `temperature` / `top_p` /
-  `sample_k` live in exactly one place — the `AgentSpec` on the Definition — and enter its
-  content hash. `RunRequest.temperature` is a read-only **derived** property, never a
-  settable field. Per-call knobs live on `RunRequest`: `grammar` (constrained decode, **not**
-  hashed — provider dialect, degrades gracefully) and `decode_seed` (**not** hashed; folded
-  into the F-1 cassette key instead). So every decode field enters run identity exactly once.
+A migration fixes a table. A read-path up-converter fixes one row lazily on read, without
+a bulk rewrite, when a stored record's shape changes meaning.
 
-### Cost model — single owner, one composition law (F-6)
+## Cost model
 
-- **`cost.py` is the single owner of the cost model.** No other module re-implements
-  estimation or re-defines an operator's cost multiplier. `CostEstimate` gains **additive**
-  `expected_usd` / `worst_case_usd` / `expected_lo_usd` / `expected_hi_usd`; the scalar
-  `total_usd` is **unchanged** — it stays the lower bound (every cost-bearing operator fires
-  once). A bare estimate is the degenerate interval `[total, total, total]`, so existing
-  call sites and tests are untouched.
-- A `CostShape` describes one cost-bearing operator wrapper and its re-run multiplier;
-  `compose_cost(base, shapes)` folds a nesting of shapes (outermost-first) onto a base.
-  **The composition law is multiplicative along operator nesting:**
-  `worst_case_usd = total_usd × Π shape.worst_case_factor()`. Per-operator worst-case
-  factors: `Refine` → `max_iters`, `Escalate` → `1 + strong_price/base_price` (re-priced on
-  the strong model), `Quorum` → `k`, `Retry` → `n`, `recurse` → `branching ** max_depth`.
-  Worked example: `Refine(4) ∘ Escalate(2×) ∘ Quorum(5)` previews `40×` the lower bound.
-- The **expected band** is CI-aware and never falsely precise:
-  `expected_factor = 1 + p·(worst_case_factor − 1)` where `p` is the operator's measured
-  escalation/retry rate (from `cw.calibrate`/ledger), with `rate_ci` widening the
-  `expected_lo`/`expected_hi` edges. With **no** measured rate, `expected == worst_case`
-  (never undercount); a model validator enforces
-  `total ≤ expected_lo ≤ expected ≤ expected_hi ≤ worst_case`. CL-3 and ALG-5 are
-  *consumers* of this API, not editors.
+`cost.py` is the single owner of the cost model. No other module re-implements estimation
+or re-defines an operator's cost multiplier. A `CostEstimate` carries an expected value, a
+worst case, and a confidence band. The scalar `total_usd` is the lower bound, where every
+cost-bearing operator fires once.
 
-### The gate algebra + statistical substrate (F-3 / F-8)
+Composition is multiplicative along operator nesting:
+`worst_case_usd = total_usd × Π shape.worst_case_factor()`. Per-operator worst-case
+factors are `Refine` to `max_iters`, `Escalate` to `1 + strong_price/base_price`, `Quorum`
+to `k`, `Retry` to `n`, and `recurse` to `branching ** max_depth`. For example,
+`Refine(4) ∘ Escalate(2×) ∘ Quorum(5)` previews 40 times the lower bound. The expected
+band uses each operator's measured escalation or retry rate; with no measured rate, the
+expected value equals the worst case, so the estimate never undercounts.
 
-- **`crawfish.experiment`** is the shared, pure, stdlib-only statistical substrate
-  (`paired_bootstrap_ci`, `holm_correction`, `k_from_alpha`, `tune_gate_split`,
-  `winners_curse_shrink`, power helpers, `anytime_valid_bound`). No numpy/scipy; bootstraps
-  are seeded via a local `random.Random` so identical inputs+seed are byte-for-byte
-  reproducible. The normative spec
-  [`experiment-design.md`](experiment-design.md) is the **conformance gate** every
-  statistical consumer (`calibrate` / `gate` / `quorum` / `explore` / `guard`) must cite.
-- **The gate algebra** (`eval.py` / `metrics.py`, single owner) reconciles three gate
-  notions and names which consumer uses which — none re-implement stats, all consume
-  `crawfish.experiment`:
+## Run identity and determinism
 
-  | Gate | Function | Consumer |
-  |------|----------|----------|
-  | relative-regression | `metrics.is_regression` / `eval.gate_against_baseline` (unchanged) | cheap mean-only callers |
-  | variance-aware aggregate | `metrics.is_regression_variance_aware` (new; `std=0,k=0` reduces to the above byte-for-byte) | callers retaining a per-metric `std` |
-  | variance-aware **paired** | `eval.paired_gate` (new) | the Tuner / `calibrate` / promotion gate |
-  | absolute-precision | `eval.precision_gate` (new; **fails closed**) | verifiers / guards / consequential sinks |
+Every decode parameter enters run identity exactly once, so two distinct decode settings
+can never replay the same cassette. The tunable knobs (`temperature`, `top_p`, `sample_k`)
+live on the Definition's `AgentSpec` and enter its content hash. Per-call knobs live on the
+`RunRequest`: `grammar` for constrained decode, and `decode_seed`, which is folded into the
+replay cassette key.
 
-  `paired_gate` analyses per-case deltas over identical GoldenSet cases via
-  `paired_bootstrap_ci` (CI strictly above 0 ⇒ promote; straddling 0 ⇒ reject), with Holm
-  family-wise correction or a primary+guardrails design. `precision_gate` is **absolute**
-  and **fails closed** — no baseline ⇒ reject (see [SECURITY.md](SECURITY.md)).
+The replay cassette key is the execution coordinate. Beyond the core fields (id, version,
+role, model, inputs, session id) it folds an execution coordinate, the `org_id` (when it is
+not `"local"`), and the decode seed, but only when each is non-default. With none of them
+set, the key reproduces the legacy key exactly, so old cassettes still resolve. Every
+operator that re-runs a leaf stamps its coordinate axis, so each re-run gets a distinct
+cassette instead of colliding.
 
-### Store-backed exclusive borrow / train mode (F-7)
+An `AgentRuntime` advertises a determinism tier: `HONORS_SEED`, `BEST_EFFORT`, or `NONE`.
+This separates model stochasticity from infrastructure nondeterminism, so calibration can
+attribute a backend's residual variance to infrastructure rather than to the Definition.
 
-- `crawfish/borrow.py` provides a **dynamic exclusive borrow** for switching a `Definition`
-  into train/mutate mode, enforced by a Store-backed atomic claim (reusing
-  `claim_idempotency`) — never an in-process registry. `mutable(target, store, *, org_id=...)`
-  is a context manager that acquires on enter and releases on exit (idempotent, even on
-  exception); an **epoch** in a `borrow_lock` record makes the single-shot claim
-  re-acquirable. The borrow lifetime is exactly the `with` block and concurrency is rejected
-  at acquire. Because enforcement lives in the Store, the guarantee holds across processes and
-  survives the SQLite→Postgres swap. See [ADR 0018](decisions/0018-borrow-lifetime-semantics.md).
+## The gate algebra
+
+`crawfish.experiment` is the shared, pure, stdlib-only statistical substrate: paired
+bootstrap confidence intervals, Holm correction, power helpers, and anytime-valid bounds.
+It uses no numpy or scipy, and bootstraps are seeded so identical inputs reproduce
+byte-for-byte.
+
+The gate algebra reconciles the gate notions and names which consumer uses which. None of
+them re-implement statistics.
+
+| Gate | Consumer |
+|------|----------|
+| relative-regression | cheap mean-only callers |
+| variance-aware aggregate | callers retaining a per-metric `std` |
+| variance-aware paired | the tuner, calibration, the promotion gate |
+| absolute-precision (fails closed) | verifiers, guards, consequential sinks |
+
+The paired gate analyses per-case deltas over identical golden-set cases: a confidence
+interval strictly above zero promotes, one straddling zero rejects. The precision gate is
+absolute and fails closed, so no baseline means reject. See [Security](SECURITY.md).
+
+## Train mode
+
+`crawfish/borrow.py` provides an exclusive borrow that switches a `Definition` into
+train mode. `mutable(target, store, *, org_id=...)` is a context manager that acquires the
+borrow on enter and releases it on exit, even on exception. Enforcement lives in the
+Store, reusing the idempotency claim, never an in-process registry, so exclusivity holds
+across processes and survives the SQLite-to-Postgres swap. Concurrent borrows are rejected
+at acquire, and the borrow is keyed on `org_id`, so a borrow held by one org never blocks
+another.
 
 ## Packaging
 
-- `packages/crawfish` — the OSS framework (the `pip install crawfish` distribution).
-- `packages/crawfish-cma` — the CMA/ManagedRuntime backend (later).
-- Module discovery reads the `crawfish.sources` / `crawfish.sinks` /
-  `crawfish.definitions` / `crawfish.types` entry-point groups.
-- A user project is **self-contained** (root = the project); `.crawfish/` is
-  generated state only; installed plugins live in site-packages, pinned by
-  `crawfish.lock`.
+`packages/crawfish` is the OSS framework, the `pip install crawfish` distribution.
+`packages/crawfish-cma` is the managed-runtime backend, which lands later. Module
+discovery reads the `crawfish.sources`, `crawfish.sinks`, `crawfish.definitions`, and
+`crawfish.types` entry-point groups. A user project is self-contained: the project root is
+the project, `.crawfish/` is generated state only, and installed plugins live in
+site-packages, pinned by `crawfish.lock`.
 
 ## Conventions
 
-- The product model **never imports the SDK** — all model calls go through
-  `AgentRuntime`. No raw SQL escapes the `Store` implementation.
-- See [`SECURITY.md`](SECURITY.md) for the security spine and
-  [`decisions/`](decisions) for ADRs.
+The product model never imports the SDK. Every model call goes through `AgentRuntime`, and
+no raw SQL escapes a `Store` implementation. Two nodes wire together only when their types
+match, checked when you assemble the pipeline, before any model call.
 
-!!! note "Good to know"
-    The three seams are the load-bearing rule. As long as the product model imports only
-    `AgentRuntime`, `Store`, and `ArtifactStore` protocols — never a concrete backend —
-    cloud and scale stay a configuration change. Breaking that rule is what turns a swap
-    into a rewrite.
+## Next steps
 
-## See also
-
-- [Security](SECURITY.md) — the prompt-injection boundary, secrets, and taint
-- [Emission taxonomy](emission-taxonomy.md) — the frozen observability contract
-- [Experiment design](experiment-design.md) — the statistical-conformance gate for the eval plane
-- [API stability](API-STABILITY.md) — semver and deprecation policy
-- [ADRs](decisions) — the decisions behind these seams
+- [Security](SECURITY.md) covers the prompt-injection boundary, secrets, and taint.
+- [API stability](API-STABILITY.md) covers semver and the deprecation policy.
+- [Concepts](../guide/concepts.md) covers the boundary in the directory model.

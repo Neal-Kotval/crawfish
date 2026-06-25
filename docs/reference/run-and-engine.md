@@ -1,95 +1,96 @@
-# Run & engine
+# Run and engine
 
-A **run** is one execution of a pipeline against one set of inputs. It binds those
+A *run* is one execution of a pipeline against one set of inputs. It binds those
 inputs, drives the work, tracks where it is in its lifecycle, and records what happened.
-The **engine** underneath is the thin bootstrap that threads a list of steps together —
+The *engine* underneath is the thin bootstrap that threads a list of steps together,
 the machinery behind `craw run`.
 
 `Run` · `RunStatus` · `InputBindingError` · `RunSuspended` · `Engine` · `run_pipeline`
 
 ## One definition, one run
 
-A **definition** describes a pipeline: its input slots, its output slots, and the agent
-team that does the work. A `Run` is *one execution* of a definition. You hand it a
+A *definition* describes a pipeline: its input slots, its output slots, and the agent
+team that does the work. A `Run` is one execution of a definition. You hand it a
 definition plus a dictionary of input values, and it carries that single task from start
 to finish.
 
-Every run moves through a fixed set of **statuses**, named by `RunStatus`. It starts
+Every run moves through a fixed set of *statuses*, named by `RunStatus`. It starts
 `PENDING`, becomes `RUNNING` while the team works, and ends `DONE` (succeeded), `FAILED`
 (errored or over budget), or `SUSPENDED`.
 
 !!! note "Good to know"
 
     A `SUSPENDED` run hit an approval gate and is idling. Its state is saved to durable
-    storage and *no compute is spent* while it waits for a human to approve, so you can
+    storage and no compute is spent while it waits for a human to approve, so you can
     rebuild it later from that saved state. `SUSPENDED` is a real status, not an
-    exception side-effect — see [restart recovery](#a-run-is-durable) below.
+    exception side-effect. See [restart recovery](#a-run-is-durable) below.
 
 ## Validation comes first
 
-Before a run does any work it **validates** its inputs, in two steps:
+Before a run does any work it *validates* its inputs, in two steps:
 
-- **Presence** — every required slot must actually be filled. A missing one raises
+- *Presence*: every required slot must actually be filled. A missing one raises
   `InputBindingError`.
-- **Type** — each filled value must match the type its slot declares. A wrong type raises
+- *Type*: each filled value must match the type its slot declares. A wrong type raises
   `InputValidationError` (a sibling exception, not on this page).
 
-This validation happens *before any model is called*, so a malformed request fails fast
+This validation happens before any model is called, so a malformed request fails fast
 and cheaply. When a run requires approval and you run it without approving, `Run.execute`
-raises `RunSuspended` — the signal that the run parked itself on the gate rather than
+raises `RunSuspended`, the signal that the run parked itself on the gate rather than
 spending money.
 
 ## A run is durable {#a-run-is-durable}
 
 `Run` survives a process restart. As it changes status it writes a record to the `Store`
 (`_persist`), and `Run.restore(store, run_id, definition)` rebuilds a run from that
-record — recovering its status so a suspended or interrupted run can be picked back up.
+record, recovering its status so a suspended or interrupted run can be picked back up.
 The state genuinely lives in storage between the suspend and the eventual approval.
 
 ## Fluid inputs taint the output
 
-A run binds **fluid** inputs (untrusted, per-item session data — see
-[core types](core-types.md)) as *data the model reads*, never concatenated into the
+A run binds **fluid** inputs (untrusted, per-item session data; see
+[core types](core-types.md)) as data the model reads, never concatenated into the
 instruction prompt. The prompt compiler enforces that boundary, not `Run` itself.
 
-When the run produces its typed `Output`, it marks the output **tainted** if any input
-was fluid *or* the team consumed any tool/MCP result. The taint marker then propagates
+When the run produces its typed `Output`, it marks the output *tainted* if any input
+was fluid or the team consumed any tool/MCP result. The taint marker then propagates
 onto the event ledger.
 
 !!! warning "Fluid data and tool results are injection vectors"
 
     Fluid values are untrusted session data, and a malicious tool/MCP response is itself
     an injection vector. Either one taints the output. Treat tainted output as data to
-    read, never as instructions to obey — the [security spine](../architecture/SECURITY.md)
+    read, never as instructions to obey. The [security overview](../architecture/SECURITY.md)
     carries that taint forward.
 
 ## Validation failures route, output failures repair
 
 Two different validation moments, two different exceptions:
 
-- **Input** validation runs in `Run.validate()` before execution: `InputBindingError`
+- *Input* validation runs in `Run.validate()` before execution: `InputBindingError`
   for an unbound required slot, `InputValidationError` for a wrong-typed value.
-- **Output** validation runs after the model replies. If the output fails its declared
+- *Output* validation runs after the model replies. If the output fails its declared
   schema, the run's `on_invalid` policy (a `ValidationAction`) decides: `RETRY` re-runs
   the team, `REPAIR` re-prompts the model once with the error fed back as ordinary fluid
   data, `DEAD_LETTER` gives up. The repair call is metered and bounded by
   `ctx.cost_budget`, so the overshoot is at most one extra call.
 
-A run is also **hard-killed at the cost cap**: if execution raises `BudgetExceeded` the
+A run is also hard-killed at the cost cap: if execution raises `BudgetExceeded` the
 run goes `FAILED` with telemetry captured, rather than overspending.
 
 ## The engine threads steps together
 
-The **engine** sits underneath all of this. At its most basic, a pipeline is an ordered
-list of **steps**, where each step is an async function `(ctx, inputs) -> outputs` that
+The *engine* sits underneath all of this. At its most basic, a pipeline is an ordered
+list of *steps*, where each step is an async function `(ctx, inputs) -> outputs` that
 takes the previous step's outputs and returns the next. `Engine.run_pipeline` walks the
-list, threading outputs forward; the module-level `run_pipeline` is a one-line
+list, threading outputs forward. The module-level `run_pipeline` is a one-line
 convenience that builds a default engine for you. An empty list of steps is a valid
-pipeline — it runs end to end and returns nothing. This is the honest minimum behind
-`craw run`, and the richer typed `Run`/definition machinery builds on the same contract.
+pipeline: it runs end to end and returns nothing. This is the minimum behind
+`craw run`, and the richer typed `Run` and definition machinery builds on the same
+contract.
 
-`Engine.run_pipeline` appends events to the store at every boundary — `pipeline.start`,
-then `step.start`/`step.done` per step, then `pipeline.done` — and checks the
+`Engine.run_pipeline` appends events to the store at every boundary (`pipeline.start`,
+then `step.start`/`step.done` per step, then `pipeline.done`) and checks the
 `RunContext` cancel token before each step, so a cancelled run stops between steps. It
 runs under a single `RunContext`: pass your own (with a cost budget and cancel token) or
 let it build a default one over the engine's store.
@@ -97,7 +98,7 @@ let it build a default one over the engine's store.
 ## Example
 
 The no-op bootstrap pipeline, a pure one-step pipeline, and a `Run`'s lifecycle and
-fail-fast input validation — all deterministic, no runtime or model.
+fail-fast input validation. All deterministic, no runtime or model.
 
 ```python
 import asyncio
@@ -153,20 +154,20 @@ print("statuses:", [s.value for s in RunStatus])
 
 ### `RunStatus`
 
-`class RunStatus(str, Enum)` — the lifecycle of a run.
+`class RunStatus(str, Enum)`: the lifecycle of a run.
 
 | Member | Value | Meaning |
 | --- | --- | --- |
 | `RunStatus.PENDING` | `"pending"` | Created, not yet started. The status a fresh `Run` carries. |
 | `RunStatus.RUNNING` | `"running"` | The team is executing. |
 | `RunStatus.DONE` | `"done"` | Completed successfully; `Run.output` is set. |
-| `RunStatus.FAILED` | `"failed"` | Errored — including over-budget (`BudgetExceeded`) and exhausted output validation. |
+| `RunStatus.FAILED` | `"failed"` | Errored, including over-budget (`BudgetExceeded`) and exhausted output validation. |
 | `RunStatus.SUSPENDED` | `"suspended"` | Idling on an approval gate; state held durably, no compute spent. |
 
 ### `Run`
 
-`class Run` — one durable execution of a `Definition` against one input set: *"an agent
-team performing a single task."* Constructor:
+`class Run`: one durable execution of a `Definition` against one input set, an agent
+team performing a single task. Constructor:
 
 ```python
 Run(
@@ -242,18 +243,18 @@ Raises `KeyError` if no record exists for `run_id`.
 
 ### `InputBindingError`
 
-`class InputBindingError(ValueError)` — raised by `Run.validate()` when a required input
+`class InputBindingError(ValueError)`: raised by `Run.validate()` when a required input
 slot is unbound before execution. The message lists the missing slot names.
 
 ### `RunSuspended`
 
-`class RunSuspended(RuntimeError)` — raised by `Run.execute()` when a run idles on an
-approval gate. State is persisted and the status is set to `SUSPENDED`; no compute is
+`class RunSuspended(RuntimeError)`: raised by `Run.execute()` when a run idles on an
+approval gate. State is persisted and the status is set to `SUSPENDED`. No compute is
 spent.
 
 ### `Engine`
 
-`class Engine` — runs a pipeline of steps under a single `RunContext`.
+`class Engine`: runs a pipeline of steps under a single `RunContext`.
 
 ```python
 Engine(store: Store | None = None)            # defaults to a fresh SqliteStore
@@ -284,6 +285,6 @@ forwarding `ctx` / `seed`. An empty `steps` list is a valid no-op that returns `
 
 ## See also
 
-- [Core types](core-types.md) — `Parameter`, `Flow`, and the static-vs-fluid boundary a run binds.
-- [Batch & execution](batch-and-execution.md) — fanning one definition over many items.
-- [Persistence](persistence.md) — the `Store` a run persists to and restores from.
+- [Core types](core-types.md): `Parameter`, `Flow`, and the static-vs-fluid boundary a run binds.
+- [Batch and execution](batch-and-execution.md): fanning one definition over many items.
+- [Persistence](persistence.md): the `Store` a run persists to and restores from.

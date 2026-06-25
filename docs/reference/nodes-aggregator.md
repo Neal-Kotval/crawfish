@@ -1,8 +1,8 @@
-# Nodes — aggregator
+# Nodes: aggregator
 
-An **aggregator** folds many results into one. After a batch step splits a job into many
-runs — one agent call per item — the aggregator gathers those results back into a single
-value. It is the **reduce** half of a pipeline. These live in
+An *aggregator* folds many results into one. After a batch step splits a job into many
+runs (one agent call per item), the aggregator gathers those results back into a single
+value. It is the *reduce* step of a pipeline. These live in
 `crawfish.nodes.aggregator`.
 
 `Aggregator` · `collect` · `concat` · `count` · `dedupe` · `definition_reducer` ·
@@ -10,42 +10,42 @@ value. It is the **reduce** half of a pipeline. These live in
 
 ## Fan-out and fan-in
 
-A pipeline often **fans out** — spreading one job across many parallel runs. A batch step
+A pipeline often *fans out*, spreading one job across many parallel runs. A batch step
 takes one list of items (a hundred pull requests, a thousand tickets) and runs an agent
 on each item independently, producing one result per item. An aggregator is the opposite
-move — the **fan-in** — taking that whole group of N results and collapsing it into
-exactly one. Source → filter, [batch (fan-out)](nodes-source-filter.md) →
-**aggregator (fan-in)** → router → [sink](nodes-router-sink.md) is the spine of every
-Crawfish pipeline.
+move, the *fan-in*: it takes that whole group of N results and collapses it into
+exactly one. The spine of every Crawfish pipeline is source, filter,
+[batch (fan-out)](nodes-source-filter.md), aggregator (fan-in), router,
+[sink](nodes-router-sink.md).
 
-Each per-item result arrives wrapped in an **Output**: a frozen (immutable) envelope
+Each per-item result arrives wrapped in an *Output*: a frozen (immutable) envelope
 carrying the result `value`, the schema describing that value's shape, and the id of the
-node that produced it. The aggregator reads the N input Outputs and emits **one** fresh
+node that produced it. The aggregator reads the N input Outputs and emits one fresh
 Output holding the reduced value. An `Output` is frozen, so `Aggregator.reduce` never
-edits an input — it builds a brand-new Output stamped with its own node id in
-`produced_by`. The reduced value lands in the new Output's `value`; its declared shape
+edits an input. It builds a brand-new Output stamped with its own node id in
+`produced_by`. The reduced value lands in the new Output's `value`. Its declared shape
 comes from the aggregator's `output_schema` (empty by default, meaning undeclared).
 
 ## Reducers
 
-*How* it reduces is up to you — you hand the aggregator a **reducer**. Crawfish ships
+How it reduces is up to you: you hand the aggregator a *reducer*. Crawfish ships
 four pure, deterministic built-in reducers:
 
-- **`collect`** — gather the N item values into one list (the identity fan-in: keep
+- `collect`: gather the N item values into one list (the identity fan-in: keep
   everything, in order).
-- **`concat`** — glue the N item values into one string, end to end, no separator.
-- **`count`** — return how many items there were, as an integer.
-- **`dedupe`** — like `collect`, but drop repeats, keeping the first occurrence of each.
+- `concat`: glue the N item values into one string, end to end, no separator.
+- `count`: return how many items there were, as an integer.
+- `dedupe`: like `collect`, but drop repeats, keeping the first occurrence of each.
 
-For richer reductions there is **`definition_reducer`** — a reducer that runs an agent
-team to fold the N values into one (e.g. "summarise these hundred findings"). The item
-values are fed to the model as **fluid** data and the agent's text answer is the reduced
-result.
+For richer reductions there is `definition_reducer`, a reducer that runs an agent
+team to fold the N values into one (for example "summarise these hundred findings"). The
+item values are fed to the model as **fluid** data and the agent's text answer is the
+reduced result.
 
 A reducer is anything matching the `Reducer` protocol: a callable taking `(outputs, ctx)`
-and returning a value *or* an awaitable of a value. The built-ins are **pure and
-synchronous** — they read only `Output.value` and ignore `ctx`. The Definition-backed
-reducer is **asynchronous**, because running an agent team is async. `Aggregator.reduce`
+and returning a value or an awaitable of a value. The built-ins are pure and
+synchronous, reading only `Output.value` and ignoring `ctx`. The Definition-backed
+reducer is asynchronous, because running an agent team is async. `Aggregator.reduce`
 handles both: it calls the reducer, and if the result is awaitable it awaits it. So you
 swap a built-in for `definition_reducer` without changing the aggregator.
 
@@ -54,37 +54,37 @@ swap a built-in for `definition_reducer` without changing the aggregator.
     Order is preserved everywhere. Every built-in reducer walks the inputs in the order
     received: `collect` and `dedupe` return values in first-seen order, `concat` joins
     left to right. `dedupe` removes a later value only if an **equal** value (`==`) was
-    already seen — equality on the raw `Output.value`, not on any extracted key.
+    already seen, with equality on the raw `Output.value`, not on any extracted key.
 
 !!! warning "Fluid item values stay untrusted"
 
     `definition_reducer` packs the N item values into a single input mapping
     `{"items": [...]}` and runs the agent team on it. Those values enter as **fluid**
-    (untrusted) session data — the model treats them as content to read, never as
+    (untrusted) session data: the model treats them as content to read, never as
     instructions to follow. This is the same prompt-injection boundary the
-    [security spine](../architecture/SECURITY.md) enforces throughout; see the
+    [security overview](../architecture/SECURITY.md) enforces throughout. See the
     [core types](core-types.md) page for `Flow.FLUID`. The reduced value is the team's
     text result.
 
 ## The `fan_in` barrier
 
-`fan_in` is the **barrier** that produces the group of Outputs the aggregator consumes:
+`fan_in` is the *barrier* that produces the group of Outputs the aggregator consumes:
 it waits for the N concurrent per-item runs to finish and returns the ones that
 succeeded. When N items run concurrently, some may fail. `fan_in` runs them with
-`asyncio.gather(..., return_exceptions=True)` and then **drops** any result that raised
+`asyncio.gather(..., return_exceptions=True)` and then drops any result that raised
 an exception or resolved to `None`, so one bad item never sinks the whole batch. The
-survivors keep their **submission order** (`asyncio.gather` preserves order), which is
+survivors keep their submission order (`asyncio.gather` preserves order), which is
 what makes the downstream reduction deterministic.
 
 !!! note "Good to know"
 
     If you pass `quorum=k`, `fan_in` raises `ValueError` when fewer than `k` items
-    survive — use it to demand "at least k must succeed or fail the run". With no quorum
+    survive. Use it to demand "at least k must succeed or fail the run". With no quorum
     it returns whatever succeeded, even an empty list.
 
 ## Example
 
-The four built-in reducers over a small in-memory list of Outputs — all pure, no agent
+The four built-in reducers over a small in-memory list of Outputs. All pure, no agent
 or network. The `RunContext` is required by the reducer signature but the built-ins
 ignore it.
 
@@ -118,7 +118,7 @@ print("dedupe: ", dedupe(outs, ctx))    # drop repeats, first-seen order
 
 ### `Reducer`
 
-`class Reducer(Protocol)` — a `@runtime_checkable` protocol for any reduction.
+`class Reducer(Protocol)`: a `@runtime_checkable` protocol for any reduction.
 
 ```python
 def __call__(
@@ -136,8 +136,8 @@ it is awaitable, so both shapes plug in interchangeably.
 def collect(outputs: list[Output[JSONValue]], ctx: RunContext) -> list[JSONValue]
 ```
 
-Gather the item values into a list — `[out.value for out in outputs]`. The identity
-fan-in: keeps everything, order preserved. `ctx` is unused.
+Gather the item values into a list: `[out.value for out in outputs]`. The identity
+fan-in, keeping everything, order preserved. `ctx` is unused.
 
 ### `concat`
 
@@ -154,7 +154,7 @@ with **no separator** (`"".join(...)`). Order preserved. `ctx` is unused.
 def count(outputs: list[Output[JSONValue]], ctx: RunContext) -> int
 ```
 
-Return the number of items — `len(outputs)`. `ctx` is unused.
+Return the number of items: `len(outputs)`. `ctx` is unused.
 
 ### `dedupe`
 
@@ -178,10 +178,10 @@ input `{"items": [out.value for out in outputs]}` and returns the team's `result
 
 ### `Aggregator`
 
-`class Aggregator(Node)` — the fan-in node: consumes a group of N Outputs and emits
+`class Aggregator(Node)`: the fan-in node. Consumes a group of N Outputs and emits
 one. `kind` is `NodeKind.AGGREGATOR`.
 
-**Constructor** — `Aggregator(reducer, *, output_schema=None, name="aggregator")`:
+**Constructor**: `Aggregator(reducer, *, output_schema=None, name="aggregator")`:
 
 | Parameter | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -221,6 +221,6 @@ submission order. If `quorum` is given and fewer than `quorum` survive, raises
 
 ## See also
 
-- [Nodes — source & filter](nodes-source-filter.md) — the fan-out side that feeds the batch.
-- [Nodes — router & sink](nodes-router-sink.md) — branch the reduced result and write it out.
-- [Core types](core-types.md) — `NodeKind`, `Output`, and the `Flow.FLUID` boundary.
+- [Nodes: source and filter](nodes-source-filter.md): the fan-out side that feeds the batch.
+- [Nodes: router and sink](nodes-router-sink.md): branch the reduced result and write it out.
+- [Core types](core-types.md): `NodeKind`, `Output`, and the `Flow.FLUID` boundary.

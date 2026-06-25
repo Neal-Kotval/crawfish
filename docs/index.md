@@ -5,33 +5,31 @@
   <span class="craw-discord__text"><strong>We're always looking for more people to join the crawfish community!</strong><span class="craw-discord__cta">Join the Discord →</span></span>
 </a>
 
-Crawfish is a framework for building agents like software. You define an agent — or a
-whole team of them — as typed, versioned components in a directory, run it locally against
-`claude -p` or a local model, and treat the result as something you can test, diff, and
-improve, not a prompt you keep poking at.
+Crawfish is a programming language for agents. You write an agent, or a team of them, as
+typed components in a directory. You run it locally against `claude -p` or a local model. You
+test it, version it, and improve it the same way you would any other software.
 
-It brings the things you expect from real engineering to agent work:
+Like any language, Crawfish gives you a few things:
 
-- **Agents as code.** The agents, their tools, the data shapes they pass, and the policies
-  that govern them are plain files you check into git — infrastructure-as-code for local
-  model work, not settings buried in a notebook.
-- **Composable by design.** Small typed nodes snap together into larger pipelines. One
-  node's output wires to the next only when their shapes match, so a team is assembled from
-  parts the way a program is.
-- **Deterministic and testable.** Typed inputs and outputs, structural type-checking, frozen
-  versions, and record/replay make a run reproducible. Snapshot it, assert on it, and gate
-  changes in CI — no live model required.
-- **Built to improve.** Score a pipeline with rubrics and evals, then let the tuner search
-  for better prompts and settings and promote the winner. Pipelines get better on purpose.
-- **Local-first.** Everything runs on your machine by default. Cloud and scale are a driver
-  swap, not a rewrite.
+- **Primitives.** Typed inputs and outputs, nodes, and runtimes. An agent is a value with a
+  type, not a prompt you keep editing.
+- **Composition.** Small nodes wire into larger pipelines. One node's output connects to the
+  next only when their types match, so a pipeline is checked before it runs.
+- **Versioning.** Every agent is content-addressed, like a git commit. The same inputs produce
+  the same outputs, so you can diff two versions and replay an old run.
+- **Tooling.** Score a pipeline with evals, let the tuner search for better settings, and watch
+  any run through the inspector. The same loop you expect from a compiler and a test runner,
+  for agents.
 
-Running a job over your data in bulk is one thing you can build this way — fan it out
-across thousands of items, reduce, branch, and write the results somewhere
-(`Source → Batch → Aggregator → Router → Sink`). The same building blocks just as easily
-express a single sharp agent, a multi-agent team, or a scheduled automation.
+Everything runs on your machine by default. Moving to the cloud later is a driver swap, not a
+rewrite.
 
-## Install the CLI
+A common thing to build this way is bulk work over your data: fan a job out across thousands of
+items, reduce the results, branch on them, and write them somewhere
+(`Source → Batch → Aggregator → Router → Sink`). The same pieces also express a single agent, a
+multi-agent team, or a scheduled automation.
+
+## Install
 
 Installing the package gives you the `craw` command:
 
@@ -40,51 +38,39 @@ pip install crawfish
 craw --version
 ```
 
-Pick the install that fits what you're doing:
+Pick the install that fits what you are doing:
 
-| You want to… | Install with |
+| You want to | Install with |
 | --- | --- |
-| Build *with* the framework (`import crawfish`) | `pip install crawfish` · `uv add crawfish` |
-| Just run the `craw` CLI, isolated | `uv tool install crawfish` · `pipx install crawfish` |
-| Try it with zero Python setup | `curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh \| sh` |
+| Build with the framework (`import crawfish`) | `pip install crawfish` or `uv add crawfish` |
+| Run the `craw` CLI, isolated | `uv tool install crawfish` or `pipx install crawfish` |
+| Try it with no Python setup | `curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh \| sh` |
 
-The `curl` line is a thin wrapper: it installs [`uv`](https://docs.astral.sh/uv/) if you
-don't have it, then the CLI. The package always comes from PyPI. Working on Crawfish itself?
-See [Getting started → Develop from source](guide/getting-started.md#develop-from-source).
+The `curl` line installs [`uv`](https://docs.astral.sh/uv/) if you do not have it, then the CLI.
+The package always comes from PyPI. Working on Crawfish itself? See
+[Install and run](guide/getting-started.md#develop-from-source).
 
-## Start here
-
-- **[Getting started](guide/getting-started.md)** — install and run your first agent in a few minutes
-- **[Tutorial](guide/tutorial.md)** — build the triage bot end to end
-- **[Concepts](guide/concepts.md)** — the directory model, pipelines, runtimes, and the security boundary
-- **[Cookbook](guide/cookbook.md)** — copy-paste recipes
-- **[API reference](guide/api-reference.md)** — the public surface
-
-## Operate and observe
-
-Run a pipeline once, or keep it running. These pages cover deploying, watching, and
-controlling pipelines locally.
-
-- **[Operations overview](guide/operations.md)** — the deploy → observe → visualize → manage loop
-- **[Deploy](guide/deploy.md)** — `craw deploy`: a detached, scheduled, self-restarting supervisor
-- **[Manage](guide/manage.md)** — `craw manage`: list, stop, restart, and tail logs for deployed pipelines
-- **[Observers](guide/observers.md)** — `crawfish.observe`: rule- and LLM-based watchers over a run
-- **[Visualize](guide/visualize.md)** — `craw visualize`: a localhost-only dashboard
-- **[Project structure](guide/project-structure.md)** — the standard layout, `[project.paths]`, and `craw doctor`
-- **[Export to Claude Code](guide/claude-code-export.md)** — `craw export --claude-code`: run a Definition as a subagent
-
-## Under the hood
-
-- **[Architecture](architecture/ARCHITECTURE.md)** — the three swappable seams · [ADRs](architecture/decisions)
-- **[Security](architecture/SECURITY.md)** — the prompt-injection boundary, secrets, and taint
-- **[API stability](architecture/API-STABILITY.md)** — semver and deprecation policy
-- **[Product](product/PRODUCT.md)** — positioning, hero use case, personas
-- **[Roadmap](roadmap/README.md)** — the Phase-1 plan
-
-## The 30-second version
+## Run something in 30 seconds
 
 ```bash
 pip install crawfish
 craw init my-app && cd my-app
 craw dev definitions/triage-bot -i project=acme -i "ticket_body=login is broken"
 ```
+
+This scaffolds a project with a working triage-bot example and runs it on the mock runtime, so
+it needs no API key and costs nothing.
+
+## Where to go next
+
+The docs are in three parts, like most framework docs:
+
+- **Get started** teaches the basics. Begin with [Install and run](guide/getting-started.md),
+  then build the [triage bot tutorial](guide/tutorial.md) end to end.
+- **Learn** explains one idea at a time. Start with [Core concepts](guide/concepts.md), the
+  mental model behind everything, then read the guide for whatever you are doing.
+- **Reference** is for looking up exact details: the [CLI](guide/cli.md), the
+  [API](guide/api-reference.md), and a page per topic.
+
+If you want to understand how Crawfish is built, the [Architecture](architecture/ARCHITECTURE.md)
+and [Security](architecture/SECURITY.md) pages cover the internals.

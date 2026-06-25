@@ -1,79 +1,79 @@
 # Anomaly & auto-halt
 
-The safety backstop that *acts* on a run's typed event stream. A small rule engine
-watches the emissions a run produces, and when something looks runaway — cost spiking,
-runs failing, a loop flooding events — it escalates from a flagged warning all the way
+The safety backstop that acts on a run's typed event stream. A small rule engine
+watches the emissions a run produces, and when something looks runaway (cost spiking,
+runs failing, a loop flooding events) it escalates from a flagged warning all the way
 up to killing the run. These live in `crawfish.anomaly`.
 
 `Response` · `AnomalyRule` · `CostSpikeRule` · `FailureRateRule` · `StuckRunRule` ·
 `EmissionFloodRule` · `BudgetApproachingRule` · `Firing` · `AnomalyEngine` · `read_and_guard`
 
-Every running pipeline produces an **emission stream** — a sequence of typed events
+Every running pipeline produces an emission stream: a sequence of typed events
 (`crawfish.emission.Emission`): a run started, a model call cost this much, a run
-finished with this status. The [observer](observer.md) layer *renders* that stream for
-a dashboard. This module is the other half: it *reads* the same stream and reacts.
+finished with this status. The [observer](observer.md) layer renders that stream for
+a dashboard. This module reads the same stream and reacts.
 
-An **anomaly rule** is one deterministic check over those emissions. "Did model spend
+An anomaly rule is one deterministic check over those emissions. "Did model spend
 in the last five minutes cross $2?" "Did more than half the recent runs fail?" Each rule
-looks at the stream and either stays quiet or **fires**.
+looks at the stream and either stays quiet or fires.
 
-When a rule fires it carries a **response** — the tier of reaction it wants:
+When a rule fires it carries a response, the tier of reaction it wants:
 
-- **Flag** — record a visible warning. Nothing stops.
-- **Alert** — record a critical warning. Nothing stops.
-- **Halt** — the kill-switch. Stop the run.
+- Flag: record a visible warning. Nothing stops.
+- Alert: record a critical warning. Nothing stops.
+- Halt: the kill-switch. Stop the run.
 
-A **firing** bundles the rule that tripped, the response tier, and the finding it
+A firing bundles the rule that tripped, the response tier, and the finding it
 produced (a `crawfish.observe.ObserverEvent`, the same record type the dashboard shows).
 
-The **anomaly engine** holds a set of rules. You hand it a stream of emissions; it runs
+The anomaly engine holds a set of rules. You hand it a stream of emissions; it runs
 every rule once and gives back the list of firings. Its `guard` method goes further: it
-saves the findings and, if any firing was a halt, **trips the run's kill-switch**.
+saves the findings and, if any firing was a halt, trips the run's kill-switch.
 
 That kill-switch is two levers on the run's context (`crawfish.core.context.RunContext`):
 
-- its **cancel token** — a flag cooperative loops check between steps; cancelling it
+- its cancel token: a flag cooperative loops check between steps; cancelling it
   asks them to stop at the next checkpoint;
-- its **cost budget** — a spend ceiling; forcing the ceiling below what's already been
+- its cost budget: a spend ceiling; forcing the ceiling below what's already been
   spent makes the next charge raise `BudgetExceeded`, blocking even a loop that ignores
   the cancel token.
 
 !!! warning "A halt can't be triggered by the input being processed"
 
     A halt must never be triggerable by the very input the agent is processing. So rules
-    read *only* typed, numeric signals — a cost figure, a failure count, an event count, a
-    run's age — never free text from outside. A value derived from **fluid** (untrusted,
-    per-item) data is marked *tainted*. The firing records that taint for the dashboard,
+    read only typed, numeric signals (a cost figure, a failure count, an event count, a
+    run's age), never free text from outside. A value derived from **fluid** (untrusted,
+    per-item) data is marked tainted. The firing records that taint for the dashboard,
     but it never changes the decision: the decision was computed from numbers a compromised
-    agent can't reach. And the rules run in the **orchestrator** — the trusted parent
-    process — never inside the sandboxed child that runs the agent, so a hijacked agent
+    agent can't reach. And the rules run in the orchestrator, the trusted parent
+    process, never inside the sandboxed child that runs the agent, so a hijacked agent
     can't switch them off.
 
 ## The tiered response, and what "halt" actually does
 
 `Response` is ordered `FLAG < ALERT < HALT`. The first two only differ in the severity
 of the finding they emit (`WARN` vs `CRITICAL`); neither stops anything. `HALT` is the
-runaway kill-switch. `AnomalyEngine.guard` calls `_halt(ctx)` once if *any* firing
+runaway kill-switch. `AnomalyEngine.guard` calls `_halt(ctx)` once if any firing
 halts, which:
 
-1. calls `ctx.cancel_token.cancel()` — the cooperative lever; and
-2. sets `ctx.cost_budget.limit_usd = spent_usd - 1e-9` — drops the ceiling a hair below
-   current spend so the *next* `charge` raises `BudgetExceeded`.
+1. calls `ctx.cancel_token.cancel()`, the cooperative lever; and
+2. sets `ctx.cost_budget.limit_usd = spent_usd - 1e-9`, dropping the ceiling a hair below
+   current spend so the next `charge` raises `BudgetExceeded`.
 
 Step 2 matters even when nothing has been spent yet (an `EmissionFloodRule` or
 `StuckRunRule` can halt before any model call). With zero spend the ceiling goes
 slightly negative on purpose, so the non-cooperative lever fires unconditionally on the
-next `charge(...)`, including `charge(0.0)`. `_halt` is idempotent — calling it twice is
+next `charge(...)`, including `charge(0.0)`. `_halt` is idempotent: calling it twice is
 harmless.
 
 ## Determinism: rules never read a wall clock
 
 Every rule is evaluated against a single `now` value. `AnomalyEngine.evaluate` resolves
-it: if you don't pass `now`, it uses the **latest emission `ts`** in the stream (or `0.0`
+it: if you don't pass `now`, it uses the latest emission `ts` in the stream (or `0.0`
 for an empty stream). Time-windowed rules then compute their cutoff from that `now`
 (via `parse_since`, e.g. `"-5m"` → `now - 300`), and age-based rules compute `now - ts`.
 No rule consults the real clock in a way that affects its outcome, so a fixed synthetic
-stream flags, alerts, and halts **identically every run** — which is what lets the
+stream flags, alerts, and halts identically every run. That is what lets the
 example below assert exact output.
 
 ## What each rule trips on
@@ -94,17 +94,17 @@ by count, budget is cumulative); the others window by `ts`.
 !!! note "Good to know"
 
     Most rules default to `Response.FLAG`, but two don't: `EmissionFloodRule` defaults to
-    `HALT` (an event flood is a loop runaway — stop it), and `BudgetApproachingRule`
-    defaults to `ALERT` (an early warning *before* the hard `CostBudget` ceiling, while
+    `HALT` (an event flood is a loop runaway, so stop it), and `BudgetApproachingRule`
+    defaults to `ALERT` (an early warning before the hard `CostBudget` ceiling, while
     there's still budget left to act on). Pass `response=` to override any of them.
 
 ## `guard` vs `evaluate`, and `read_and_guard`
 
-`AnomalyEngine.evaluate` is **pure**: run the rules, return the firings, touch nothing.
-`AnomalyEngine.guard` is the orchestrator entry point — it evaluates, emits each finding
+`AnomalyEngine.evaluate` is pure: run the rules, return the firings, touch nothing.
+`AnomalyEngine.guard` is the orchestrator entry point: it evaluates, emits each finding
 onto an `ObserverSurface` (which also lands a typed `OBSERVER` emission back on the run
-stream, so the breach is itself visible on the dashboard — see
-[emission inspector & visualizer](emission-inspector-visualize.md)), and halts on any
+stream, so the breach is itself visible on the dashboard, see
+[emission, inspector & visualize](emission-inspector-visualize.md)), and halts on any
 halting firing. `read_and_guard` is the live-tail wiring the executor calls between
 iterations: it reads the run's emissions from the store and `guard`s them.
 
@@ -116,21 +116,21 @@ cooperative loop stops too.
 
 ### `Response`
 
-`class Response(str, Enum)` — the tier a breached rule escalates to. Ordered
+`class Response(str, Enum)`: the tier a breached rule escalates to. Ordered
 `FLAG < ALERT < HALT`.
 
 | Member | Value | Meaning |
 | --- | --- | --- |
 | `Response.FLAG` | `"flag"` | Emit a `WARN` finding; nothing stops. |
 | `Response.ALERT` | `"alert"` | Emit a `CRITICAL` finding; nothing stops. |
-| `Response.HALT` | `"halt"` | Trip the run's `CancelToken` and force `BudgetExceeded` — the kill-switch. |
+| `Response.HALT` | `"halt"` | Trip the run's `CancelToken` and force `BudgetExceeded`: the kill-switch. |
 
 Properties: `.severity` → `Severity.WARN` for `FLAG`, else `Severity.CRITICAL`;
 `.halts` → `True` only for `HALT`.
 
 ### `AnomalyRule`
 
-`class AnomalyRule(ABC)` — a deterministic check over the emission stream.
+`class AnomalyRule(ABC)`: a deterministic check over the emission stream.
 
 ```python
 def __init__(self, *, response: Response = Response.FLAG) -> None
@@ -152,7 +152,7 @@ wraps it in a `Firing`, recording window taint via `_any_tainted`.
 
 ### `CostSpikeRule`
 
-`class CostSpikeRule(AnomalyRule)` — `kind = "cost.spike"`.
+`class CostSpikeRule(AnomalyRule)`: `kind = "cost.spike"`.
 
 ```python
 def __init__(
@@ -171,7 +171,7 @@ Breaches when summed `cost_usd` across `MODEL` emissions in `window` is **≥**
 
 ### `FailureRateRule`
 
-`class FailureRateRule(AnomalyRule)` — `kind = "failure.rate"`.
+`class FailureRateRule(AnomalyRule)`: `kind = "failure.rate"`.
 
 ```python
 def __init__(
@@ -191,7 +191,7 @@ window → never fires.
 
 ### `StuckRunRule`
 
-`class StuckRunRule(AnomalyRule)` — `kind = "run.stuck"`.
+`class StuckRunRule(AnomalyRule)`: `kind = "run.stuck"`.
 
 ```python
 def __init__(self, *, seconds: float, response: Response = Response.FLAG) -> None
@@ -207,7 +207,7 @@ Breaches when a run has a `RUN_START` but no `RUN_FINISH` and its age `now - sta
 
 ### `EmissionFloodRule`
 
-`class EmissionFloodRule(AnomalyRule)` — `kind = "emission.flood"`. The batch-level loop
+`class EmissionFloodRule(AnomalyRule)`: `kind = "emission.flood"`. The batch-level loop
 cap, on count rather than cost.
 
 ```python
@@ -226,7 +226,7 @@ Breaches when emission count in `window` is **≥** `max_count`.
 
 ### `BudgetApproachingRule`
 
-`class BudgetApproachingRule(AnomalyRule)` — `kind = "budget.approaching"`. An early
+`class BudgetApproachingRule(AnomalyRule)`: `kind = "budget.approaching"`. An early
 warning before the hard `CostBudget` ceiling.
 
 ```python
@@ -246,7 +246,7 @@ Breaches when cumulative `cost_usd` across **all** `MODEL` emissions is **≥**
 
 ### `Firing`
 
-`@dataclass(frozen=True) class Firing` — a rule breach.
+`@dataclass(frozen=True) class Firing`: a rule breach.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -259,7 +259,7 @@ Property: `.halts` → `self.response.halts`.
 
 ### `AnomalyEngine`
 
-`class AnomalyEngine` — evaluate a set of rules over the stream and enforce halts.
+`class AnomalyEngine`: evaluate a set of rules over the stream and enforce halts.
 
 ```python
 def __init__(self, rules: Sequence[AnomalyRule]) -> None
@@ -272,7 +272,7 @@ def evaluate(
 ) -> list[Firing]
 ```
 
-Runs every rule once; returns firings, **no side effects**. `now` defaults to the latest
+Runs every rule once; returns firings, no side effects. `now` defaults to the latest
 emission `ts` (or `0.0` for an empty stream).
 
 ```python
@@ -313,7 +313,7 @@ live-tail point the executor calls between iterations. Deterministic given a fix
 
 A seeded synthetic stream: two of three runs failed, and $2.75 of model spend lands in
 the window. `FailureRateRule` (alert) and `CostSpikeRule` (halt) both trip. Pure and
-in-memory — `evaluate` touches no context, so no run is needed.
+in-memory: `evaluate` touches no context, so no run is needed.
 
 ```python
 from crawfish.emission import Emission, EmissionKind
@@ -361,6 +361,6 @@ print("any halts ->", any(f.halts for f in firings))
 
 ## See also
 
-- [Observer](observer.md) — the watchdog tier that *reports* on the same runs without acting.
-- [Emission, inspector & visualize](emission-inspector-visualize.md) — the typed stream rules read.
-- [Context & budgets](context-and-budgets.md) — the `CancelToken` and `CostBudget` a halt trips.
+- [Observer](observer.md): the watchdog tier that reports on the same runs without acting.
+- [Emission, inspector & visualize](emission-inspector-visualize.md): the typed stream rules read.
+- [Context & budgets](context-and-budgets.md): the `CancelToken` and `CostBudget` a halt trips.

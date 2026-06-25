@@ -1,8 +1,8 @@
-# Nodes — router & sink
+# Nodes: router and sink
 
-A **router** splits one stream into several by attaching a label to each item. A **sink**
-is the one place a pipeline writes to the outside world — open a PR, post a comment. They
-are the two boundary nodes that decide *where data goes*. Both live in `crawfish.nodes`,
+A *router* splits one stream into several by attaching a label to each item. A *sink*
+is the one place a pipeline writes to the outside world: open a PR, post a comment. They
+are the two boundary nodes that decide where data goes. Both live in `crawfish.nodes`,
 and both are guarded: a router refuses to assemble if any branch is missing, and a sink
 refuses to construct if its destination could be steered by untrusted data.
 
@@ -11,31 +11,31 @@ refuses to construct if its destination could be steered by untrusted data.
 
 ## Routers and classifiers
 
-A **router** takes the single stream of items flowing through a pipeline and splits it
-into several **branches** — for example, send bug reports to one downstream node and
+A *router* takes the single stream of items flowing through a pipeline and splits it
+into several *branches*. For example, send bug reports to one downstream node and
 feature requests to another. To decide which branch an item takes, the router asks a
-**classifier** for a **label** (a short string like `"bug"` or `"feature"`). Each label
-maps to one downstream node; that mapping is the router's `branches`.
+*classifier* for a *label* (a short string like `"bug"` or `"feature"`). Each label
+maps to one downstream node, and that mapping is the router's `branches`.
 
-A **classifier** turns one item into one label drawn from a fixed, closed set you
-declare up front. That set always includes a **default** label — the "none of the
-above" / dead-letter bucket — so *every* item is guaranteed a destination. There are two
+A *classifier* turns one item into one label drawn from a fixed, closed set you
+declare up front. That set always includes a *default* label, the "none of the
+above" or dead-letter bucket, so every item is guaranteed a destination. There are two
 flavours:
 
-- **Predicate** (`Classifier.from_predicates`): an ordered map of `label → test`, where
-  each test is a plain function returning `True`/`False`. The first test that passes
-  wins; if none pass, the item gets the default. Pure and synchronous — no model call.
-- **Definition-backed** (`Classifier.from_definition`): runs an agent team that emits a
+- *Predicate* (`Classifier.from_predicates`): an ordered map of `label -> test`, where
+  each test is a plain function returning `True` or `False`. The first test that passes
+  wins. If none pass, the item gets the default. Pure and synchronous, no model call.
+- *Definition-backed* (`Classifier.from_definition`): runs an agent team that emits a
   label as free text, which is then matched to one of your allowed labels. Used when the
   decision needs a model.
 
 ### Routing is proven total at assembly time
 
 If a classifier could ever emit a label that the router has no branch for, the pipeline
-is broken — there would be an item with nowhere to go. Crawfish catches this when you
+is broken: there would be an item with nowhere to go. Crawfish catches this when you
 *construct* the `Router` (assembly time), not when it runs. `Router.__init__` compares
 the classifier's full `labels` set against the keys of `branches`. Any label without a
-branch — and, separately, a `default` that has no branch — raises `UnroutableLabelError`
+branch, and separately a `default` that has no branch, raises `UnroutableLabelError`
 (a `ValueError`) immediately. A routing hole is a structural defect, so it surfaces when
 you wire the pipeline, never as a `KeyError` mid-run on the one item that hit the missing
 branch. Once constructed, `Router.route` (pure) and `Router.route_async` (agent-backed)
@@ -45,73 +45,72 @@ can index `branches[label]` without guarding, because totality is already proven
 
 `from_predicates` preserves the mapping's insertion order and appends `default` to the
 label set if it isn't already a key. `classify` walks the predicates in that order and
-returns the **first** label whose predicate returns `True` on the item's value, else the
-default. Order is significant — earlier labels win when more than one predicate would
+returns the first label whose predicate returns `True` on the item's value, else the
+default. Order is significant: earlier labels win when more than one predicate would
 match. `classify` raises `TypeError` if called on a Definition-backed classifier (which
-has no predicates); use `classify_async` there.
+has no predicates). Use `classify_async` there.
 
 A Definition-backed classifier runs its agent team and gets back free text, which
 `classify_async` maps to an allowed label by case-insensitive token match: a label is
 chosen if it appears as a whitespace-delimited token in the text (so `"the label is
-bug."` → `"bug"`), trying labels in declared order, falling back to `default` on no
-match. The classification run deliberately skips input-type and output-schema validation
-— it over-binds the item into every required slot and reads the run's free text — so it
+bug."` gives `"bug"`), trying labels in declared order, falling back to `default` on no
+match. The classification run skips input-type and output-schema validation: it
+over-binds the item into every required slot and reads the run's free text, so it
 needs no knowledge of the Definition's port names.
 
 ## Sinks write to the outside world
 
-A **sink** is the egress boundary — *egress* meaning data leaving the system for the
+A *sink* is the egress boundary, where *egress* means data leaving the system for the
 outside world. It is the only node that performs an external side effect. Two concrete
 sinks ship: `LinearSink` (create a Linear issue/comment) and `GitHubPRSink` (open a
-GitHub pull request). Both default to **dry-run** — instead of touching the network they
-record what they *would* have written into a `writes` list, so tests stay deterministic
+GitHub pull request). Both default to *dry-run*: instead of touching the network they
+record what they would have written into a `writes` list, so tests stay deterministic
 and offline.
 
 Because a sink writes to the outside world, two safety terms matter:
 
-- **Static-only target.** A sink's *target* is the destination address of a write — the
+- *Static-only target.* A sink's *target* is the destination address of a write: the
   Linear team, the GitHub repo. "Static" means the value is fixed once at the start of a
-  batch and is identical for every item (the opposite is **fluid** — a per-item value
-  that can be influenced by model output or untrusted input). Sink targets must be static
+  batch and is identical for every item. The opposite is **fluid**: a per-item value
+  that can be influenced by model output or untrusted input. Sink targets must be static
   so that a malicious prompt buried in fluid data can never redirect a write to a
   destination you didn't choose. A fluid target is rejected the moment you construct the
   sink, with `TargetMustBeStaticError`.
-- **Idempotency key.** "Idempotent" means doing the same operation twice has the same
-  effect as doing it once. A sink derives a unique fingerprint — the *idempotency key* —
+- *Idempotency key.* "Idempotent" means doing the same operation twice has the same
+  effect as doing it once. A sink derives a unique fingerprint, the *idempotency key*,
   for each write from its static configuration plus the batch and item identity (never
   from the fluid value). The key is claimed atomically before writing, so re-running the
   same batch is a silent no-op rather than a duplicate PR.
 
-Sinks marked `always_ask` add an **approval gate**: they refuse to fire unless a human
+Sinks marked `always_ask` add an *approval gate*: they refuse to fire unless a human
 approval callback says yes. Asking such a sink to write with no callback raises
 `ApprovalRequired`.
 
-!!! warning "Sink targets are static-only — the egress contract"
+!!! warning "Sink targets are static only"
 
     A *fluid* value is per-item and can carry model output or untrusted session data. If a
     write's destination could be fluid, a prompt-injection payload in an item could redirect
-    egress — open a PR against an attacker's repo, post to the wrong channel. `Sink.__init__`
+    egress: open a PR against an attacker's repo, post to the wrong channel. `Sink.__init__`
     walks `target_params` and raises `TargetMustBeStaticError` for any param whose `flow` is
-    not `Flow.STATIC`. The rejection happens at construction (wire/compile time), so the
-    guarantee holds before the pipeline ever runs a model. These nodes are part of the
-    [security spine](../architecture/SECURITY.md); no ADR governs them directly — the
-    load-bearing rule is the SECURITY.md egress contract.
+    not `Flow.STATIC`. The rejection happens at construction (wire or compile time), so the
+    guarantee holds before the pipeline ever runs a model. The rule that enforces this is the
+    egress contract in the [security overview](../architecture/SECURITY.md).
 
 ### Idempotency excludes fluid data by design
 
 `Sink._idempotency_key` hashes (SHA-256) a payload of the sink name, `ctx.batch_id`, the
 item's stable `lineage` (falling back to `output.id`), and the JSON of the sink's static
-`config` — sorted for order-stability. The `Output` *value* and any model-derived data
+`config`, sorted for order-stability. The `Output` *value* and any model-derived data
 are excluded on purpose: a re-run of the same batch/item yields the same key (so the
 write no-ops), and a perturbed prompt can't escape idempotency by changing the key. The
-key is claimed via `ctx.store.claim_idempotency`; if the claim is lost, the write is
+key is claimed via `ctx.store.claim_idempotency`. If the claim is lost, the write is
 skipped.
 
 ### The approval gate fires before the idempotency claim
 
 In `Sink.write`, the `always_ask` check runs *before* claiming the idempotency key. This
 ordering matters: a declined write must be retryable later, but an idempotency claim is
-permanent — so a decline never burns the claim.
+permanent, so a decline never burns the claim.
 
 !!! warning "Approval gating with `always_ask`"
 
@@ -121,16 +120,16 @@ permanent — so a decline never burns the claim.
 
 !!! note "Good to know"
 
-    Credentials are read by **reference**, never by value — `config["credential_ref"]`
+    Credentials are read by reference, never by value: `config["credential_ref"]`
     holds the *name* of an env var, never the secret itself. The recorded write carries that
     name, so no secret reaches stored config, the `Output`, logs, or telemetry. On a
     successful write, `Sink.write` emits a typed `SINK` telemetry event whose `target` is
-    the static sink name and whose `tainted` flag propagates from the producing `Output` —
+    the static sink name and whose `tainted` flag propagates from the producing `Output`,
     never the credential value or the (possibly model-derived) output value.
 
 ## Example
 
-A predicate router that branches numbers by sign — printing where each lands — followed
+A predicate router that branches numbers by sign, printing where each lands, followed
 by proof that a fluid sink target is rejected at construction. Pure and in-memory: no
 runtime, no network.
 
@@ -213,12 +212,12 @@ except TargetMustBeStaticError as e:
 
 ### `UnroutableLabelError`
 
-`class UnroutableLabelError(ValueError)` — raised at assembly time (in `Router.__init__`)
+`class UnroutableLabelError(ValueError)`: raised at assembly time (in `Router.__init__`)
 when a classifier label, or the classifier's `default`, has no matching router branch.
 
 ### `Classifier`
 
-`class Classifier` — produces one label from a closed set for an `Output`. Construct via
+`class Classifier`: produces one label from a closed set for an `Output`. Construct via
 the classmethods, not the raw `__init__`.
 
 ```python
@@ -257,7 +256,7 @@ Attributes: `id: str`, `name: str`, `labels: list[str]`, `default: str`. The raw
 
 ### `Router`
 
-`class Router(Node)` — routes an `Output` down one labelled branch. `kind` is
+`class Router(Node)`: routes an `Output` down one labelled branch. `kind` is
 `NodeKind.ROUTER`.
 
 ```python
@@ -269,8 +268,8 @@ def __init__(
 ) -> None
 ```
 
-Raises `UnroutableLabelError` if any `classifier.labels` entry — or `classifier.default`
-— is missing from `branches`.
+Raises `UnroutableLabelError` if any `classifier.labels` entry, or `classifier.default`,
+is missing from `branches`.
 
 | Method | Signature | Returns |
 | --- | --- | --- |
@@ -282,19 +281,19 @@ Attributes: `id: str`, `name: str`, `kind: NodeKind`, `branches: dict[str, Node]
 
 ### `TargetMustBeStaticError`
 
-`class TargetMustBeStaticError(ValueError)` — raised in `Sink.__init__` when a
+`class TargetMustBeStaticError(ValueError)`: raised in `Sink.__init__` when a
 `target_params` entry has `flow` other than `Flow.STATIC`. Enforced at construction so a
 fluid (per-item, model-influenced) target cannot redirect egress.
 
 ### `ApprovalRequired`
 
-`class ApprovalRequired(RuntimeError)` — raised by `Sink.write` when an `always_ask` sink
+`class ApprovalRequired(RuntimeError)`: raised by `Sink.write` when an `always_ask` sink
 is invoked without an `approve` callback.
 
 ### `Sink`
 
-`class Sink(Node, ABC, Generic[T])` — base egress node. `kind` is `NodeKind.SINK`.
-Subclasses implement `_write`; they never reimplement the idempotency or approval
+`class Sink(Node, ABC, Generic[T])`: base egress node. `kind` is `NodeKind.SINK`.
+Subclasses implement `_write`. They never reimplement the idempotency or approval
 invariants, which live in the public `write`.
 
 ```python
@@ -320,7 +319,7 @@ to allow the write).
 
 ### `LinearSink`
 
-`class LinearSink(Sink[JSONValue])` — create a Linear issue/comment.
+`class LinearSink(Sink[JSONValue])`: create a Linear issue/comment.
 
 ```python
 def __init__(
@@ -341,7 +340,7 @@ Reads `config["team"]`, `config["project"]`, and `config["credential_ref"]` (the
 
 ### `GitHubPRSink`
 
-`class GitHubPRSink(Sink[JSONValue])` — open a GitHub pull request. Same signature as
+`class GitHubPRSink(Sink[JSONValue])`: open a GitHub pull request. Same signature as
 `LinearSink` except `name` defaults to `"github_pr"`. In `dry_run` (the default) records
 to `self.writes`; live mode raises `NotImplementedError`. Reads `config["repo"]`,
 `config["base"]`, and `config["credential_ref"]`. Extra attributes: `dry_run: bool`,
@@ -349,6 +348,6 @@ to `self.writes`; live mode raises `NotImplementedError`. Reads `config["repo"]`
 
 ## See also
 
-- [Nodes — aggregator](nodes-aggregator.md) — fold the per-item runs before they branch out.
-- [Nodes — source & filter](nodes-source-filter.md) — the ingress side of the pipeline spine.
-- [Core types](core-types.md) — `NodeKind`, `Parameter`, and the static-vs-`Flow.FLUID` boundary.
+- [Nodes: aggregator](nodes-aggregator.md): fold the per-item runs before they branch out.
+- [Nodes: source and filter](nodes-source-filter.md): the ingress side of the pipeline spine.
+- [Core types](core-types.md): `NodeKind`, `Parameter`, and the static-vs-`Flow.FLUID` boundary.

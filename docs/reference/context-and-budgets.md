@@ -1,22 +1,22 @@
 # Context & budgets
 
 The handle a node holds while it runs: who it is, where it saves state, and the two levers
-the orchestrator uses to stop runaway work — a cost ceiling and a cooperative cancel signal.
+the orchestrator uses to stop runaway work (a cost ceiling and a cooperative cancel signal).
 These live in `crawfish.core.context` and are threaded through every step of a run.
 
 `RunContext` · `CostBudget` · `CancelToken` · `BudgetExceeded` · `Cancelled`
 
 ## What a node gets when it runs
 
-When a node executes, it receives a **run context** — one object carrying everything that
-step needs to know about *this* run: a `run_id` identifying the run, the `org_id` it belongs
-to (the tenancy key — which customer or workspace owns the data), a `store` for reading and
+When a node executes, it receives a **run context**: one object carrying everything that
+step needs to know about *this* run. A `run_id` identifying the run, the `org_id` it belongs
+to (the tenancy key, which customer or workspace owns the data), a `store` for reading and
 writing state, and the two safety levers below.
 
 A **cost budget** is a spending ceiling in dollars. Each unit of work (usually a model call)
 **charges** its cost against the budget. While the running total stays under the cap, charges
 succeed silently. The first charge that pushes the total *over* the cap raises
-`BudgetExceeded` — the orchestrator's hard kill on a run that is burning money too fast. A
+`BudgetExceeded`, the orchestrator's hard kill on a run that is burning money too fast. A
 budget with no cap (the local-dev default) never raises.
 
 A **cancel token** is a cooperative stop signal. *Cooperative* means nothing force-kills the
@@ -25,18 +25,18 @@ node mid-instruction. Instead, long-running loops **check in** now and then by c
 **trips** the token by calling `cancel`, the next check-in raises `Cancelled` and the loop
 unwinds. You can also poll the token without raising, via its `cancelled` property.
 
-`BudgetExceeded` and `Cancelled` are the exceptions these two levers raise — the signals that
+`BudgetExceeded` and `Cancelled` are the exceptions these two levers raise: the signals that
 travel up the stack when a run hits its ceiling or is told to stop.
 
 ## One context, shared by every node
 
-`RunContext` is a plain dataclass, not a Pydantic model — it bundles live handles
+`RunContext` is a plain dataclass, not a Pydantic model. It bundles live handles
 (a `Store`, a `threading.Event`-backed token), not serialisable data. Every node in a
 pipeline receives the *same* context for a run, so the cost budget and cancel token are
 shared state: a charge in one node counts against the same ceiling every other node
 shares, and one `cancel()` stops them all.
 
-The `Store` type is imported only under `TYPE_CHECKING` — `core` is the substrate the
+The `Store` type is imported only under `TYPE_CHECKING`. `core` is the substrate the
 rest of the framework sits on, so it depends on the store *protocol*, never a concrete
 backend. This keeps the module dependency-light and free of import cycles.
 
@@ -44,13 +44,13 @@ backend. This keeps the module dependency-light and free of import cycles.
 
 `CostBudget.charge` adds to `spent_usd` *first*, then tests the total against the cap.
 A cap of `None` means unbounded: `charge` never raises (the `limit_usd is not None`
-guard short-circuits), and `remaining_usd` returns `None` rather than a number — there is
+guard short-circuits), and `remaining_usd` returns `None` rather than a number. There is
 no remaining budget to report when there is no limit.
 
 !!! warning "The trip charge is still recorded"
 
-    The spend total reflects a charge even when that charge is the one that trips the limit —
-    after a `BudgetExceeded`, `spent_usd` already includes the over-the-line amount. The
+    The spend total reflects a charge even when that charge is the one that trips the limit.
+    After a `BudgetExceeded`, `spent_usd` already includes the over-the-line amount. The
     comparison is strict (`>`): spending *exactly* the cap is allowed; only spending *past* it
     raises.
 
@@ -64,21 +64,21 @@ the node thread.
 !!! note "Good to know"
 
     Nothing interrupts the node on its behalf. A node that never calls `raise_if_cancelled`
-    runs to completion regardless of cancellation — the contract is that long loops opt in by
+    runs to completion regardless of cancellation. The contract is that long loops opt in by
     checking in.
 
 ## How `emit` routes through the store
 
 `RunContext.emit` appends an observer event for the run-info surface, but it does so
-*through this run's `store`*. That indirection is load-bearing: a `ScrubbingStore`
-wrapper around the store redacts secrets before the write, so emitted events cannot leak
-credentials — the secret/prompt-injection boundary. The import of `ObserverSurface` is
-deliberately function-local to avoid a `core ↔ observe` import cycle.
+*through this run's `store`*. That indirection matters: a `ScrubbingStore` wrapper around
+the store redacts secrets before the write, so emitted events cannot leak credentials. This
+is the secret and prompt-injection boundary. The import of `ObserverSurface` is function-local
+to avoid a `core ↔ observe` import cycle.
 
 ## Example
 
 A budget that charges under its cap, then trips it; an unbounded budget; and a cancel
-token polled and tripped — all pure, no runtime needed.
+token polled and tripped. All pure, no runtime needed.
 
 ```python
 from crawfish.core.context import CostBudget, BudgetExceeded, CancelToken, Cancelled
@@ -125,17 +125,17 @@ except Cancelled as exc:
 
 ### `BudgetExceeded`
 
-`class BudgetExceeded(RuntimeError)` — raised by `CostBudget.charge` when a charge would
+`class BudgetExceeded(RuntimeError)`: raised by `CostBudget.charge` when a charge would
 push cumulative spend past the cap.
 
 ### `Cancelled`
 
-`class Cancelled(RuntimeError)` — raised by `CancelToken.raise_if_cancelled` when the
+`class Cancelled(RuntimeError)`: raised by `CancelToken.raise_if_cancelled` when the
 token has been cancelled.
 
 ### `CostBudget`
 
-`@dataclass class CostBudget` — a dollar ceiling the orchestrator can hard-kill on.
+`@dataclass class CostBudget`: a dollar ceiling the orchestrator can hard-kill on.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -149,7 +149,7 @@ token has been cancelled.
 
 ### `CancelToken`
 
-`@dataclass class CancelToken` — cooperative cancellation backed by a `threading.Event`.
+`@dataclass class CancelToken`: cooperative cancellation backed by a `threading.Event`.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -163,14 +163,14 @@ token has been cancelled.
 
 ### `RunContext`
 
-`@dataclass class RunContext` — per-run execution context handed to every node.
+`@dataclass class RunContext`: per-run execution context handed to every node.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `store` | `Store` | — (required) | Persistence handle; a `Store` protocol implementation. |
+| `store` | `Store` | (required) | Persistence handle; a `Store` protocol implementation. |
 | `run_id` | `str` | `new_id()` | Opaque identifier for this run (UUID4 string). |
 | `batch_id` | `str \| None` | `None` | Identifier of the enclosing batch, if any. |
-| `org_id` | `str` | `"local"` | Tenancy key — which org/workspace owns the run. |
+| `org_id` | `str` | `"local"` | Tenancy key: which org/workspace owns the run. |
 | `cost_budget` | `CostBudget` | new `CostBudget()` | The run's shared spend ceiling (unbounded by default). |
 | `cancel_token` | `CancelToken` | new `CancelToken()` | The run's shared cancel signal. |
 
@@ -180,6 +180,6 @@ token has been cancelled.
 
 ## See also
 
-- [Core types](core-types.md) — the nodes and parameters a run context threads through.
-- [Persistence](persistence.md) — the `Store` protocol the context carries.
-- [Run & engine](run-and-engine.md) — where a `RunContext` is created and driven.
+- [Core types](core-types.md): the nodes and parameters a run context threads through.
+- [Persistence](persistence.md): the `Store` protocol the context carries.
+- [Run & engine](run-and-engine.md): where a `RunContext` is created and driven.

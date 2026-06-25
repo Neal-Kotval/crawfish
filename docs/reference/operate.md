@@ -1,9 +1,9 @@
-# Operate — deploy, manage & triggers
+# Operate: deploy, manage, and triggers
 
-Everything that turns a finished pipeline into something that *runs by itself*. Launch it
-as a long-lived background process, list and restart what's running, decide *when* it
-fires, and package it as a container image. These live in `crawfish.deploy`,
-`crawfish.manage`, `crawfish.triggers`, and `crawfish.build`.
+Everything that turns a finished pipeline into something that runs by itself. Launch it as a
+long-lived background process, list and restart what's running, decide when it fires, and
+package it as a container image. These live in `crawfish.deploy`, `crawfish.manage`,
+`crawfish.triggers`, and `crawfish.build`.
 
 `DeployEntry` · `DeployRegistry` · `DeployStatus` · `Supervisor` · `deploy` · `stop` ·
 `PipelineStatus` · `manage_list` · `format_table` · `restart_target` · `Cron` ·
@@ -17,44 +17,44 @@ fires, and package it as a container image. These live in `crawfish.deploy`,
 
 ## Deploying a pipeline
 
-A pipeline you run by hand stops when you close the terminal. **Deploying** it means
-launching it as a **daemon** — a long-lived background process that survives the shell
-closing, fires the pipeline on a schedule (or continuously), restarts a failed cycle, and
-picks up unfinished work again after a crash. In Crawfish that daemon is the
-**`Supervisor`**, and `deploy` is the function that spawns it detached and remembers it.
+A pipeline you run by hand stops when you close the terminal. *Deploying* it means launching
+it as a *daemon*: a long-lived background process that survives the shell closing, fires the
+pipeline on a schedule (or continuously), restarts a failed cycle, and picks up unfinished
+work again after a crash. In Crawfish that daemon is the **`Supervisor`**, and `deploy` is
+the function that spawns it detached and remembers it.
 
-To "remember it" Crawfish writes a row into the **deploy registry** — a small table, kept
-in the project's [`Store`](persistence.md), recording each deployed pipeline's name, process id
-(**PID**, the operating system's number for a running process), schedule, and status. One
-row is a **`DeployEntry`**; `DeployRegistry` reads and writes them; `DeployStatus` is the
-running / stopped / dead label on each. `stop` signals the process and flips its status.
+To remember it, Crawfish writes a row into the *deploy registry*: a small table, kept in the
+project's [`Store`](persistence.md), recording each deployed pipeline's name, process id
+(the **PID**, the operating system's number for a running process), schedule, and status. One
+row is a **`DeployEntry`**. `DeployRegistry` reads and writes them. `DeployStatus` is the
+running, stopped, or dead label on each. `stop` signals the process and flips its status.
 
 ## Managing what's running
 
-**`craw manage`** is the operator's window onto all of that. `manage_list` builds the
-view — one **`PipelineStatus`** per deployed pipeline, joining the registry row with how
-its runs actually went (uptime, last run, cost today, next fire time). `format_table`
-prints those rows as a plain text table. `restart_target` stops a pipeline and
-re-deploys it from its recorded directory and schedule.
+**`craw manage`** is the operator's window onto all of that. `manage_list` builds the view:
+one **`PipelineStatus`** per deployed pipeline, joining the registry row with how its runs
+actually went (uptime, last run, cost today, next fire time). `format_table` prints those
+rows as a plain text table. `restart_target` stops a pipeline and re-deploys it from its
+recorded directory and schedule.
 
 ## Triggers
 
-A **trigger** answers *when does this fire?* Two kinds:
+A *trigger* answers the question of when a pipeline fires. Two kinds:
 
-- A **cron schedule** — the classic Unix five-field time spec (`m h dom mon dow`,
-  e.g. `0 8 * * *` = "08:00 every day"). `CronSchedule` evaluates one; `Cron` is just a
-  shorter name for the same class; `CronTrigger` is the object a project declares to say
-  "fire on this cron string". `Trigger` is the abstract base both trigger kinds share.
-- A **webhook** — instead of polling a clock, an external system sends an HTTP request
-  that fires a run. `WebhookTrigger` describes the endpoint. Because anyone can send an
-  HTTP request, the sender proves it is genuine by attaching a **signature** computed from
-  a shared secret; `verify_webhook` recomputes that signature and checks it matches.
+- A *cron schedule*: the classic Unix five-field time spec (`m h dom mon dow`, for example
+  `0 8 * * *` = "08:00 every day"). `CronSchedule` evaluates one. `Cron` is a shorter name
+  for the same class. `CronTrigger` is the object a project declares to say "fire on this
+  cron string". `Trigger` is the abstract base both trigger kinds share.
+- A *webhook*: instead of polling a clock, an external system sends an HTTP request that
+  fires a run. `WebhookTrigger` describes the endpoint. Because anyone can send an HTTP
+  request, the sender proves it is genuine by attaching a *signature* computed from a shared
+  secret. `verify_webhook` recomputes that signature and checks it matches.
 
 ## Building an image
 
-**`craw build`** packages a project as a container image — a self-contained, reproducible
+**`craw build`** packages a project as a container image: a self-contained, reproducible
 bundle of the project plus its pinned dependencies. You never hand-write the build recipe
-(the **`Containerfile`**): `generate_containerfile` derives it deterministically,
+(the **`Containerfile`**). `generate_containerfile` derives it deterministically,
 `write_containerfile` saves it, and `plan_build` returns a **`BuildPlan`** summarising what
 the image will be without writing anything.
 
@@ -63,22 +63,21 @@ the image will be without writing anything.
 ### Why a detached daemon, not tmux
 
 `deploy` spawns the supervisor as a true detached child via
-`subprocess.Popen(..., start_new_session=True)` — its own session leader, so it outlives
-the shell. An earlier option was to run it inside a `tmux` session; that was rejected
-because it adds a runtime dependency, hides the process from the registry, and makes the
-control surface (`craw manage`) depend on parsing `tmux` output. The daemon is visible,
-dependency-free, and controllable through the Store-backed registry. See
-[ADR 0009](../architecture/decisions/0009-deploy-detached-daemon-over-tmux.md) (daemon vs tmux).
+`subprocess.Popen(..., start_new_session=True)`, its own session leader, so it outlives the
+shell. An earlier option was to run it inside a `tmux` session; that was rejected because it
+adds a runtime dependency, hides the process from the registry, and makes the control surface
+(`craw manage`) depend on parsing `tmux` output. The daemon is visible, dependency-free, and
+controllable through the Store-backed registry.
 
 ### The supervisor never carries a secret
 
 The detached child's command line is `python -m crawfish.cli _supervise <name> --dir <dir>
-[--schedule <s>]` — the pipeline name, its directory, and an optional schedule string.
-**No secret value ever appears** in argv, in the session name (`crawfish/<name>`), or in
-an env dump. Secrets are resolved by reference at run time, exactly as in a foreground run,
-and `supervise_main` wraps the project's Store in a `ScrubbingStore` so nothing a cycle
-writes can leak a credential. A failed cycle's exception text is additionally passed
-through `redact` before it becomes an observer event — defence in depth.
+[--schedule <s>]`: the pipeline name, its directory, and an optional schedule string. No
+secret value ever appears in argv, in the session name (`crawfish/<name>`), or in an env
+dump. Secrets are resolved by reference at run time, exactly as in a foreground run, and
+`supervise_main` wraps the project's Store in a `ScrubbingStore` so nothing a cycle writes
+can leak a credential. A failed cycle's exception text is additionally passed through
+`redact` before it becomes an observer event, a second line of defence.
 
 !!! warning "No secret ever reaches the daemon's argv"
 
@@ -90,8 +89,8 @@ through `redact` before it becomes an observer event — defence in depth.
 
 `Supervisor`'s scheduling and one-cycle logic is kept separate from the act of launching a
 daemon. Tests drive `run_cycle(now)` and `due(now)` directly, and `serve` takes injectable
-`now_fn` / `sleep_fn` / `stop_flag` / `max_cycles` seams so the always-on loop runs in zero
-real time. `deploy` and `stop` likewise take an injectable `spawn` / `kill` callable.
+`now_fn`, `sleep_fn`, `stop_flag`, and `max_cycles` seams so the always-on loop runs in zero
+real time. `deploy` and `stop` likewise take an injectable `spawn` or `kill` callable.
 Nothing on this page needs an actual daemon to exercise.
 
 ### Liveness reconciliation: reality over stale state
@@ -99,9 +98,9 @@ Nothing on this page needs an actual daemon to exercise.
 A process can crash without cleaning up its registry row, leaving a stale `running`.
 `DeployRegistry.reconcile_liveness` checks each `RUNNING` row's PID with `os.kill(pid, 0)`
 (a probe that delivers no signal) and marks the vanished ones `DEAD`. `manage_list` calls
-this on every read, so the operator sees what is actually alive, not what was last
-recorded. Redeploying over a still-live PID of the same name emits a `deploy.replaced`
-warning rather than silently orphaning the old process.
+this on every read, so the operator sees what is actually alive, not what was last recorded.
+Redeploying over a still-live PID of the same name emits a `deploy.replaced` warning rather
+than silently orphaning the old process.
 
 ### Cron semantics that match real cron
 
@@ -110,17 +109,17 @@ ranges, and exact values. Day-of-week is `0-6` with **Sunday = 0**. Following st
 cron, when *both* day-of-month and day-of-week are restricted, a tick matches if **either**
 matches; otherwise both must. `next_after` searches forward minute by minute for up to a
 year and raises `ValueError` if nothing matches. (`parse_schedule` also accepts `@every 30s`
-style strings, returning an `IntervalSchedule` for sub-minute cadence — documented with the
-trigger internals; the `Cron`/cron path is the focus here.)
+style strings, returning an `IntervalSchedule` for sub-minute cadence, documented with the
+trigger internals; the cron path is the focus here.)
 
 ### Webhook verification is constant-time
 
-`verify_webhook` computes `HMAC-SHA256(secret, payload)` as lowercase hex and compares it
-to the supplied signature with `hmac.compare_digest`. The constant-time compare matters:
-a naive `==` returns early on the first differing byte, leaking through timing how much of
-a forged signature was correct. The `secret` itself is never stored inline —
-`WebhookTrigger.secret_ref` holds the *name* of an environment variable, and the caller
-resolves the value from there before calling `verify_webhook`.
+`verify_webhook` computes `HMAC-SHA256(secret, payload)` as lowercase hex and compares it to
+the supplied signature with `hmac.compare_digest`. The constant-time compare matters: a naive
+`==` returns early on the first differing byte, leaking through timing how much of a forged
+signature was correct. The `secret` itself is never stored inline. `WebhookTrigger.secret_ref`
+holds the *name* of an environment variable, and the caller resolves the value from there
+before calling `verify_webhook`.
 
 !!! note "Good to know"
 
@@ -128,10 +127,10 @@ resolves the value from there before calling `verify_webhook`.
     differing byte, leaking through timing how much of a forged signature was correct.
     `hmac.compare_digest` always compares the full length, so it gives a forger nothing.
 
-### Builds are deterministic by construction
+### Builds are deterministic
 
 Both `generate_containerfile` and `plan_build` are pure functions of the manifest plus two
-keyword switches (`python_version`, `lock_present`) — identical input yields byte-identical
+keyword switches (`python_version`, `lock_present`). Identical input yields byte-identical
 output, so an image is reproducible. The base image is `python:<version>-slim`; the image
 tag is `<name>:<version>` from the manifest; the entrypoint is always `craw run`, so the
 container *is* the runnable automation. When `lock_present` is true the recipe copies and
@@ -210,7 +209,7 @@ print(format_table(rows))
 
 ### `DeployStatus`
 
-`class DeployStatus(str, Enum)` — the lifecycle label on a deployed pipeline.
+`class DeployStatus(str, Enum)`: the lifecycle label on a deployed pipeline.
 
 | Member | Value | Meaning |
 | --- | --- | --- |
@@ -220,7 +219,7 @@ print(format_table(rows))
 
 ### `DeployEntry`
 
-`class DeployEntry(BaseModel)` — one registry row describing a deployed pipeline.
+`class DeployEntry(BaseModel)`: one registry row describing a deployed pipeline.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -237,7 +236,7 @@ print(format_table(rows))
 
 ### `DeployRegistry`
 
-`class DeployRegistry` — Store-backed registry of deployed pipelines.
+`class DeployRegistry`: Store-backed registry of deployed pipelines.
 
 ```python
 DeployRegistry(store: Store, *, org_id: str = "local")
@@ -254,8 +253,8 @@ DeployRegistry(store: Store, *, org_id: str = "local")
 
 ### `Supervisor`
 
-`class Supervisor` — the always-on loop (schedule → fire → record) with ledger-backed
-resume. Construct it directly; `deploy` spawns it in a detached process for you.
+`class Supervisor`: the always-on loop (schedule, fire, record) with ledger-backed resume.
+Construct it directly; `deploy` spawns it in a detached process for you.
 
 ```python
 Supervisor(
@@ -294,11 +293,11 @@ def deploy(
 ) -> DeployEntry
 ```
 
-Validate the schedule, spawn the detached `craw _supervise` child (argv carries only name +
-dir + optional schedule — never a secret), write the registry entry, and return it. When
-`schedule` is omitted, the project's own declared `TRIGGER` / `SCHEDULE` (in its
+Validate the schedule, spawn the detached `craw _supervise` child (argv carries only name,
+dir, and optional schedule, never a secret), write the registry entry, and return it. When
+`schedule` is omitted, the project's own declared `TRIGGER` or `SCHEDULE` (in its
 `pipeline.py`) is used. `spawn` is an injectable `Callable[[list[str], Path, Path], int]`
-returning a PID. See [ADR 0009](../architecture/decisions/0009-deploy-detached-daemon-over-tmux.md).
+returning a PID.
 
 ### `stop`
 
@@ -318,8 +317,8 @@ for tests.
 
 ### `PipelineStatus`
 
-`class PipelineStatus(BaseModel)` — one row in the `craw manage` view: a registry entry
-joined with its run state.
+`class PipelineStatus(BaseModel)`: one row in the `craw manage` view, a registry entry joined
+with its run state.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -375,8 +374,8 @@ Stop `name`, then re-deploy it from its recorded `dir`, `schedule`, and `backend
 
 ### `CronSchedule` (and `Cron`)
 
-`class CronSchedule` — a minimal five-field cron evaluator (`m h dom mon dow`). `Cron` is
-an alias for the same class (`Cron = CronSchedule`).
+`class CronSchedule`: a minimal five-field cron evaluator (`m h dom mon dow`). `Cron` is an
+alias for the same class (`Cron = CronSchedule`).
 
 ```python
 CronSchedule(expr: str)            # raises ValueError unless expr has 5 fields
@@ -390,7 +389,7 @@ both day-of-month and day-of-week are restricted, a tick matches if *either* mat
 
 ### `Trigger`
 
-`class Trigger(ABC)` — base for anything that can fire a pipeline run. Attributes `id: str`,
+`class Trigger(ABC)`: base for anything that can fire a pipeline run. Attributes `id: str`,
 `kind: str`. Abstract method:
 
 ```python
@@ -399,7 +398,7 @@ def describe(self) -> dict[str, JSONValue]    # JSON-serialisable description
 
 ### `CronTrigger`
 
-`class CronTrigger(Trigger)` — fire a run on a cron `schedule`.
+`class CronTrigger(Trigger)`: fire a run on a cron `schedule`.
 
 ```python
 CronTrigger(schedule: str)
@@ -410,14 +409,14 @@ Sets `id` (a fresh `new_id`), `kind = "cron"`, and `schedule`. `describe()` retu
 
 ### `WebhookTrigger`
 
-`class WebhookTrigger(Trigger)` — fire a run from an inbound HTTP POST to `path`.
+`class WebhookTrigger(Trigger)`: fire a run from an inbound HTTP POST to `path`.
 
 ```python
 WebhookTrigger(path: str, secret_ref: str | None = None)
 ```
 
-Sets `id`, `kind = "webhook"`, `path`, and `secret_ref`. **`secret_ref` is the *name* of an
-environment variable** holding the shared secret, never the value — so it is safe to
+Sets `id`, `kind = "webhook"`, `path`, and `secret_ref`. **`secret_ref` is the name of an
+environment variable** holding the shared secret, never the value, so it is safe to
 serialise. `describe()` returns `{"id", "kind", "path", "secret_ref"}`.
 
 ### `verify_webhook`
@@ -432,7 +431,7 @@ from the trigger's `secret_ref` environment variable.
 
 ### `BuildPlan`
 
-`class BuildPlan(BaseModel)` — a summary of what `craw build` will produce.
+`class BuildPlan(BaseModel)`: a summary of what `craw build` will produce.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -488,6 +487,6 @@ directory, the file is written as `dest/Containerfile`.
 
 ## See also
 
-- [Persistence](persistence.md) — the `Store` that backs the deploy registry and ledger.
-- [Authoring](authoring.md) — the project a `deploy` or `build` runs from.
-- [Core types](core-types.md) — the static-only rule behind `secret_ref` and sink targets.
+- [Persistence](persistence.md): the `Store` that backs the deploy registry and ledger.
+- [Authoring](authoring.md): the project a `deploy` or `build` runs from.
+- [Core types](core-types.md): the static-only rule behind `secret_ref` and sink targets.

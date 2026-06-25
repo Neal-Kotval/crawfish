@@ -1,25 +1,25 @@
-# Observers — watch a running pipeline
+# Observe a running pipeline
 
-An **Observer** watches a running pipeline and raises an alert when something looks wrong.
-It polls the pipeline's event stream on a cron interval and emits an `ObserverEvent` on a
+An *observer* watches a running pipeline and raises an alert when something looks wrong. It
+polls the pipeline's event stream on a cron interval and emits an `ObserverEvent` on a
 failure-rate spike, a cost spike, or a stuck or slow run. Add an LLM judge and it also
 flags low-quality results, described in plain language. Observers write to the same
-scrubbed run-info surface that the [dashboard](visualize.md) and
-[`craw manage`](manage.md) read from, so an alert shows up in every view at once.
+scrubbed run-info surface that the [dashboard](visualize.md) and [`craw manage`](manage.md)
+read, so an alert shows up in every view at once.
 
-Observers live in `crawfish.observe`, alongside the run-info surface below.
+Observers live in `crawfish.observe`, alongside the run-info surface described below.
 
-## The run-info surface
+## Read and write the run-info surface
 
-Nodes, observers, and the deploy supervisor record what happened through
-`ObserverSurface`, a Store-backed handle:
+Nodes, observers, and the deploy supervisor record what happened through `ObserverSurface`,
+a Store-backed handle:
 
 ```python
 from crawfish.observe import ObserverSurface, ObserverEvent, RunInfo, Severity
 
 surface = ObserverSurface(store, org_id="local")
 
-# emit an event (nodes call ctx.emit(...) — same payload)
+# emit an event (nodes call ctx.emit(...) with the same payload)
 surface.emit(ObserverEvent(
     pipeline="triage-bot",
     kind="cost.spike",
@@ -29,7 +29,7 @@ surface.emit(ObserverEvent(
     run_id="01HZ…",
 ))
 
-# record per-run rollup
+# record a per-run rollup
 surface.put_run_info(RunInfo(
     pipeline="triage-bot",
     run_id="01HZ…",
@@ -45,16 +45,17 @@ events = surface.events("triage-bot", since="-1h", kind="cost.spike")
 runs   = surface.run_info("triage-bot", since="-1d")
 ```
 
+The three types you write and read:
+
 | Type            | Fields |
 | --------------- | ------ |
 | `ObserverEvent` | `pipeline, kind, detail, severity, observer, run_id, ts, data` |
 | `RunInfo`       | `pipeline, run_id, status, backend, version, cost_usd, items, started_at, finished_at` |
 | `Severity`      | `info` · `warn` · `critical` |
 
-!!! note "Good to know"
-    Every event and run-info row carries `org_id` (defaulted `"local"`) and is scrubbed
-    before the Store write. The surface wraps `ScrubbingStore`, so no secret value reaches
-    an event, the dashboard, or a log.
+Every event and run-info row carries `org_id` (defaulted `"local"`) and is scrubbed before
+the Store write. The surface wraps `ScrubbingStore`, so no secret value reaches an event,
+the dashboard, or a log.
 
 `since=` takes a relative window (`"-1h"`, `"-30m"`, `"-15s"`, `"-2d"`) or an epoch
 timestamp. Inside a node or observer, you emit through the run context:
@@ -64,15 +65,15 @@ ctx.emit(ObserverEvent(pipeline="triage-bot", kind="item.dropped",
                        detail="missing ticket_body", severity=Severity.info))
 ```
 
-## Defining an observer
+## Define an observer
 
-Author an observer in two parts: rules and an optional judge. An `Observer` polls a
-pipeline's event stream on a cron interval and applies rules. Two kinds:
+An observer has two parts: rules and an optional judge. It polls a pipeline's event stream
+on a cron interval and applies the rules. There are two kinds of check:
 
-- **Rule-based** (pure and free): failure rate over a window, cost spike against the
+- Rule-based checks are pure and free: failure rate over a window, cost spike against the
   median, and latency or stuck-run detection.
-- **LLM / Definition-backed judge** (optional): a Definition reads recent run data and
-  flags low-quality runs in plain language.
+- An LLM judge is optional. A Definition reads recent run data and flags low-quality runs
+  in plain language.
 
 ```python
 from crawfish.observe import Observer, Severity
@@ -86,17 +87,17 @@ watch = Observer(
         Observer.cost_spike(factor=2.0, severity=Severity.warn),
         Observer.stuck(after="-10m", severity=Severity.critical),
     ],
-    judge=Definition.from_package("observers/quality"),   # optional NL judge
+    judge=Definition.from_package("observers/quality"),   # optional language judge
 )
 ```
 
-When a rule trips, the observer emits an `ObserverEvent` onto the same surface. From
-there, `craw manage logs`, the dashboard, and any downstream alert sink pick it up.
+When a rule trips, the observer emits an `ObserverEvent` onto the same surface. From there,
+`craw manage logs`, the dashboard, and any downstream alert sink pick it up.
 
-## Worked example — guard the deployed triage bot
+## Guard the deployed triage bot
 
-Deploy the pipeline, then attach an observer that warns on cost spikes and runs a
-quality judge:
+Deploy the pipeline, then attach an observer that warns on cost spikes and runs a quality
+judge:
 
 ```bash
 craw deploy demo/triage-bot --schedule "0 8 * * *"
@@ -134,25 +135,25 @@ Or query them directly:
 events = surface.events("triage-bot", since="-1h", kind="quality.flag")
 ```
 
-## Security
+## How an LLM judge stays safe
 
-An LLM/Definition-backed observer runs under the **same boundary as any Definition**.
+An LLM judge runs under the same boundary as any Definition.
 
 !!! warning "The judge reads untrusted data"
-    Run data the judge reads is **fluid** (untrusted) data. It reaches the model inside a
+    Run data the judge reads is *fluid* (untrusted) data. It reaches the model inside a
     labelled data block, never as instructions. A malicious ticket body that surfaces in a
     run cannot turn the observer into an attacker's agent.
 
-- **Cost-capped and metered.** The judge spends under the same `CostBudget` and
-  `CostMeter` as a normal run. Its spend is metered and shows up in `$ today`. There is
-  no unbounded background LLM cost.
-- **Scrubbed surface, tenancy.** Events and run-info are scrubbed before the Store write.
-  The surface wraps `ScrubbingStore` (reused, not reinvented), and every row carries
-  `org_id`. No secret value reaches an event, the dashboard, or a log.
+- Cost-capped and metered. The judge spends under the same `CostBudget` and `CostMeter` as
+  a normal run. Its spend is metered and shows up in `$ today`. There is no unbounded
+  background LLM cost.
+- Scrubbed surface and tenancy. Events and run-info are scrubbed before the Store write.
+  The surface wraps `ScrubbingStore`, and every row carries `org_id`. No secret value
+  reaches an event, the dashboard, or a log.
 
 ## Next steps
 
-- [Visualize](visualize.md) — see observer events in the localhost dashboard.
-- [`craw manage`](manage.md) — query the same events from the CLI.
-- [Operations overview](operations.md) — how observe fits the deploy loop.
-- [SECURITY.md](../architecture/SECURITY.md) — the fluid-data boundary in full.
+- [Visualize runs](visualize.md) shows observer events in the localhost dashboard.
+- [Manage deployed pipelines](manage.md) queries the same events from the CLI.
+- [Run a pipeline in the background](operations.md) shows how observe fits the deploy loop.
+- [SECURITY.md](../architecture/SECURITY.md) covers the fluid-data boundary in full.

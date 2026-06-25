@@ -1,11 +1,10 @@
 site_name: Crawfish
-site_description: Build agents like software — typed, composable, deterministic, and local-first.
+site_description: A programming language for agents. Write them as typed code, run them locally, test and improve them like software.
 site_url: https://neal-kotval.github.io/crawfish/
 docs_dir: docs
 
-# Internal doc-authoring findings log — kept in-repo for the team, not published.
-exclude_docs: |
-  BUILD-LOG.md
+# Internal authoring notes, ADRs, roadmap, and product material live in /dev_docs
+# at the repo root. That folder is outside docs_dir, so it is never published.
 repo_url: https://github.com/Neal-Kotval/crawfish
 
 theme:
@@ -56,34 +55,35 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Guide:
-      - Getting started: guide/getting-started.md
-      - Tutorial: guide/tutorial.md
-      - Concepts: guide/concepts.md
-      - Refine & verify: guide/refine-and-verify.md
-      - Compose — branch, cycle, recurse: guide/compose.md
-      - Train, calibrate & promote: guide/train-and-tune.md
-      - Taming stochasticity: guide/tameness.md
-      - Drive the language from the CLI: guide/optimize-from-the-cli.md
-      - Agents as variables — compose, version, summon: guide/variables-and-knowledge.md
-      - Diff, prove & replay: guide/diff-prove-replay.md
-      - Injection rejected by construction (ALG-3): guide/injection-rejected-by-construction.md
-      - CLI reference: guide/cli.md
+  - Get started:
+      - Install and run: guide/getting-started.md
+      - Tutorial - build the triage bot: guide/tutorial.md
+  - Learn:
+      - Core concepts: guide/concepts.md
+      - Refine and verify: guide/refine-and-verify.md
+      - Compose - branch, cycle, recurse: guide/compose.md
+      - Train, calibrate, and promote: guide/train-and-tune.md
+      - Tame stochasticity: guide/tameness.md
+      - Agents as variables: guide/variables-and-knowledge.md
+      - Diff, prove, and replay: guide/diff-prove-replay.md
+      - The injection boundary: guide/injection-rejected-by-construction.md
+      - Drive Crawfish from the CLI: guide/optimize-from-the-cli.md
       - Cookbook: guide/cookbook.md
-      - Contributing a connector: guide/contributing-a-connector.md
-      - Connector ideas: guide/connector-ideas.md
-      - API reference: guide/api-reference.md
-      - Release notes: guide/release-notes.md
-  - Operate & Observe:
+  - Operate:
       - Overview: guide/operations.md
       - Deploy: guide/deploy.md
       - Manage: guide/manage.md
-      - Observers: guide/observers.md
+      - Observe: guide/observers.md
       - Visualize: guide/visualize.md
       - Project structure: guide/project-structure.md
       - Export to Claude Code: guide/claude-code-export.md
+  - Extend:
+      - Contribute a connector: guide/contributing-a-connector.md
+      - Connector ideas: guide/connector-ideas.md
   - Reference:
       - Overview: reference/index.md
+      - CLI: guide/cli.md
+      - API: guide/api-reference.md
       - Foundations:
           - Core types: reference/core-types.md
           - Type system: reference/type-system.md
@@ -123,10 +123,8 @@ nav:
           - Authoring & config: reference/authoring.md
           - Testing: reference/testing.md
           - Claude Code export: reference/claude-code-export.md
+      - Release notes: guide/release-notes.md
   - Architecture:
       - Overview: architecture/ARCHITECTURE.md
-      - Security spine: architecture/SECURITY.md
-      - Security-review DoD: architecture/SECURITY-REVIEW-DOD.md
+      - Security: architecture/SECURITY.md
       - API stability: architecture/API-STABILITY.md
-  - Product: product/PRODUCT.md
-  - Roadmap: roadmap/README.md

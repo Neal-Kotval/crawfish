@@ -1,8 +1,8 @@
 # Tuner & learning
 
-The **Tuner** makes an agent better at its job by trying many candidate configurations and
-keeping the one that scores best — no human editing it by hand, no live model in the loop.
-The **LearningLoop** wraps that search in a safe, reversible promotion policy. You reach for
+The Tuner makes an agent better at its job by trying many candidate configurations and
+keeping the one that scores best: no human editing it by hand, no live model in the loop.
+The LearningLoop wraps that search in a safe, reversible promotion policy. You reach for
 these to close the iterate→measure→tune→promote loop: turn knobs, score against a benchmark,
 promote only a winner that clears the bar.
 
@@ -10,8 +10,10 @@ promote only a winner that clears the bar.
 `FewShotMutator` · `ChainMutator` · `SearchStrategy` · `TrialResult` · `TuneResult` ·
 `Tuner` · `LearningLoop` · `PromotionOutcome` · `VersionRecord`
 
-**Milestone 3 — the tunable-ML library** (the
-[PyTorch-for-LLMs half](../guide/concepts.md#the-pytorch-for-llms-half-train-eval-and-the-tunable-knob)):
+These symbols are the train/eval mutability switch, the tunable knob space, calibration, the
+cost-regularized objective, the promotion gate, weight transfer, and the serving-time explore
+dial:
+
 `train` · `eval` · `guard_consequential` · `TuneSpec` · `KnobDomain` · `tune_spec_sha` ·
 `Objective` · `ObjectiveForm` · `ObjectiveScore` · `calibrate` · `CalibrationReport` ·
 `ReliabilityBin` · `extract_confidence` · `abstention_threshold` · `promote_against_baseline` ·
@@ -25,40 +27,40 @@ runnable end-to-end walkthrough is the [Train, calibrate & promote guide](../gui
 
 ## Definitions, knobs, mutators, and the gate
 
-An agent in Crawfish is described by a **Definition** — its team of agents, each agent's
-prompt, its model, and other settings. Those settings are the **knobs** you can turn:
+An agent in Crawfish is described by a *Definition*: its team of agents, each agent's
+prompt, its model, and other settings. Those settings are the knobs you can turn:
 which model runs, what the prompt says, which few-shot examples are attached. Tuning means
 trying different knob settings and keeping the best one.
 
-A **mutator** produces the things to try. Given a starting Definition (the **base**), a
-mutator enumerates **candidates** — each candidate is a new Definition with some knobs
-changed, plus a record of exactly what was changed (the **mutation**). Crucially a mutator
+A mutator produces the things to try. Given a starting Definition (the *base*), a
+mutator enumerates candidates. Each candidate is a new Definition with some knobs
+changed, plus a record of exactly what was changed (the *mutation*). A mutator
 never asks a model to invent new text: it only selects and combines settings the author
 already supplied. That keeps the search reproducible and keeps untrusted text off the
 instruction path.
 
-The **Tuner** runs the search. It scores the base, then scores each candidate against a
-**Benchmark** (a fixed set of tasks plus a rubric that turns each run into numbers). It
-keeps the best-scoring candidate — but only if that candidate actually beats the base and
-does not score worse on any measured dimension. That last check is the **regression gate**:
-a worse candidate is never chosen. The output of a full run is a **TuneResult**, and each
-individual scored attempt is a **TrialResult**.
+The Tuner runs the search. It scores the base, then scores each candidate against a
+*Benchmark* (a fixed set of tasks plus a rubric that turns each run into numbers). It
+keeps the best-scoring candidate, but only if that candidate actually beats the base and
+does not score worse on any measured dimension. That last check is the *regression gate*:
+a worse candidate is never chosen. The output of a full run is a TuneResult, and each
+individual scored attempt is a TrialResult.
 
-A search costs real money once a real model is wired in, so the Tuner enforces an **autonomy
-ceiling** — three independent stops. It halts when a spend budget is exhausted, when a
+A search costs real money once a real model is wired in, so the Tuner enforces an autonomy
+ceiling: three independent stops. It halts when a spend budget is exhausted, when a
 cancel signal fires, or when a hard cap on the number of trials is reached. An autonomous
 search can never run away.
 
-The **LearningLoop** points the Tuner at an agent's *own* Definition and adds a **promotion
-policy**: the winner becomes the agent's new active version only if it improves *and* clears
-a stored quality bar (the **baseline**). Every version — the base and any promoted candidate
-— is recorded as a frozen, content-hashed **VersionRecord** in the store, so a bad promotion
+The LearningLoop points the Tuner at an agent's own Definition and adds a promotion
+policy: the winner becomes the agent's new active version only if it improves and clears
+a stored quality bar (the *baseline*). Every version, the base and any promoted candidate,
+is recorded as a frozen, content-hashed VersionRecord in the store, so a bad promotion
 is fully reversible: you can roll back to any earlier version. The result of one improve
-cycle is a **PromotionOutcome**.
+cycle is a PromotionOutcome.
 
 !!! note "Good to know"
 
-    Nothing in this loop calls a live model to *invent* configuration. Mutators only select
+    Nothing in this loop calls a live model to invent configuration. Mutators only select
     and recombine settings the author already supplied, scoring is deterministic under a
     `MockRuntime` or replayed cassette, and the same `base` plus the same `seed` always yield
     the same result. That is what makes a tune reproducible and keeps an autonomous search
@@ -66,17 +68,16 @@ cycle is a **PromotionOutcome**.
 
 ## Mutators: producing candidates
 
-The Tuner's design — propose prompt variants and few-shot examples, search, keep the
-benchmark-best, regression-gate the winner — is borrowed from DSPy's ideas while
-deliberately rejecting the dependency. See
-[ADR 0015](../architecture/decisions/0015-prompt-optimization-method-for-the-tuner.md) for the rationale.
+The Tuner proposes prompt variants and few-shot examples, searches, keeps the
+benchmark-best, and regression-gates the winner. The mutators only select and recombine
+settings the author supplied: no new dependency, no model inventing text.
 
 ### Mutators are pure and seeded
 
 Every mutator subclasses `PromptMutator` and implements one method, `propose(base, *, seed)`,
-which yields `Candidate`s. The contract is **purity**: no model call, no I/O, no wall clock,
+which yields `Candidate`s. The contract is purity: no model call, no I/O, no wall clock,
 no global random state. The same `base` plus the same `seed` must yield identical candidates
-in identical order. Each mutator enforces this by **sorting** its inputs before enumerating —
+in identical order. Each mutator enforces this by sorting its inputs before enumerating,
 so a Python `set` or `dict` iteration order never leaks into the proposal order.
 
 `PromptVariantMutator` swaps or appends prompt text from an author-supplied pool. It sorts
@@ -96,16 +97,16 @@ the cases by id, then for each of `samples` runs derives a seeded subset of size
 sample index), renders the picks as one static `Prompt` block, and appends it. The seed
 governs *which* `k` cases are chosen, so the choice is reproducible.
 
-`ChainMutator` concatenates several mutators' proposals in declared order — the way you
+`ChainMutator` concatenates several mutators' proposals in declared order: the way you
 combine, say, a prompt sweep with a knob grid in one search.
 
-The "primary agent" the knobs apply to is the team **lead** if one is set, otherwise the
+The "primary agent" the knobs apply to is the team lead if one is set, otherwise the
 first agent. Tuning a Definition with no agents raises `ValueError`.
 
 ## Each candidate is a fresh frozen artifact
 
 A frozen Definition rejects mutation, so the search never edits in place. For every candidate
-the mutator builds a new Definition and **re-freezes** it with a fresh content-hash version:
+the mutator builds a new Definition and re-freezes it with a fresh content-hash version:
 the model is serialised (minus its volatile `version` field), hashed, and that hash becomes
 the new `version.sha`. Two structurally-identical candidates collapse to the same sha
 (idempotent); any knob difference produces a distinct sha. This matters for determinism: when
@@ -115,22 +116,22 @@ version, so distinct candidates never collide on replay.
 ## How the search decides
 
 `Tuner.tune` scores the base first (the bar to beat). For each candidate it computes the score
-deltas against the current running best. A candidate is **accepted** when it strictly improves
+deltas against the current running best. A candidate is accepted when it strictly improves
 on at least one dimension and is no worse than `tolerance` on every dimension (`beats_best`),
-*and* it is not a regression versus the base within `tolerance` (`clean_vs_base`). On
+and it is not a regression versus the base within `tolerance` (`clean_vs_base`). On
 acceptance it becomes the new best. The winner is therefore never worse than the base.
 
-`SearchStrategy` controls the order in which candidates are tried — never *which* candidates
+`SearchStrategy` controls the order in which candidates are tried, never which candidates
 exist (the mutator owns that). `GRID` keeps the mutator's proposal order. `RANDOM` takes a
 seeded sample of `sample_size` candidates (a fixed seed gives a fixed sample). `EVOLUTIONARY`
-is a seeded shuffle — a reproducible reordering of the full pool.
+is a seeded shuffle, a reproducible reordering of the full pool.
 
 ## The autonomy ceiling
 
 Before scoring *anything*, `tune` checks the ceiling: an already-cancelled or
 already-exhausted context returns the base unscored with an empty trial log, so the search
 never starts past its ceiling. Inside the loop the order is: stop at `max_trials`; check the
-cancel token then the budget; then charge `cost_per_trial_usd` *before* scoring (a trial costs
+cancel token then the budget; then charge `cost_per_trial_usd` before scoring (a trial costs
 even on a replay hit). `CostBudget.charge` raises `BudgetExceeded` past the hard limit. The
 `stopped_reason` on the result records which bound fired: `"exhausted"`, `"budget"`,
 `"cancelled"`, or `"max_trials"`. The loop is never bounded by wall clock.
@@ -141,13 +142,13 @@ even on a replay hit). `CostBudget.charge` raises `BudgetExceeded` past the hard
 tuned-from base as a frozen `VersionRecord` (seeding the regression baseline on first use),
 then decides:
 
-- A ceiling breach (`budget` / `cancelled` / `max_trials`) **with no improvement** is never a
-  promotion — outcome reason `"ceiling:<reason>"`.
-- If the Tuner found nothing better than the base — reason `"no_improvement"`.
-- If the winner regresses against the *stored* baseline (via `gate_against_baseline`) — reason
+- A ceiling breach (`budget` / `cancelled` / `max_trials`) with no improvement is never a
+  promotion: outcome reason `"ceiling:<reason>"`.
+- If the Tuner found nothing better than the base: reason `"no_improvement"`.
+- If the winner regresses against the stored baseline (via `gate_against_baseline`): reason
   `"gated"`. The baseline is the separate, persisted quality bar; it survives restarts and is
   what stops a noisy candidate from silently replacing a working agent.
-- Otherwise the winner is **promoted**: recorded as a frozen `VersionRecord`, marked the single
+- Otherwise the winner is promoted: recorded as a frozen `VersionRecord`, marked the single
   active version, and the baseline advances to its scores.
 
 `rollback(sha)` re-activates any prior recorded version and resets the baseline to that
@@ -159,13 +160,13 @@ unknown `sha` raises `KeyError`.
     The loop mutates only **static** configuration through the pure mutators, so a promotion
     can never introduce a **FLUID (untrusted)**, per-item sink target, and untrusted content
     can never drive a promotion. The improvement loop stays inside the
-    [security spine](../architecture/SECURITY.md) — a noisy or adversarial output can move
+    [security spine](../architecture/SECURITY.md): a noisy or adversarial output can move
     scores, but it can't move the instruction path.
 
 ## Example
 
 A deterministic tune: a `KnobGridMutator` sweeps the agent's `model` knob, scored by a fixed
-function (`slow`→1, `mid`→5, `fast`→9) through a `MockRuntime` — no live model. The grid sorts
+function (`slow`→1, `mid`→5, `fast`→9) through a `MockRuntime`, no live model. The grid sorts
 the models alphabetically, so `fast` is tried first and accepted as the best.
 
 ```python
@@ -229,7 +230,7 @@ for t in result.trials:
 
 ### `Mutation`
 
-`class Mutation(BaseModel)` — the typed knob change that produced a candidate (the audit
+`class Mutation(BaseModel)`: the typed knob change that produced a candidate (the audit
 trail).
 
 | Field | Type | Default | Notes |
@@ -240,7 +241,7 @@ trail).
 
 ### `Candidate`
 
-`class Candidate(BaseModel)` — a proposed point in the knob space plus the patch that produced
+`class Candidate(BaseModel)`: a proposed point in the knob space plus the patch that produced
 it. Allows arbitrary types.
 
 | Field | Type | Default | Notes |
@@ -250,7 +251,7 @@ it. Allows arbitrary types.
 
 ### `PromptMutator`
 
-`class PromptMutator(ABC)` — deterministically enumerate candidate Definitions from a base.
+`class PromptMutator(ABC)`: deterministically enumerate candidate Definitions from a base.
 
 ```python
 @abstractmethod
@@ -262,7 +263,7 @@ candidates in identical order.
 
 ### `PromptVariantMutator`
 
-`class PromptVariantMutator(PromptMutator)` — swap/append from an author-supplied pool of
+`class PromptVariantMutator(PromptMutator)`: swap/append from an author-supplied pool of
 prompt variants.
 
 ```python
@@ -281,7 +282,7 @@ adds a `Prompt` to `injected_prompts`. `include_base=True` yields the unchanged 
 
 ### `KnobGridMutator`
 
-`class KnobGridMutator(PromptMutator)` — Cartesian product over discrete typed knobs.
+`class KnobGridMutator(PromptMutator)`: Cartesian product over discrete typed knobs.
 
 ```python
 def __init__(
@@ -301,7 +302,7 @@ land on the primary agent; `coordination` lands on the team; `temperature` trave
 
 ### `FewShotMutator`
 
-`class FewShotMutator(PromptMutator)` — inject few-shot exemplars from a golden set.
+`class FewShotMutator(PromptMutator)`: inject few-shot exemplars from a golden set.
 
 ```python
 def __init__(self, cases: Sequence[EvalCase], *, k: int = 2, samples: int = 1) -> None
@@ -313,7 +314,7 @@ index) and appends it as one static `Prompt`. Empty `cases` yields nothing.
 
 ### `ChainMutator`
 
-`class ChainMutator(PromptMutator)` — concatenate several mutators' proposals in declared
+`class ChainMutator(PromptMutator)`: concatenate several mutators' proposals in declared
 order.
 
 ```python
@@ -322,17 +323,17 @@ def __init__(self, mutators: Sequence[PromptMutator]) -> None
 
 ### `SearchStrategy`
 
-`class SearchStrategy(str, Enum)` — the order candidates are tried (not which exist).
+`class SearchStrategy(str, Enum)`: the order candidates are tried (not which exist).
 
 | Member | Value | Meaning |
 | --- | --- | --- |
 | `SearchStrategy.GRID` | `"grid"` | Exhaustive enumeration in the mutator's proposal order. |
 | `SearchStrategy.RANDOM` | `"random"` | Seeded sample of `sample_size` candidates (fixed seed → fixed sample). |
-| `SearchStrategy.EVOLUTIONARY` | `"evolutionary"` | Seeded shuffle — a reproducible reordering of the full pool. |
+| `SearchStrategy.EVOLUTIONARY` | `"evolutionary"` | Seeded shuffle, a reproducible reordering of the full pool. |
 
 ### `TrialResult`
 
-`class TrialResult(BaseModel)` — one scored trial (the ordered audit log). Allows arbitrary
+`class TrialResult(BaseModel)`: one scored trial (the ordered audit log). Allows arbitrary
 types.
 
 | Field | Type | Default | Notes |
@@ -345,7 +346,7 @@ types.
 
 ### `TuneResult`
 
-`class TuneResult(BaseModel)` — the outcome of a tune. Allows arbitrary types.
+`class TuneResult(BaseModel)`: the outcome of a tune. Allows arbitrary types.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -358,7 +359,7 @@ types.
 
 ### `Tuner`
 
-`class Tuner` — deterministic search over a mutator's candidates, scored by a Benchmark.
+`class Tuner`: deterministic search over a mutator's candidates, scored by a Benchmark.
 
 ```python
 def __init__(
@@ -398,7 +399,7 @@ benchmark-best. The autonomy ceiling is checked before any scoring. The only mod
 
 ### `VersionRecord`
 
-`class VersionRecord(BaseModel)` — one frozen, auditable point in an agent's version lineage,
+`class VersionRecord(BaseModel)`: one frozen, auditable point in an agent's version lineage,
 persisted through the `Store`. Allows arbitrary types.
 
 | Field | Type | Default | Notes |
@@ -414,7 +415,7 @@ persisted through the `Store`. Allows arbitrary types.
 
 ### `PromotionOutcome`
 
-`class PromotionOutcome(BaseModel)` — the result of one `improve` cycle. Allows arbitrary
+`class PromotionOutcome(BaseModel)`: the result of one `improve` cycle. Allows arbitrary
 types.
 
 | Field | Type | Default | Notes |
@@ -430,7 +431,7 @@ types.
 
 ### `LearningLoop`
 
-`class LearningLoop` — a self-improving agent: the Tuner plus an eval-gated, versioned
+`class LearningLoop`: a self-improving agent, the Tuner plus an eval-gated, versioned
 promotion policy.
 
 ```python
@@ -464,13 +465,12 @@ Other methods: `history() -> list[VersionRecord]` (the full lineage); `active() 
 | None` (the currently-active record); `rollback(sha) -> Definition` (re-activate a prior
 version and reset the baseline to its scores; raises `KeyError` if `sha` is unknown).
 
-## The tunable-ML library (Milestone 3)
+## The tunable-ML library
 
-The symbols below are the *PyTorch-for-LLMs* half: the train/eval mutability switch, the
-tunable knob space as data, calibration, the cost-regularized objective, the variance-aware
-promotion gate, weight transfer, and the serving-time explore dial. The conceptual frame is
-on the [Concepts page](../guide/concepts.md#the-pytorch-for-llms-half-train-eval-and-the-tunable-knob)
-and the runnable path is the [Train, calibrate & promote guide](../guide/train-and-tune.md).
+The symbols below are the train/eval mutability switch, the tunable knob space as data,
+calibration, the cost-regularized objective, the variance-aware promotion gate, weight
+transfer, and the serving-time explore dial. See [Core concepts](../guide/concepts.md)
+and the runnable path in the [Train, calibrate & promote guide](../guide/train-and-tune.md).
 
 ### Two-axis mode (`crawfish.tuner`)
 
@@ -480,7 +480,7 @@ and the runnable path is the [Train, calibrate & promote guide](../guide/train-a
 def train(definition: Definition) -> Definition
 ```
 
-**Train mode.** Returns an *unfrozen* deep copy with a fresh `Version` (`frozen is False`,
+Train mode. Returns an unfrozen deep copy with a fresh `Version` (`frozen is False`,
 `version.sha is None`). Copy-on-write: a training mutation mints a new `version.sha` when
 re-frozen, never an in-place edit of the original.
 
@@ -490,8 +490,8 @@ re-frozen, never an in-place edit of the original.
 def eval(definition: Definition) -> Definition
 ```
 
-**Eval mode** (the default for a loaded Definition). Re-freezes via the content-hash path, so
-`eval(train(d))` is idempotent — it hashes back to `d`'s eval sha whenever no knob moved. Only
+Eval mode (the default for a loaded Definition). Re-freezes via the content-hash path, so
+`eval(train(d))` is idempotent: it hashes back to `d`'s eval sha whenever no knob moved. Only
 in eval mode may a consequential Sink fire or a run be recorded. (Shadows the builtin `eval`;
 import it as `from crawfish import eval as eval_mode` if that collides in your module.)
 
@@ -501,13 +501,13 @@ import it as `from crawfish import eval as eval_mode` if that collides in your m
 def guard_consequential(definition: Definition) -> None
 ```
 
-The load-bearing gate every consequential boundary calls before an irreversible side effect.
-A no-op in eval mode; raises `FrozenError` against an unfrozen (train-mode) Definition — a
+The gate every consequential boundary calls before an irreversible side effect.
+A no-op in eval mode; raises `FrozenError` against an unfrozen (train-mode) Definition: a
 training artifact has no stable content identity to key idempotency or attribute the effect to.
 
 #### `TuneSpec`
 
-`class TuneSpec(BaseModel)` (frozen) — the tunable knob space as content-hashable data (the
+`class TuneSpec(BaseModel)` (frozen): the tunable knob space as content-hashable data (the
 typed form of `tune.toml`). Lives in `crawfish.tune` and is re-exported (identity-stable) from
 `crawfish.tuner`.
 
@@ -517,14 +517,14 @@ typed form of `tune.toml`). Lives in `crawfish.tune` and is re-exported (identit
 
 | Method | Signature | Purpose |
 | --- | --- | --- |
-| `named_knobs` | `() -> Iterator[tuple[str, KnobDomain]]` | Yields only `tunable=True` knobs, **path-sorted** (set/insertion-order-free). |
+| `named_knobs` | `() -> Iterator[tuple[str, KnobDomain]]` | Yields only `tunable=True` knobs, path-sorted (set/insertion-order-free). |
 | `is_tunable` | `(path: str) -> bool` | Declared-and-tunable test; unknown paths are not tunable. |
 | `from_toml` | `(text: str) -> TuneSpec` *(classmethod)* | Parse the `[[knob]]` array-of-tables authoring shape. |
 | `to_dict` | `() -> dict` | Canonical, path-sorted, JSON-ready payload for export + hashing. |
 
 #### `KnobDomain`
 
-`class KnobDomain(BaseModel)` (frozen) — one knob's search domain.
+`class KnobDomain(BaseModel)` (frozen): one knob's search domain.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -539,7 +539,7 @@ def tune_spec_sha(spec: TuneSpec) -> str
 ```
 
 Deterministic 12-char content hash of a `TuneSpec`. An empty spec hashes to a stable constant
-(an empty `tune.toml` is hash-neutral). `Definition.content_dict()` folds this in **only** for
+(an empty `tune.toml` is hash-neutral). `Definition.content_dict()` folds this in only for
 a non-empty tune, so declaring a knob versions the agent while a tune-less Definition keeps its
 sha byte-for-byte.
 
@@ -547,15 +547,15 @@ sha byte-for-byte.
 
 #### `Objective`
 
-`class Objective(BaseModel)` (frozen) — the cost-regularized loss the Tuner maximizes **among
-candidates that already pass the hard regression gate**, so cost can never promote a quality
+`class Objective(BaseModel)` (frozen): the cost-regularized loss the Tuner maximizes among
+candidates that already pass the hard regression gate, so cost can never promote a quality
 regression.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `weights` | `dict[str, float]` | `{}` | Per-metric quality weights; an absent metric defaults to `1.0` (a bare objective sums every metric). |
-| `cost_weight` | `float` | `0.0` | λ — the cost penalty. `0` reproduces today's pure-quality winner. |
-| `ece_weight` | `float` | `0.0` | μ — the calibration penalty (a passed-in value; ships as 0 until `calibrate` feeds it). |
+| `cost_weight` | `float` | `0.0` | λ, the cost penalty. `0` reproduces today's pure-quality winner. |
+| `ece_weight` | `float` | `0.0` | μ, the calibration penalty (a passed-in value; ships as 0 until `calibrate` feeds it). |
 | `form` | `ObjectiveForm` | `LINEAR` | Scalarization vs ε-constraint. |
 | `quality_floor` | `float` | `0.0` | ε-constraint: the minimum acceptable `Σ wᵢ·scoreᵢ`. |
 | `cost_baseline_usd` | `float \| None` | `None` | Cost normalizer (set to the cheapest candidate's cost so λ is unit-free); `None` uses raw dollars. |
@@ -568,15 +568,15 @@ regression.
 
 #### `ObjectiveForm`
 
-`class ObjectiveForm(str, Enum)` — `LINEAR` (weighted scalarization) / `EPSILON` (minimize cost
+`class ObjectiveForm(str, Enum)`: `LINEAR` (weighted scalarization) / `EPSILON` (minimize cost
 subject to `quality >= quality_floor`).
 
 #### `ObjectiveScore`
 
-`class ObjectiveScore(BaseModel)` (frozen) — `value`, `quality`, `cost_penalty`, `ece_penalty`,
+`class ObjectiveScore(BaseModel)` (frozen): `value`, `quality`, `cost_penalty`, `ece_penalty`,
 `feasible` (the ε-constraint gate; always `True` in linear form).
 
-**`Tuner` gains** (all optional; defaults preserve legacy behavior): `objective: Objective |
+`Tuner` gains (all optional; defaults preserve legacy behavior): `objective: Objective |
 None = None`, `pareto: bool = False`, `objective_items: int = 1`. `TrialResult.cost_usd` and
 `TrialResult.objective_value` are recorded per candidate (both `None` with no objective);
 `TuneResult.pareto_front: list[int]` is populated only when `pareto=True`.
@@ -608,20 +608,20 @@ async def calibrate(
 Runs each golden case `runs` times under distinct, deterministically-derived per-run seeds and
 returns the noise band + calibration measurement. Drives the runtime directly via
 `RunRequest(decode_seed=...)`. The same `(base_seed, runs)` over the same golden yields a
-byte-identical report and seed schedule. **Raises `CalibrationError` on a `RecordReplayRuntime`**
-(replay would fabricate zero variance). Honours the autonomy ceiling — a budget/cancel breach
+byte-identical report and seed schedule. Raises `CalibrationError` on a `RecordReplayRuntime`
+(replay would fabricate zero variance). Honours the autonomy ceiling: a budget/cancel breach
 returns a `partial=True` report.
 
 #### `CalibrationReport`
 
-`class CalibrationReport(BaseModel)` (frozen) — the `org_id`-tagged measurement the promotion
+`class CalibrationReport(BaseModel)` (frozen): the `org_id`-tagged measurement the promotion
 gate and objective consume.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `rubric_mean` / `rubric_std` | `dict[str, float]` | Per-metric mean and **population** std across `runs × len(golden)` scored outputs (the noise band). |
+| `rubric_mean` / `rubric_std` | `dict[str, float]` | Per-metric mean and population std across `runs × len(golden)` scored outputs (the noise band). |
 | `output_variance` | `float` | Mean fraction of structurally-differing fields across a case's re-runs; `0.0` iff every re-run agreed. |
-| `brier` | `float \| None` | **Primary** calibration metric (binning-free); `None` without labels. |
+| `brier` | `float \| None` | Primary calibration metric (binning-free); `None` without labels. |
 | `ece` / `ece_ci` | `float \| None` / `tuple[float, float] \| None` | ECE diagnostic (equal-mass bins) and its bootstrap CI; `None` without labels; `ece ∈ [0,1]`. |
 | `reliability` | `tuple[ReliabilityBin, ...]` | The equal-mass confidence→accuracy curve. |
 | `abstention_threshold` / `abstention_rate` | `float` / `float` | The confidence below which acting is unsafe (read off `reliability`) and the share of outputs below it. |
@@ -634,12 +634,12 @@ than the gate margin, and fails safe (`False`) with no CI.
 
 #### `ReliabilityBin`
 
-`class ReliabilityBin(BaseModel)` (frozen) — `confidence`, `accuracy`, `count` for one
+`class ReliabilityBin(BaseModel)` (frozen): `confidence`, `accuracy`, `count` for one
 equal-mass bin.
 
 #### `CalibrationError`
 
-`class CalibrationError(RuntimeError)` — raised when `calibrate` is handed a `RecordReplayRuntime`.
+`class CalibrationError(RuntimeError)`: raised when `calibrate` is handed a `RecordReplayRuntime`.
 
 ### Confidence & abstention (`crawfish.escalate`)
 
@@ -650,8 +650,8 @@ def extract_confidence(output: Output[JSONValue], *, field: str = "confidence") 
 ```
 
 Read a `[0,1]` self-reported confidence from a typed Output (a mapping field, or a bare numeric
-value), clamped; `None` when absent. The fluid value is **measured, never trusted as an
-instruction**.
+value), clamped; `None` when absent. The fluid value is measured, never trusted as an
+instruction.
 
 #### `abstention_threshold`
 
@@ -668,7 +668,7 @@ def abstention_threshold(
 
 The evidence-derived replacement for the old guessed escalation constant: the lowest bin
 confidence above which observed accuracy stays `>= target`. Empty bins are skipped; fails safe
-to `default` (`1.0` — abstain on everything) when no level is reliable. Pure and deterministic.
+to `default` (`1.0`, abstain on everything) when no level is reliable. Pure and deterministic.
 
 ### Variance-aware promotion (`crawfish.eval`)
 
@@ -690,14 +690,14 @@ def promote_against_baseline(
 ```
 
 Promotes `candidate` iff BOTH: no metric regresses past its recorded noise band (the hard F-3
-invariant, made noise-robust), **and** the `primary` metric's gain exceeds `k·std`
+invariant, made noise-robust), and the `primary` metric's gain exceeds `k·std`
 (`k` from `alpha`). With no recorded `std` the band is zero-width and the gate reduces
 byte-for-byte to `gate_against_baseline` + "primary gain > 0". A `fresh_sample` shrinks the
 stored baseline (winner's-curse correction). A rejected candidate writes nothing.
 
 #### `PromotionVerdict`
 
-`class PromotionVerdict` (frozen dataclass) — `promoted`, `regressed`, `cleared_band`,
+`class PromotionVerdict` (frozen dataclass): `promoted`, `regressed`, `cleared_band`,
 `primary`, `primary_gain`, `primary_band`, `reason` (auditable).
 
 #### `save_baseline_from_report`
@@ -717,7 +717,7 @@ and its `rubric_std` the noise band. The report's `org_id` is respected at the d
 def load_baseline_std(store: Store, name: str, *, org_id: str = "local") -> dict[str, float] | None
 ```
 
-Load the per-metric std recorded alongside a baseline. `None` (no std record — any pre-CRA-212
+Load the per-metric std recorded alongside a baseline. `None` (no std record, any pre-CRA-212
 baseline) signals a zero-width band, reducing the gate to `gate_against_baseline`.
 
 `save_baseline` gained an optional `std: dict[str, float] | None = None`; the `scores` record
@@ -731,8 +731,8 @@ format is unchanged (`std=None` writes exactly the old record and never erases a
 def state_dict(definition: Definition) -> StateDict
 ```
 
-Extract the tunable knobs as the "weights" — per-role knobs, the coordination choice,
-`injected_prompts`, and summoned units as references-by-version. **Excludes** architecture keys
+Extract the tunable knobs as the "weights": per-role knobs, the coordination choice,
+`injected_prompts`, and summoned units as references-by-version. Excludes architecture keys
 (IO schema, dependency structure, team topology). JSON-only and deterministic.
 
 #### `load_state`
@@ -747,34 +747,34 @@ def load_state(
 ) -> Definition
 ```
 
-Transfer the knob VALUES from `state` onto `definition`, **copy-on-write** (a NEW frozen
+Transfer the knob VALUES from `state` onto `definition`, copy-on-write (a NEW frozen
 Definition; the target is never mutated). `strict=True` raises `IncompatibleStateError` on a
 `structure_sha` mismatch; `strict=False` loads the structural intersection. `only` restricts
-the transferred groups — members of `{prompt, model, context_strategy, policies, decode,
+the transferred groups to members of `{prompt, model, context_strategy, policies, decode,
 fewshots, coordination}`. `d.load_state(d.state_dict())` re-mints the same content sha.
 
 #### `StateDict`
 
-`class StateDict(BaseModel)` (frozen, JSON-only) — the tunable knobs as the "weights".
+`class StateDict(BaseModel)` (frozen, JSON-only): the tunable knobs as the "weights".
 
 | Field / property | Type | Notes |
 | --- | --- | --- |
 | `roles` | `dict[str, RoleKnobs]` | Per-role tunable knobs. |
 | `coordination` | `Coordination` | The team topology *choice* (a tunable knob). |
 | `injected_prompts` | `list[Prompt]` | Few-shots / appended instruction blocks. |
-| `summons` | `list[DefinitionRef]` | Summoned units as **references-by-version** (`{id, version}`); embedding a nested Definition is rejected. |
-| `structure_sha` | `str` | Content hash of the **architecture** — the transfer-compatibility key. |
-| `sha` *(property)* | `str` | Content hash of the knob **values**; editing any knob changes it (excludes `structure_sha`). |
+| `summons` | `list[DefinitionRef]` | Summoned units as references-by-version (`{id, version}`); embedding a nested Definition is rejected. |
+| `structure_sha` | `str` | Content hash of the architecture, the transfer-compatibility key. |
+| `sha` *(property)* | `str` | Content hash of the knob values; editing any knob changes it (excludes `structure_sha`). |
 
 #### `RoleKnobs`
 
-`class RoleKnobs(BaseModel)` (frozen) — one role's knob bundle: `prompt`, `model`,
+`class RoleKnobs(BaseModel)` (frozen): one role's knob bundle: `prompt`, `model`,
 `context_strategy`, `policies`, and decode knobs (`temperature` / `top_p` / `sample_k`, carried
 only when pinned). Every field is a static, author-supplied knob; none is fluid.
 
 #### `IncompatibleStateError`
 
-`class IncompatibleStateError(TypeError)` — `load_state(strict=True)` was asked to load onto an
+`class IncompatibleStateError(TypeError)`: `load_state(strict=True)` was asked to load onto an
 incompatible architecture (a `structure_sha` mismatch).
 
 ### Serving-time explore (`crawfish.learning`)
@@ -810,31 +810,31 @@ promoted best. Promotion stays with the `LearningLoop` (eval-gated + reversible)
 
 #### `ExploreSchedule`
 
-`class ExploreSchedule(BaseModel)` (frozen) — `epsilon` (base rate in `[0,1]`; `0` disables
+`class ExploreSchedule(BaseModel)` (frozen): `epsilon` (base rate in `[0,1]`; `0` disables
 exploration), `decay` (effective rate after `n` served items is `epsilon / (1 + decay·n)`;
 `decay=0` is flat fixed-ε), `strategy: ExploreStrategy`. `rate_at(served) -> float` gives the
 effective rate.
 
 #### `ExploreStrategy`
 
-`class ExploreStrategy(str, Enum)` — `HASH` (the shipped deterministic router) plus reserved
+`class ExploreStrategy(str, Enum)`: `HASH` (the shipped deterministic router) plus reserved
 `UCB1` / `THOMPSON` hooks (declared so a future strategy plugs in without an API change).
 
 #### `ServingDecision`
 
-`class ServingDecision(BaseModel)` (frozen) — per-item routing verdict: `item_id`, `explore`,
+`class ServingDecision(BaseModel)` (frozen): per-item routing verdict: `item_id`, `explore`,
 `version`.
 
 #### `GraduationVerdict`
 
-`class GraduationVerdict(BaseModel)` (frozen) — `decided`, `graduate`, `n_outcomes`,
+`class GraduationVerdict(BaseModel)` (frozen): `decided`, `graduate`, `n_outcomes`,
 `sample_size`, `trial_mean`, `baseline_mean`, `reason`. `decided` is `False` until
 `n_outcomes >= sample_size` (no peeking); once decided, `graduate` is `True` iff the trial
 mean beats baseline by at least `min_lift`.
 
 ## See also
 
-- [Train, calibrate & promote](../guide/train-and-tune.md) — the runnable end-to-end workflow for the symbols above.
-- [Metrics](metrics.md) — the `Benchmark` and `Rubric` that turn a candidate run into scores, and `calibrate`.
-- [Evals](evals.md) — the golden set, `gate_against_baseline`, and the variance-aware promotion gate.
-- [Definition](definition.md) — the agents, prompts, and knobs the mutators turn; `Definition.tune`.
+- [Train, calibrate & promote](../guide/train-and-tune.md): the runnable end-to-end workflow for the symbols above.
+- [Metrics](metrics.md): the `Benchmark` and `Rubric` that turn a candidate run into scores, and `calibrate`.
+- [Evals](evals.md): the golden set, `gate_against_baseline`, and the variance-aware promotion gate.
+- [Definition](definition.md): the agents, prompts, and knobs the mutators turn; `Definition.tune`.

@@ -1,101 +1,101 @@
-# Secrets & consent
+# Secrets and consent
 
-How credentials are held without ever leaking, and how a package earns permission to
-touch them. Secrets live **by reference** (an env-var name), are handed out
-least-privilege, and are stripped from anything written or logged. Before a package may
-use them, its declared needs are shown for explicit consent and recorded as a grant. These
-live in `crawfish.secrets`.
+How credentials are held without leaking, and how a package earns permission to touch them.
+Secrets live **by reference** (an env-var name), are handed out with least privilege, and
+are stripped from anything written or logged. Before a package may use them, its declared
+needs are shown for explicit consent and recorded as a grant. These live in
+`crawfish.secrets`.
 
 **Symbols on this page:** `resolve_secret` · `load_env` · `SecretManager` ·
 `ScrubbingStore` · `redact` · `read_capabilities` · `Capabilities` · `ConsentRequest` ·
 `ConsentDecider` · `AutoConsent` · `DenyConsent` · `CallbackConsent` · `GrantManifest` ·
 `ConsentDeclined` · `consent_install` · `GRANT_RECORD_KIND`
 
-The *runtime* half of `crawfish.secrets` — the broker that injects a credential at the
-network boundary so a jailed agent never sees its value (`Grant`, `SecretBroker`,
-`LeaseHandle`, leases, egress) — lives on its own page,
-[Secret broker](secret-broker.md). This page covers three things: resolving a secret by
-reference, scrubbing it out of anything written, and the install-time consent gate.
+The runtime side of `crawfish.secrets` (the broker that injects a credential at the network
+boundary so a jailed agent never sees its value: `Grant`, `SecretBroker`, `LeaseHandle`,
+leases, egress) lives on its own page, [Secret broker](secret-broker.md). This page covers
+three things: resolving a secret by reference, scrubbing it out of anything written, and the
+install-time consent gate.
 
 ## Secrets live by reference
 
-A **secret** is a credential — an API key, a token. Crawfish never stores the value of
-one. A node names the *reference* instead: the name of an environment variable (e.g.
-`"GITHUB_TOKEN"`) that holds the value. The value lives only in the process environment or
-a gitignored `.env` file. The framework passes around the name and looks the value up at
-the last possible moment.
+A *secret* is a credential, an API key or a token. Crawfish never stores the value of one. A
+node names the *reference* instead: the name of an environment variable (for example
+`"GITHUB_TOKEN"`) that holds the value. The value lives only in the process environment or a
+gitignored `.env` file. The framework passes around the name and looks the value up at the
+last possible moment.
 
 Three pieces do the resolving:
 
 - **`resolve_secret`** turns one reference name into its value, or `None` if it is unset.
-- **`load_env`** parses a `.env` file into a `name → value` map.
-- **`SecretManager`** holds that map and enforces *least privilege*: each node gets only
-  the secrets it explicitly **declared** it needs, never the whole environment.
+- **`load_env`** parses a `.env` file into a `name -> value` map.
+- **`SecretManager`** holds that map and enforces *least privilege*: each node gets only the
+  secrets it declared it needs, never the whole environment.
 
 !!! warning "Secrets resolve by reference, never by value"
 
-    A credential value never reaches stored config, an output, a log, or the model prompt.
-    A node declares the env-var *name*; `SecretManager.for_node` resolves only those names,
-    only for that node — the embryonic capability manifest, least privilege from day one.
-    See the [security spine](../architecture/SECURITY.md). The known v1 tradeoff: a local
-    command runtime can still read `.env` inside its sandbox. The broker's egress-mediated
-    injection closes that gap — see [Secret broker](secret-broker.md).
+    A credential value never reaches stored config, an output, a log, or the model prompt. A
+    node declares the env-var name. `SecretManager.for_node` resolves only those names, only
+    for that node, so each node gets least privilege. See the
+    [security spine](../architecture/SECURITY.md). One v1 tradeoff: a local command runtime
+    can still read `.env` inside its sandbox. The broker's egress-mediated injection closes
+    that gap. See [Secret broker](secret-broker.md).
 
 ## Scrubbing keeps the value off disk
 
-Even held by reference, a value can still leak by being *written down* — into a saved
+Even held by reference, a value can still leak by being written down: into a saved
 transcript, a log line, a stored event. Two pieces guard that exit:
 
-- **`redact`** takes a string and replaces any known secret value (plus common
-  credential/PII patterns like an `sk-…` key or an email address) with a fixed marker.
-- **`ScrubbingStore`** wraps the persistence layer (the **Store** — Crawfish's database
-  seam) and runs `redact` over everything on the way *in*, so the saved ledger never
-  contains a raw credential.
+- **`redact`** takes a string and replaces any known secret value (plus common credential
+  and PII patterns like an `sk-…` key or an email address) with a fixed marker.
+- **`ScrubbingStore`** wraps the persistence layer (the `Store`, Crawfish's database seam)
+  and runs `redact` over everything on the way in, so the saved ledger never contains a raw
+  credential.
 
-`ScrubbingStore` redacts on the *write* path. `put_record`, `kv_set`, and `append_event`
-pass their payloads through `redact_obj` (the recursive form of `redact`) before handing
-them to the inner Store. Read paths (`get_record`, `events`, …) are pass-through. So a
-value that was never written can never be read back — the event ledger is clean by
-construction, not by a later sweep. `ScrubbingStore` implements the same Store protocol it
-wraps, so it drops in anywhere a Store is expected.
+`ScrubbingStore` redacts on the write path. `put_record`, `kv_set`, and `append_event` pass
+their payloads through `redact_obj` (the recursive form of `redact`) before handing them to
+the inner Store. Read paths (`get_record`, `events`, and so on) are pass-through. A value
+that was never written can never be read back, so the event ledger is clean as it is
+written, not by a later sweep. `ScrubbingStore` implements the same Store protocol it wraps,
+so it drops in anywhere a Store is expected.
 
 `redact` matches two things: exact known secret values (passed in), and a fixed set of
-credential/PII regexes — `sk-…` and `ghp_…`/`xox…` tokens, `Bearer …` headers, and email
-addresses. Both become the literal marker `***REDACTED***`. Because it matches patterns, a
-credential is scrubbed *even if* it was never registered as a known value.
+credential and PII regexes (`sk-…` and `ghp_…`/`xox…` tokens, `Bearer …` headers, and email
+addresses). Both become the literal marker `***REDACTED***`. Because it matches patterns, a
+credential is scrubbed even if it was never registered as a known value.
 
 ## Consent gates what a package may touch
 
-Holding secrets safely is half the job. The other half is **consent**: deciding that a
-package is *allowed* to touch a given secret or reach a given network host at all.
+Holding secrets safely is half the job. The other half is *consent*: deciding that a
+package is allowed to touch a given secret or reach a given network host at all.
 
-- A package **declares** what it needs in its `crawfish.toml`. **`read_capabilities`**
-  reads that declaration into a **`Capabilities`** object — the list of secret references
-  and egress (outbound network) hosts it wants.
-- At install time those declared needs become a **`ConsentRequest`** — a read-only summary
-  shown for approval (secrets by *reference name*, never value).
-- A **`ConsentDecider`** says yes or no. Three ship: **`AutoConsent`** (always yes — for an
-  explicit `--yes` install), **`DenyConsent`** (always no — the fail-closed default when
-  nobody is there to ask), and **`CallbackConsent`** (wraps your own yes/no function, e.g.
-  a stdin prompt).
-- On approval, **`consent_install`** records a **grant** through the **`GrantManifest`**
-  and returns it. On refusal it records nothing and raises **`ConsentDeclined`**.
+- A package declares what it needs in its `crawfish.toml`. **`read_capabilities`** reads
+  that declaration into a **`Capabilities`** object: the list of secret references and
+  egress (outbound network) hosts it wants.
+- At install time those declared needs become a **`ConsentRequest`**, a read-only summary
+  shown for approval (secrets by reference name, never value).
+- A **`ConsentDecider`** says yes or no. Three ship: **`AutoConsent`** (always yes, for an
+  explicit `--yes` install), **`DenyConsent`** (always no, the fail-closed default when
+  nobody is there to ask), and **`CallbackConsent`** (wraps your own yes/no function, such
+  as a stdin prompt).
+- On approval, **`consent_install`** records a *grant* through the **`GrantManifest`** and
+  returns it. On refusal it records nothing and raises **`ConsentDeclined`**.
 
-The consent surface shows only the **statically declared** capabilities. A per-item
-*fluid* value (untrusted session data) can never appear here and can never grant a
-capability. Approval is recorded as a `Grant` under the Store record kind
-`GRANT_RECORD_KIND` (`"capability_grant"`), one grant per `(org_id, package)` —
-re-consenting a package overwrites its prior grant. On decline, **no** record is written.
+The consent surface shows only the statically declared capabilities. A per-item **fluid**
+value (untrusted session data) can never appear here and can never grant a capability.
+Approval is recorded as a `Grant` under the Store record kind `GRANT_RECORD_KIND`
+(`"capability_grant"`), one grant per `(org_id, package)`. Re-consenting a package
+overwrites its prior grant. On decline, no record is written.
 
 !!! warning "Consent fails closed"
 
     A detached or non-interactive install has no human to ask, so the default decider is
-    `DenyConsent`: nothing self-approves silently. With no consent, `consent_install`
-    writes no grant and raises `ConsentDeclined` — the package stays fail-closed and can
-    lease nothing it was not granted. This mirrors the broker's fail-closed approval queue
+    `DenyConsent`: nothing self-approves silently. With no consent, `consent_install` writes
+    no grant and raises `ConsentDeclined`, so the package stays fail-closed and can lease
+    nothing it was not granted. This mirrors the broker's fail-closed approval queue
     default.
 
-`ConsentDecider` is a `runtime_checkable` `Protocol` — an injectable seam — so tests never
+`ConsentDecider` is a `runtime_checkable` `Protocol`, an injectable seam, so tests never
 touch real stdin and a CLI can plug in a stdin-prompt callback via `CallbackConsent`. The
 three concrete deciders cover the install modes: interactive (`CallbackConsent`), explicit
 non-interactive yes (`AutoConsent`), and fail-closed default (`DenyConsent`).
@@ -104,7 +104,7 @@ non-interactive yes (`AutoConsent`), and fail-closed default (`DenyConsent`).
 
 Redacting a string that contains a secret value, then running one `ConsentRequest`
 through `AutoConsent` (granted) and `DenyConsent` (refused → `ConsentDeclined`, caught).
-All pure and in-memory — no real secrets, no network.
+All pure and in-memory, no real secrets, no network.
 
 ```python
 from crawfish.secrets import (
@@ -169,8 +169,8 @@ A missing file yields `{}`. Values are never logged.
 
 ### `SecretManager`
 
-`class SecretManager` — maps nodes to the secrets they declare and resolves them
-least-privilege.
+`class SecretManager`: maps nodes to the secrets they declare and resolves them with least
+privilege.
 
 | Member | Signature | Notes |
 | --- | --- | --- |
@@ -191,7 +191,7 @@ Slack tokens, `Bearer …` headers, and email addresses.
 
 ### `ScrubbingStore`
 
-`class ScrubbingStore` — a `Store` wrapper that redacts secrets/PII before any write.
+`class ScrubbingStore`: a `Store` wrapper that redacts secrets and PII before any write.
 
 | Member | Signature | Behaviour |
 | --- | --- | --- |
@@ -212,7 +212,7 @@ Read a package's declared capabilities from `crawfish.toml`'s `[capabilities]` t
 
 ### `Capabilities`
 
-`class Capabilities` — what a package/unit declares it needs (the consent surface).
+`class Capabilities`: what a package or unit declares it needs (the consent surface).
 
 | Member | Signature | Notes |
 | --- | --- | --- |
@@ -223,7 +223,7 @@ Read a package's declared capabilities from `crawfish.toml`'s `[capabilities]` t
 
 ### `ConsentRequest`
 
-`@dataclass(frozen=True) class ConsentRequest` — the static consent surface shown to a
+`@dataclass(frozen=True) class ConsentRequest`: the static consent surface shown to a
 decider. Carries references only, never a value.
 
 | Field | Type | Default | Notes |
@@ -239,7 +239,7 @@ decider. Carries references only, never a value.
 
 ### `ConsentDecider`
 
-`@runtime_checkable class ConsentDecider(Protocol)` — the injectable consent-decision seam.
+`@runtime_checkable class ConsentDecider(Protocol)`: the injectable consent-decision seam.
 
 ```python
 def decide(self, request: ConsentRequest) -> bool: ...
@@ -249,18 +249,18 @@ Returns `True` to grant. Implementations: `AutoConsent`, `DenyConsent`, `Callbac
 
 ### `AutoConsent`
 
-`class AutoConsent` — `decide` always returns `True`. For an explicit, non-interactive
+`class AutoConsent`: `decide` always returns `True`. For an explicit, non-interactive
 `--yes` install only.
 
 ### `DenyConsent`
 
-`class DenyConsent` — `decide` always returns `False`. The fail-closed default for a
-detached/non-interactive install: with no human to consent, the install raises
+`class DenyConsent`: `decide` always returns `False`. The fail-closed default for a
+detached or non-interactive install. With no human to consent, the install raises
 `ConsentDeclined` rather than self-approve.
 
 ### `CallbackConsent`
 
-`class CallbackConsent` — wraps a `Callable[[ConsentRequest], bool]` as a decider.
+`class CallbackConsent`: wraps a `Callable[[ConsentRequest], bool]` as a decider.
 
 | Member | Signature | Notes |
 | --- | --- | --- |
@@ -269,7 +269,7 @@ detached/non-interactive install: with no human to consent, the install raises
 
 ### `GrantManifest`
 
-`class GrantManifest` — a Store-backed, queryable manifest of consented capability grants.
+`class GrantManifest`: a Store-backed, queryable manifest of consented capability grants.
 One grant per `(org_id, package)`, persisted under `GRANT_RECORD_KIND`.
 
 | Member | Signature | Notes |
@@ -284,8 +284,8 @@ One grant per `(org_id, package)`, persisted under `GRANT_RECORD_KIND`.
 
 ### `ConsentDeclined`
 
-`class ConsentDeclined(RuntimeError)` — raised when an install is attempted but consent
-was not explicitly granted. No grant is written, so the package can lease nothing.
+`class ConsentDeclined(RuntimeError)`: raised when an install is attempted but consent was
+not explicitly granted. No grant is written, so the package can lease nothing.
 
 ### `consent_install`
 
@@ -302,20 +302,21 @@ def consent_install(
 ```
 
 The install-time consent gate. Steps: (1) build a static `ConsentRequest` from `caps`;
-(2) ask `decider` (default `DenyConsent` — fail-closed); (3) on approval, mint a `Grant`
+(2) ask `decider` (default `DenyConsent`, fail-closed); (3) on approval, mint a `Grant`
 (stamped `granted_at = now`, or `time.time()` if `now` is `None`), persist it via
 `GrantManifest`, and return it; (4) on decline, write nothing and raise `ConsentDeclined`.
 
 ### `GRANT_RECORD_KIND`
 
-`GRANT_RECORD_KIND: str = "capability_grant"` — the Store record `kind` under which
+`GRANT_RECORD_KIND: str = "capability_grant"`: the Store record `kind` under which
 consented grants are persisted. One grant per `(org_id, package)`; re-consenting
 overwrites.
 
 ## See also
 
-- [Secret broker](secret-broker.md) — the runtime half: leasing a secret to the network
-  without ever handing the value to the agent.
-- [Sandbox & jail](sandbox-and-jail.md) — the host-side isolation that runs node code
+- [Secret broker](secret-broker.md): leasing a secret to the network without ever handing
+  the value to the agent.
+- [Sandbox and jail](sandbox-and-jail.md): the host-side isolation that runs node code
   out-of-process with taint propagation.
-- [Core types](core-types.md) — `Flow`, the static-vs-fluid distinction consent rests on.
+- [Core types](core-types.md): `Flow`, the static-versus-fluid distinction consent rests
+  on.

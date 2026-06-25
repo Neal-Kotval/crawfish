@@ -1,4 +1,4 @@
-# Authoring — config, discovery, scaffold & doctor
+# Authoring: config, discovery, scaffold, and doctor
 
 How a Crawfish *project on disk* becomes something the engine can run. This covers the
 `crawfish.toml` manifest that describes it, the scan that finds the units you authored, the
@@ -11,46 +11,44 @@ in `crawfish.config`, `crawfish.discovery`, `crawfish.scaffold`, and `crawfish.d
 
 ## A project is a directory
 
-A **Crawfish project** is a directory you author by hand. Its root holds the folders that
-make up your agents — `definitions/`, `sources/`, `sinks/`, and a few more — alongside one
-manifest file, `crawfish.toml`. A hidden `.crawfish/` folder holds **generated state**
-(anything the engine writes for itself); everything else is **authored** (what you wrote
-and check into git).
+A *Crawfish project* is a directory you author by hand. Its root holds the folders that make
+up your agents (`definitions/`, `sources/`, `sinks/`, and a few more) alongside one manifest
+file, `crawfish.toml`. A hidden `.crawfish/` folder holds *generated state* (anything the
+engine writes for itself); everything else is *authored* (what you wrote and check into git).
 
-The **manifest** (`crawfish.toml`) names the project and picks its defaults. `load_manifest`
-reads it into a `ProjectManifest` — and if the file is absent, hands back a manifest of pure
+The *manifest* (`crawfish.toml`) names the project and picks its defaults. `load_manifest`
+reads it into a `ProjectManifest`, and if the file is absent, hands back a manifest of pure
 defaults, so a bare directory still works.
 
-A **profile** is a named runtime choice. `dev` runs the agent loop by shelling out to
-`claude -p` with no API key; `prod` runs it on the managed backend. A `ProfileConfig`
-records which runtime a profile uses plus any free-form settings. The manifest's
-`default_profile` says which one to use when you don't name one.
+A *profile* is a named runtime choice. `dev` runs the agent loop by shelling out to
+`claude -p` with no API key; `prod` runs it on the managed backend. A `ProfileConfig` records
+which runtime a profile uses plus any free-form settings. The manifest's `default_profile`
+says which one to use when you don't name one.
 
-`ProjectPaths` records **where each kind of unit lives** — `sources/` for sources,
-`definitions/` for agent teams, and so on. The defaults are the canonical layout; a project
-can relocate any folder, and every other tool here follows the override rather than
-assuming the default name.
+`ProjectPaths` records where each kind of unit lives: `sources/` for sources, `definitions/`
+for agent teams, and so on. The defaults are the canonical layout. A project can relocate any
+folder, and every other tool here follows the override rather than assuming the default name.
 
-A project's model choices live in a `[models]` block: a `default` model for agents that
-don't pin one, and **aliases** — friendly names like `fast` that map to a concrete model
-id. `load_models_config` reads just that block. If the block is malformed — a non-string
-default, an alias pointing at another alias — it raises `ModelsConfigError` at load time,
-so the project fails fast with a clear message instead of a confusing failure later.
+A project's model choices live in a `[models]` block: a `default` model for agents that don't
+pin one, and *aliases*, friendly names like `fast` that map to a concrete model id.
+`load_models_config` reads only that block. If the block is malformed (a non-string default,
+or an alias pointing at another alias), it raises `ModelsConfigError` at load time, so the
+project fails fast with a clear message instead of a confusing failure later.
 
-**Discovery** is the scan that finds your units. A `Registry` collects `UnitRef`s — one per
-discovered unit, recording its `kind` (source, sink, definition…), its `name`, and where it
-came from. It gathers from two feeds: installed `crawfish-*` packages (via Python *entry
-points* — the standard way a package advertises plug-ins) and a scan of the local project
-folders. When two units claim the same kind and name, the **first one registered wins** and
-a warning is emitted.
+*Discovery* is the scan that finds your units. A `Registry` collects `UnitRef`s, one per
+discovered unit, recording its `kind` (source, sink, definition, and so on), its `name`, and
+where it came from. It gathers from two feeds: installed `crawfish-*` packages (via Python
+*entry points*, the standard way a package advertises plug-ins) and a scan of the local
+project folders. When two units claim the same kind and name, the first one registered wins
+and a warning is emitted.
 
-`scaffold_project` writes a fresh project to disk — manifest, a working example agent (the
-triage-bot), a `.gitignore`, fixtures — so one command produces a runnable project with no
+`scaffold_project` writes a fresh project to disk: a manifest, a working example agent (the
+triage-bot), a `.gitignore`, and fixtures, so one command produces a runnable project with no
 API key.
 
 `diagnose` is the health check behind `craw doctor`. It walks the project and returns a
-`DoctorReport`: a list of `DoctorFinding`s, each tagged with a `level` (`ok`, `info`,
-`warn`, or `error`). The report is healthy when nothing rose above `info`.
+`DoctorReport`: a list of `DoctorFinding`s, each tagged with a `level` (`ok`, `info`, `warn`,
+or `error`). The report is healthy when nothing rose above `info`.
 
 ## The manifest is all-optional
 
@@ -75,35 +73,33 @@ them, but can override either in the manifest.
 
 ## Why an alias may not point at another alias
 
-`resolve_model` (see [providers](providers.md)) expands an alias by a **single
-hop** — it looks the name up once and returns the target. An alias chain
-(`a → b → c`) would therefore resolve `a` to the *name* `b`, not to a real model.
-Rather than let that surface as a baffling runtime error, `_models_config_from_raw`
-rejects any alias whose target is itself an alias, raising `ModelsConfigError` at
-load time. The same function rejects a non-string `default`, a non-table
-`[models.aliases]`, a non-string alias target, and an `allowed_providers` that
+`resolve_model` (see [providers](providers.md)) expands an alias by a single hop: it looks
+the name up once and returns the target. An alias chain (`a -> b -> c`) would therefore
+resolve `a` to the name `b`, not to a real model. Rather than let that surface as a baffling
+runtime error, `_models_config_from_raw` rejects any alias whose target is itself an alias,
+raising `ModelsConfigError` at load time. The same function rejects a non-string `default`, a
+non-table `[models.aliases]`, a non-string alias target, and an `allowed_providers` that
 isn't a list of strings.
 
-`load_models_config` and `load_manifest` share this builder, so the validation is
-identical whether you load the whole manifest or just the models block. Both
-return an empty/default config when the file or section is absent — the
-back-compat path where the runtime's built-in model fallback applies.
+`load_models_config` and `load_manifest` share this builder, so the validation is identical
+whether you load the whole manifest or only the models block. Both return an empty or default
+config when the file or section is absent, the back-compatible path where the runtime's
+built-in model fallback applies.
 
 ## Two feeds, first-wins, namespaced by kind
 
-`Registry.discover` runs the two feeds in order: **entry points first**, then the
-**local directory scan**. Because first registration wins, an installed package's
-unit beats a local file of the same kind and name — and the collision warns so
-you know a local file was shadowed. Collisions are scoped to a `(kind, name)`
-pair, so a `source` and a `sink` may share a name freely.
+`Registry.discover` runs the two feeds in order: entry points first, then the local
+directory scan. Because first registration wins, an installed package's unit beats a local
+file of the same kind and name, and the collision warns so you know a local file was
+shadowed. Collisions are scoped to a `(kind, name)` pair, so a `source` and a `sink` may
+share a name freely.
 
-The local scan treats two kinds — `definition` and `observer` — as **directory
-packages**: a subfolder counts as a unit when it contains an `instructions.md` or
-a `definition.py`. Every other kind is a **single file**: a `*.py` whose stem
-doesn't start with `_` becomes a unit named for the file. When called without an
-explicit `paths` map, `discover` loads the manifest and honours any
-`[project.paths]` relocation automatically. See [definition](definition.md) for
-the units the registry discovers.
+The local scan treats two kinds (`definition` and `observer`) as *directory packages*: a
+subfolder counts as a unit when it contains an `instructions.md` or a `definition.py`. Every
+other kind is a *single file*: a `*.py` whose stem doesn't start with `_` becomes a unit
+named for the file. When called without an explicit `paths` map, `discover` loads the
+manifest and honours any `[project.paths]` relocation automatically. See
+[definition](definition.md) for the units the registry discovers.
 
 ## What the doctor checks
 
@@ -115,7 +111,7 @@ override so the report matches the real project:
 2. **Each unit folder**, in `ProjectPaths` field order. Present → `ok` (with a
    `(relocated from …/)` note if the path was overridden). A folder that an
    override *points at but that doesn't exist* → `warn` (a real
-   misconfiguration). A default folder that's simply absent → `info` (optional).
+   misconfiguration). A default folder that is absent → `info` (optional).
 3. **Misplacement.** A Definition-shaped subfolder (one with `instructions.md` or
    `definition.py`) sitting under a non-definition root → `warn`, with a hint to
    move it to `definitions/`. The `definitions` and `observers` roots are
@@ -130,13 +126,13 @@ renders the findings with per-level glyphs and a one-line verdict.
 !!! note "Good to know"
 
     A missing folder is only a problem when an override points at it. A default folder
-    that's simply absent is `info` (optional), but a `[project.paths]` override pointing at
-    a folder that doesn't exist is `warn` — a real misconfiguration.
+    that is absent is `info` (optional), but a `[project.paths]` override pointing at
+    a folder that doesn't exist is `warn`, a real misconfiguration.
 
 ## Example
 
 Scaffold a fresh project into a temp directory, read its manifest back, discover
-its units, and run the doctor — pure local filesystem, no network.
+its units, and run the doctor. Pure local filesystem, no network.
 
 ```python
 import tempfile, os
@@ -183,7 +179,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
 ### `ProfileConfig`
 
-`class ProfileConfig(BaseModel)` — one named profile.
+`class ProfileConfig(BaseModel)`: one named profile.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -192,8 +188,8 @@ with tempfile.TemporaryDirectory() as tmp:
 
 ### `ProjectPaths`
 
-`class ProjectPaths(BaseModel)` — where each unit kind lives, relative to the
-project root. A project may relocate any folder via `crawfish.toml [project.paths]`.
+`class ProjectPaths(BaseModel)`: where each unit kind lives, relative to the project root. A
+project may relocate any folder via `crawfish.toml [project.paths]`.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -207,12 +203,12 @@ project root. A project may relocate any folder via `crawfish.toml [project.path
 
 `as_discovery_map() -> dict[str, str]` returns `{unit-kind: subdir}` for the
 registry's local scan. It maps `source`, `sink`, `definition`, `observer`,
-`tool`, and `policy` — **`pipelines` is not included**, so the local scan does
+`tool`, and `policy`. **`pipelines` is not included**, so the local scan does
 not discover pipeline files by this map.
 
 ### `ProjectManifest`
 
-`class ProjectManifest(BaseModel)` — the parsed `crawfish.toml`.
+`class ProjectManifest(BaseModel)`: the parsed `crawfish.toml`.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -252,14 +248,13 @@ Raises `ModelsConfigError` on a malformed block.
 
 ### `ModelsConfigError`
 
-`class ModelsConfigError(ValueError)` — a malformed `[models]` section. Raised at
-config-load time for: a non-string `default`; a non-table `[models.aliases]`; a
-non-string alias target; an alias pointing at another alias; or an
-`allowed_providers` that isn't a list of strings.
+`class ModelsConfigError(ValueError)`: a malformed `[models]` section. Raised at config-load
+time for a non-string `default`, a non-table `[models.aliases]`, a non-string alias target,
+an alias pointing at another alias, or an `allowed_providers` that isn't a list of strings.
 
 ### `UnitRef`
 
-`@dataclass UnitRef` — one discovered unit.
+`@dataclass UnitRef`: one discovered unit.
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -270,7 +265,7 @@ non-string alias target; an alias pointing at another alias; or an
 
 ### `Registry`
 
-`@dataclass Registry` — collects discovered units; first `(kind, name)` wins.
+`@dataclass Registry`: collects discovered units; first `(kind, name)` wins.
 
 | Member | Signature | Notes |
 | --- | --- | --- |
@@ -302,7 +297,7 @@ package, a fixture, and `.gitkeep`s for `sources/`/`sinks/`. Uses
 
 ### `DoctorFinding`
 
-`class DoctorFinding(BaseModel)` — one health observation.
+`class DoctorFinding(BaseModel)`: one health observation.
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -335,6 +330,6 @@ to a one-line description.
 
 ## See also
 
-- [Definition](definition.md) — the units discovery finds and the doctor checks.
-- [Providers](providers.md) — how the `[models]` default and aliases resolve.
-- [Operate](operate.md) — running and deploying the project you authored.
+- [Definition](definition.md): the units discovery finds and the doctor checks.
+- [Providers](providers.md): how the `[models]` default and aliases resolve.
+- [Operate](operate.md): running and deploying the project you authored.

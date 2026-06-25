@@ -1,52 +1,52 @@
 # Evals
 
-An **eval** turns real agent runs into a durable, gradable corpus: capture runs as reusable
+An eval turns real agent runs into a durable, gradable corpus. Capture runs as reusable
 examples, gather them into versioned collections, grade their outputs, and gate each new
-version against a saved baseline so quality can't silently regress. You reach for evals when
-you want a change to *prove* it didn't make the agent worse before it ships.
+version against a saved baseline so quality can't silently regress. Use evals when you want
+a change to prove it didn't make the agent worse before it ships.
 
 `EvalCase` · `GoldenSet` · `LLMJudge` · `capture_case` · `grade_output` · `save_baseline` ·
 `load_baseline` · `gate_against_baseline` · `upconvert_case` · `migrate_golden_set`
 
-The scoring *types* (`Metric`, `Rubric`) live in [metrics](metrics.md); this page covers
+The scoring types (`Metric`, `Rubric`) live in [metrics](metrics.md). This page covers
 everything that turns runs into a durable corpus. It all lives in `crawfish.eval`.
 
 ## Cases, golden sets, grading, and the gate
 
-An **eval case** is one worked example: the **inputs** that went into a run, the
-**output** it produced, and an optional **label** — a human's judgment of what the
-right answer was. `EvalCase` is the record that holds all three. You build one by
-hand, or you capture it from a real run with `capture_case`.
+An eval case is one worked example: the inputs that went into a run, the output it
+produced, and an optional label (a human's judgment of what the right answer was).
+`EvalCase` is the record that holds all three. Build one by hand, or capture it from a
+real run with `capture_case`.
 
-A **golden set** is a named, versioned collection of those cases — your reference
-corpus of "here are inputs and here is what good looks like." `GoldenSet` stores its
-cases through the [`Store`](persistence.md) (the persistence seam), so the corpus survives
-across runs and machines. *Versioned* means the same name can hold several
-generations (`triage@0.1`, `triage@0.2`); each lives under its own key.
+A golden set is a named, versioned collection of those cases: your reference corpus of
+"here are inputs and here is what good looks like." `GoldenSet` stores its cases through
+the [`Store`](persistence.md) (the persistence seam), so the corpus survives across runs
+and machines. Versioned means the same name can hold several generations (`triage@0.1`,
+`triage@0.2`); each lives under its own key.
 
-**Grading** scores an output. There are two kinds of grader:
+Grading scores an output. There are two kinds of grader:
 
-- A **rubric** — a bundle of coded [metrics](metrics.md), pure functions that read
-  the output and return a number (is this field present? does it equal the expected
+- A rubric: a bundle of coded [metrics](metrics.md), pure functions that read the
+  output and return a number (is this field present? does it equal the expected
   value?). Deterministic, no model.
-- An **LLM judge** — a model that reads the output and scores it against criteria,
-  for qualities no coded check captures ("is this summary faithful?"). `LLMJudge`
-  wraps that. `grade_output` runs both kinds and merges their scores into one
+- An LLM judge: a model that reads the output and scores it against criteria, for
+  qualities no coded check captures ("is this summary faithful?"). `LLMJudge` wraps
+  that. `grade_output` runs both kinds and merges their scores into one
   `{name: score}` dictionary.
 
-A **baseline** is a saved score dictionary — the quality bar a known-good version
-cleared. `save_baseline` writes it; `load_baseline` reads it back. The payoff is the
-**eval gate**: `gate_against_baseline` scores a candidate, compares it to the stored
-baseline, and returns `True` only if no metric got worse. Wire that into CI and a
-change that degrades quality fails the build.
+A baseline is a saved score dictionary, the quality bar a known-good version cleared.
+`save_baseline` writes it; `load_baseline` reads it back. The eval gate uses it:
+`gate_against_baseline` scores a candidate, compares it to the stored baseline, and
+returns `True` only if no metric got worse. Wire that into CI and a change that degrades
+quality fails the build.
 
-`upconvert_case` and `migrate_golden_set` handle an older storage format —
-explained under [Schema migration](#schema-migration-the-string-era).
+`upconvert_case` and `migrate_golden_set` handle an older storage format, explained under
+[Schema migration](#schema-migration-the-string-era).
 
 ## Grading: coded metrics vs. the LLM judge
 
 The two graders are complementary, not redundant. Coded metrics (a `Rubric`) are
-cheap, deterministic, and catch structural failures — a missing field, a wrong enum,
+cheap, deterministic, and catch structural failures: a missing field, a wrong enum,
 a confidence below threshold. An `LLMJudge` catches the qualities a coded check can't
 articulate: faithfulness, tone, whether an answer actually addresses the question.
 
@@ -62,9 +62,9 @@ fully deterministic, which is what keeps eval suites reproducible.
 !!! warning "The judged output is fluid"
 
     The judge feeds the candidate output to the grading agent as **FLUID (untrusted)**
-    input — session data that reaches the model as data to *read*, never as instructions
+    input: session data that reaches the model as data to *read*, never as instructions
     to *obey* (the [security spine](../architecture/SECURITY.md)). An output that tries to
-    talk the judge into a perfect score is just text the judge reads, not a command it
+    talk the judge into a perfect score is text the judge reads, not a command it
     follows.
 
 ## The eval gate
@@ -73,22 +73,21 @@ fully deterministic, which is what keeps eval suites reproducible.
 compares it to the candidate score-by-score, and returns `True` (pass) unless some
 metric dropped. The comparison is [`is_regression`](metrics.md) from the metrics
 module: a metric regresses when `candidate - baseline` falls below `-tolerance`.
-Every metric is assumed **higher-is-better**.
+Every metric is assumed higher-is-better.
 
 Two edge cases matter:
 
-- **No baseline yet.** If `load_baseline` returns `None`, the gate returns `True` —
-  there is nothing to regress against. The first run establishes the bar; it never
-  blocks.
-- **`tolerance`.** A small `tolerance` (default `0.0`) absorbs scoring noise so a
-  trivial dip doesn't fail the gate. At `0.0`, *any* drop on *any* metric fails.
+- No baseline yet. If `load_baseline` returns `None`, the gate returns `True`. There
+  is nothing to regress against. The first run establishes the bar; it never blocks.
+- `tolerance`. A small `tolerance` (default `0.0`) absorbs scoring noise so a trivial
+  dip doesn't fail the gate. At `0.0`, any drop on any metric fails.
 
 Metrics present on only one side are treated as `0.0` on the other, so the baseline
 and candidate vectors need not have identical keys.
 
 !!! note "Good to know"
 
-    The gate only ever blocks on a *regression* — a metric that dropped. A candidate that
+    The gate only ever blocks on a regression, a metric that dropped. A candidate that
     holds steady or improves on every metric always passes, even at `tolerance=0.0`. The
     very first run, with no stored baseline, also passes: there is nothing to regress
     against, so the first run establishes the bar rather than failing the build.
@@ -96,27 +95,26 @@ and candidate vectors need not have identical keys.
 ## Schema migration: the string era
 
 Golden sets captured before the typed-output change stored `output` and `label` as
-JSON-encoded **strings**; metrics now read the **typed** value. `upconvert_case`
-bridges the two: given a stored row, it lifts any `output`/`label` field that holds a
-single self-contained JSON document back to its typed form, canonicalising it so the
-result is reproducible under record/replay. It is **pure and idempotent** — an
-already-typed row up-converts to itself, so it is safe to apply on every read. A
-string that is *not* a single JSON document (free text, or two concatenated objects)
-is left untouched; the converter never guesses.
+JSON-encoded strings; metrics now read the typed value. `upconvert_case` bridges the
+two: given a stored row, it lifts any `output`/`label` field that holds a single
+self-contained JSON document back to its typed form, canonicalising it so the result
+is reproducible under record/replay. It is pure and idempotent: an already-typed row
+up-converts to itself, so it is safe to apply on every read. A string that is not a
+single JSON document (free text, or two concatenated objects) is left untouched; the
+converter never guesses.
 
 Because a golden set's storage `kind` is dynamic (`golden:NAME@VERSION`), there is no
 static converter table to register against. Instead the lift is applied lazily on the
 read path: `GoldenSet.get` and `GoldenSet.cases` run every row through
-`upconvert_case` before validating it. To rewrite the stored rows in place — a
-one-time bulk lift — call `GoldenSet.migrate`, or the module-level
-`migrate_golden_set` convenience wrapper; both return the count of cases that
-actually changed.
+`upconvert_case` before validating it. To rewrite the stored rows in place (a one-time
+bulk lift), call `GoldenSet.migrate`, or the module-level `migrate_golden_set`
+convenience wrapper; both return the count of cases that actually changed.
 
 ## Example
 
 Build a small golden set, grade outputs with a coded (non-model) rubric, save a
 baseline, then gate a matching candidate (pass) and a regressed one (fail). Fully
-deterministic — no runtime, no model.
+deterministic: no runtime, no model.
 
 ```python
 from crawfish.store.sqlite import SqliteStore
@@ -176,7 +174,7 @@ print("fail:", gate_against_baseline(store, "triage", rubric.score(bad)))
 
 ### `EvalCase`
 
-`class EvalCase(BaseModel)` — one captured example: inputs, produced output, optional
+`class EvalCase(BaseModel)`: one captured example: inputs, produced output, optional
 human label.
 
 | Field | Type | Default | Notes |
@@ -191,7 +189,7 @@ human label.
 
 ### `GoldenSet`
 
-`class GoldenSet` — a named, versioned collection of cases, persisted through a
+`class GoldenSet`: a named, versioned collection of cases, persisted through a
 `Store`.
 
 ```python
@@ -225,7 +223,7 @@ Build an `EvalCase` from a real run. Copies `output.value` into `EvalCase.output
 
 ### `LLMJudge`
 
-`class LLMJudge` — a `Definition`-backed grader: an agent scores an output against
+`class LLMJudge`: a `Definition`-backed grader: an agent scores an output against
 criteria. Complements coded `Metric`s; deterministic under a mock/replay runtime.
 
 ```python
@@ -237,7 +235,7 @@ async def grade(
 ```
 
 `grade` binds `output.value` and `criteria` as fluid inputs, runs the judging agent
-team, and parses its free-text verdict into a clamped `[0, 1]` score (no number →
+team, and parses its free-text verdict into a clamped `[0, 1]` score (no number is
 `0.0`).
 
 ### `grade_output`
@@ -289,7 +287,7 @@ def gate_against_baseline(
 ) -> bool
 ```
 
-`True` if `candidate` passes — no metric regressed beyond `tolerance` versus the
+`True` if `candidate` passes: no metric regressed beyond `tolerance` versus the
 stored baseline. Returns `True` when no baseline exists yet. Higher-is-better is
 assumed for every metric. See [`is_regression`](metrics.md) for the comparison rule.
 
@@ -317,6 +315,6 @@ convenience wrapper over `GoldenSet.migrate`; returns the number of cases rewrit
 
 ## See also
 
-- [Metrics](metrics.md) — the `Metric` and `Rubric` graders the rubric path scores with.
-- [Tuner & learning](tuner-and-learning.md) — improve a Definition *toward* the bar, not just guard it.
-- [Persistence](persistence.md) — the `Store` seam a `GoldenSet` and baseline persist through.
+- [Metrics](metrics.md): the `Metric` and `Rubric` graders the rubric path scores with.
+- [Tuner & learning](tuner-and-learning.md): improve a Definition toward the bar, not only guard it.
+- [Persistence](persistence.md): the `Store` seam a `GoldenSet` and baseline persist through.

@@ -1,6 +1,6 @@
 # Definition
 
-The authored, on-disk spec of an agent or team — the directory you write and the typed
+The authored, on-disk spec of an agent or team: the directory you write and the typed
 object it compiles into. A Definition fixes the team layout, the typed inputs and outputs,
 the prompts, and the bundled assets (tools, skills, MCP servers, policies) as one
 reproducible package. These live in `crawfish.definition`.
@@ -13,7 +13,7 @@ A **Definition** is one agent or team, written as a directory of files and compi
 single typed object. The directory holds an `instructions.md` (the main agent's prompt),
 optional `agents/*.md` (more agents), `tools/*.py`, `skills/*.md`, `mcp/*.py`,
 `policies/*.py`, and a `definition.py` that declares typed inputs and outputs. The compiler
-reads those files and produces a `Definition` — the unit you install, version, and run.
+reads those files and produces a `Definition`, the unit you install, version, and run.
 
 ## Agents and teams
 
@@ -22,49 +22,48 @@ A team is a list of **agents**. Each agent is an `AgentSpec`: a `role` name, a `
 to (`delegates_to`). The whole team is a `TeamSpec`: the agent list plus how they work
 together.
 
-That "how" is the **`Coordination`** setting — one of three shapes:
+That "how" is the `Coordination` setting, one of three shapes:
 
-- **single** — one agent, or several independent agents, with no coordinator.
-- **lead** — a designated `lead` agent delegates to subagents and combines their
+- **single**: one agent, or several independent agents, with no coordinator.
+- **lead**: a designated `lead` agent delegates to subagents and combines their
   typed results.
-- **sequential** — agents run in declared order, each one's output feeding the next.
+- **sequential**: agents run in declared order, each one's output feeding the next.
 
 ## Inputs, prompts, dependencies, assets
 
-A Definition also carries **typed inputs and outputs** — `Parameter`s, the same typed slots
+A Definition also carries typed inputs and outputs: `Parameter`s, the same typed slots
 used everywhere in Crawfish, each marked *static* (set once) or *fluid* (varies per item,
-treated as untrusted data). It carries **injected prompts** (`Prompt` — extra text aimed at
-a named target), **dependencies** on other definitions (`DefinitionRef` — an `id` plus a
-`version`), and an **assets** bundle (`DefinitionAssets`) listing the code modules, skills,
+treated as untrusted data). It carries injected prompts (`Prompt`, extra text aimed at
+a named target), dependencies on other definitions (`DefinitionRef`, an `id` plus a
+`version`), and an assets bundle (`DefinitionAssets`) listing the code modules, skills,
 MCP connections, and policies the directory contributed.
 
-An **`MCPConnection`** describes one external tool server (an MCP server) the definition
+An `MCPConnection` describes one external tool server (an MCP server) the definition
 connects to.
 
 !!! warning "MCP auth is by reference only"
 
-    An `MCPConnection.auth` is always a *secret reference* — the name of an environment
-    variable — never an inline password. Credentials resolve at run time, are injected into
+    An `MCPConnection.auth` is always a *secret reference*: the name of an environment
+    variable, never an inline password. Credentials resolve at run time, are injected into
     the server env, and never get written into a prompt. See the
-    [security spine](../architecture/SECURITY.md).
+    [security overview](../architecture/SECURITY.md).
 
-You compile a directory with **`load_definition`**, the one canonical loader. On any
-problem — a missing directory, an agent binding a tool that doesn't exist, a broken import —
-it raises **`DefinitionLoadError`**. A finished Definition can be exported to a
-**`MarketplacePackage`**, a flat, checksummed shape for publishing to a hub.
+You compile a directory with `load_definition`, the one canonical loader. On any
+problem (a missing directory, an agent binding a tool that doesn't exist, a broken import)
+it raises `DefinitionLoadError`. A finished Definition can be exported to a
+`MarketplacePackage`, a flat, checksummed shape for publishing to a hub.
 
 ## One canonical loader, deterministic identity
 
-`load_definition` is the *single* loader: `Definition.from_package(path)` calls it,
+`load_definition` is the single loader. `Definition.from_package(path)` calls it,
 and the installed-package route resolves through it too. A directory and its installed
-copy therefore compile to byte-identical Definitions. Identity is **content-derived,
-never path- or time-derived** — the version's content hash (`sha`) is computed over
+copy therefore compile to byte-identical Definitions. Identity is content-derived,
+never path-derived or time-derived: the version's content hash (`sha`) is computed over
 the directory's files, with the lockfile, caches, VCS dirs, and virtualenvs excluded
 (`definition.lock`, `__pycache__`, `.crawfish`, `uv.lock`, `.venv`, `.env`, `.git`,
 `node_modules`, `.DS_Store`, `.claude`). The Definition's `id` is set from the
 package name (`pyproject.toml` `project.name`, else the directory name), not the
-random default. See
-[ADR 0006](../architecture/decisions/0006-canonical-loader-deterministic-identity.md).
+random default.
 
 !!! note "Good to know"
 
@@ -84,48 +83,46 @@ instances in `mcp/*.py`), it checks every agent:
 - a policy an agent binds must exist among the discovered policies;
 - every role in `delegates_to` must be a real agent role in the same team.
 
-An agent that declares no `tools` is given **all** available tools (local + MCP) — no
+An agent that declares no `tools` is given all available tools (local plus MCP), with no
 explicit wiring needed. Compiling imports `definition.py`, `policies/*.py`, and
-`tools/*.py`: this is authoring-time trusted code. Host-side *tool* code runs
+`tools/*.py`: this is authoring-time trusted code. Host-side tool code runs
 out-of-process at run time with taint propagation (untrusted fluid data is tracked as
 it flows), not here.
 
 !!! note "Good to know"
 
-    An agent that declares no `tools` is granted **all** available tools — local plus any
+    An agent that declares no `tools` is granted all available tools: local plus any
     exposed by a connected MCP server. Declare a `tools` list only when you want to narrow
     that.
 
 ## Team coordination is hierarchical
 
-The coordination model is delegation-in / typed-result-out, leaning on Claude's
-hierarchical subagent model — there is no bespoke message bus. If `definition.py`
+The coordination model is delegation in, typed result out. It uses Claude's
+hierarchical subagent model, with no separate message bus. If `definition.py`
 sets neither a full `team` override nor an explicit `coordination`, the compiler
-infers it: a `lead` set with more than one agent ⇒ `Coordination.LEAD`, otherwise
+infers it: a `lead` set with more than one agent gives `Coordination.LEAD`, otherwise
 `Coordination.SINGLE`. `workspace` is `"shared"` by default (agents see one
-workspace) or `"isolated"`. See
-[ADR 0007](../architecture/decisions/0007-team-coordination-hierarchical.md).
+workspace) or `"isolated"`.
 
 ## Definitions are versioned and freezable
 
 `Definition` subclasses `Freezable`: a frozen Definition is an immutable, reproducible
-artifact that rejects mutation. Its `version` is a `Version` (major/minor + content
-`sha`); a `pyproject.toml` `project.version` like `"0.2"` sets major/minor, and the
+artifact that rejects mutation. Its `version` is a `Version` (major/minor plus content
+`sha`). A `pyproject.toml` `project.version` like `"0.2"` sets major/minor, and the
 loader always stamps the freshly computed `sha`. `export()` produces a
 `MarketplacePackage` whose `checksum` is a 16-char SHA-256 over the sorted,
-JSON-dumped payload — stable for the same content. See
-[ADR 0012](../architecture/decisions/0012-definitions-are-versioned.md).
+JSON-dumped payload, stable for the same content.
 
 ## Model pinning stays universal
 
-`AgentSpec.model` defaults to `None`, meaning model-universal — the platform picks. Pin a
-string or list to restrict that one agent. The runtime ships Claude-first, but the type
-stays universal by design.
+`AgentSpec.model` defaults to `None`, meaning model-universal: the platform picks. Pin a
+string or list to restrict that one agent. The runtime ships Claude first, but the type
+stays universal.
 
 ## Example
 
 Build a two-agent `lead`-coordinated Definition in memory, read its key fields, export
-it, and trigger a `DefinitionLoadError` on a bad load — all deterministic, no runtime.
+it, and trigger a `DefinitionLoadError` on a bad load. All deterministic, no runtime.
 
 ```python
 from crawfish.definition.types import (
@@ -180,7 +177,7 @@ except DefinitionLoadError as exc:
 
 ### `Coordination`
 
-`class Coordination(str, Enum)` — how a team's agents work together.
+`class Coordination(str, Enum)`: how a team's agents work together.
 
 | Member | Value | Meaning |
 | --- | --- | --- |
@@ -190,7 +187,7 @@ except DefinitionLoadError as exc:
 
 ### `AgentSpec`
 
-`class AgentSpec(BaseModel)` — one agent in a team; `prompt` is compiled from its
+`class AgentSpec(BaseModel)`: one agent in a team. `prompt` is compiled from its
 markdown body.
 
 | Field | Type | Default | Notes |
@@ -205,7 +202,7 @@ markdown body.
 
 ### `TeamSpec`
 
-`class TeamSpec(BaseModel)` — the team's agents plus their coordination.
+`class TeamSpec(BaseModel)`: the team's agents plus their coordination.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -217,7 +214,7 @@ markdown body.
 
 ### `Prompt`
 
-`class Prompt(BaseModel)` — a piece of injected prompt text aimed at a named target.
+`class Prompt(BaseModel)`: a piece of injected prompt text aimed at a named target.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -226,7 +223,7 @@ markdown body.
 
 ### `DefinitionRef`
 
-`class DefinitionRef(BaseModel)` — a reference to another definition (a dependency).
+`class DefinitionRef(BaseModel)`: a reference to another definition (a dependency).
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -235,7 +232,7 @@ markdown body.
 
 ### `MCPConnection`
 
-`class MCPConnection(BaseModel)` — one MCP server connection authored in `mcp/*.py`.
+`class MCPConnection(BaseModel)`: one MCP server connection authored in `mcp/*.py`.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -243,12 +240,12 @@ markdown body.
 | `description` | `str` | `""` | Human description. |
 | `command` | `list[str] \| None` | `None` | stdio transport: the server argv. |
 | `url` | `str \| None` | `None` | http/sse transport URL. |
-| `auth` | `str \| None` | `None` | **Secret reference** — an env-var name, by reference only. Never an inline credential; injected into the server env, never the prompt. |
+| `auth` | `str \| None` | `None` | **Secret reference**: an env-var name, by reference only. Never an inline credential. Injected into the server env, never the prompt. |
 | `tools` | `list[str]` | `[]` | Tool names this connection exposes (keeps the per-agent allowlist checkable). |
 
 ### `DefinitionAssets`
 
-`class DefinitionAssets(BaseModel)` — the assets a directory contributed.
+`class DefinitionAssets(BaseModel)`: the assets a directory contributed.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -261,7 +258,7 @@ markdown body.
 
 ### `MarketplacePackage`
 
-`class MarketplacePackage(BaseModel)` — the export shape for publishing (stub; full
+`class MarketplacePackage(BaseModel)`: the export shape for publishing (stub; the full
 hub package lands with the registry).
 
 | Field | Type | Default | Notes |
@@ -273,8 +270,8 @@ hub package lands with the registry).
 
 ### `Definition`
 
-`class Definition(Freezable)` — the rigid, code-first agent-team package, compiled
-from a directory. Versioned and freezable; a frozen Definition is immutable.
+`class Definition(Freezable)`: the rigid, code-first agent-team package, compiled
+from a directory. Versioned and freezable. A frozen Definition is immutable.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -309,13 +306,13 @@ inferring coordination, discovering assets, validating every binding, and writin
 
 ### `DefinitionLoadError`
 
-`class DefinitionLoadError(Exception)` — raised when a directory cannot compile to a
+`class DefinitionLoadError(Exception)`: raised when a directory cannot compile to a
 valid Definition (not a directory, missing entry files, an unknown tool/policy/role
 binding, a bad front-matter mapping, or an import error in authored code).
 
 ## See also
 
-- [Core types](core-types.md) — the `Parameter`, `Flow`, and `Policy` atoms a Definition
+- [Core types](core-types.md): the `Parameter`, `Flow`, and `Policy` atoms a Definition
   is built from.
-- [Runtimes](runtimes.md) — how a compiled Definition is run, and who calls `resolve_model`.
-- [Providers](providers.md) — the model backends a Definition's agents resolve to.
+- [Runtimes](runtimes.md): how a compiled Definition is run, and who calls `resolve_model`.
+- [Providers](providers.md): the model backends a Definition's agents resolve to.

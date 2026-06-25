@@ -1,34 +1,27 @@
-# Compose — branch, cycle, and recurse
+# Compose: branch, cycle, and recurse
 
-A single `Refine` loop is the control plane for *one* body. Real agent work has
-**shape**: tickets branch by type into different sub-pipelines, some loop back to be
-re-extracted until they converge, and a multi-part ticket fans into a bounded recursion.
-The **composition surface** lets you author that shape as a typed, durable graph — and a
-crash anywhere in it resumes for **\$0**.
+A single `Refine` loop iterates one body. Real agent work has shape: tickets branch by type
+into different sub-pipelines, some loop back to be re-extracted until they converge, and a
+multi-part ticket fans out into a bounded recursion. The composition operators let you author
+that shape as a typed, durable graph, and a crash anywhere in it resumes for $0.
 
-This is the structural keystone of the agent language: control flow that is
-**deterministic, versioned, and taint-tracked**. Cycles are *bounded and crash-resumable*;
-recursion re-enters only **frozen** Definitions. Everything on this page is real public
-API, importable from the top-level `crawfish` package, and runs deterministically under
-`MockRuntime`.
+You will learn how to:
 
-On this page:
+- Route each item to a different branch with `branch()`.
+- Build a graph whose edges may cycle with `Program`.
+- Bound a cycle so it always terminates.
+- Express recursive work with `recurse()`.
 
-- [`branch()` — a runnable Router step](#branch-a-runnable-router-step)
-- [`Program` — a typed cyclic graph](#program-a-typed-cyclic-graph)
-- [Bounding a cycle](#bounding-a-cycle) — `max_visits`, budget, cancel, no-progress
-- [Durable \$0 resume](#durable-0-resume)
-- [`recurse()` — bounded self-referential Definitions](#recurse-bounded-self-referential-definitions)
-- [What stays static (the security spine)](#what-stays-static-the-security-spine)
+Every symbol on this page imports from the top-level `crawfish` package and runs
+deterministically under `MockRuntime`.
 
-## `branch()` — a runnable Router step
+## branch(): a runnable router step
 
-A `Router` chooses one labelled branch per item with a `Classifier` (see
-[Concepts → the pipeline](concepts.md#the-pipeline)). `branch()` is a thin, readable
-constructor that makes a Router a **first-class, runnable composition step**: each item is
-classified and dispatched through the **same** step machinery as its chosen branch, so a
-branch may itself be a `Sink`, `Batch`, `Filter`, or `Aggregator` and inherits the
-identical budget / taint / checkpoint guarantees.
+A `Router` chooses one labelled branch per item using a `Classifier` (see
+[the pipeline](concepts.md#the-pipeline)). `branch()` is a readable constructor that makes a
+router a runnable composition step. Each item is classified and dispatched through the same
+step machinery as its chosen branch, so a branch may itself be a `Sink`, `Batch`, `Filter`, or
+`Aggregator` and inherits the same budget, taint, and checkpoint behaviour.
 
 ```python
 import crawfish as cw
@@ -36,7 +29,7 @@ import crawfish as cw
 route = cw.branch(
     classifier,                        # a Classifier: from_predicates (pure) or from_definition
     {
-        "bug": bug_pipeline,           # each branch is any Node — Sink/Batch/Filter/Aggregator
+        "bug": bug_pipeline,           # each branch is any Node: Sink/Batch/Filter/Aggregator
         "billing": billing_pipeline,
         "default": dead_letter,        # the closed label set always covers a default
     },
@@ -44,22 +37,22 @@ route = cw.branch(
 )
 ```
 
-The label set is **closed and totality-checked at construction** — an uncovered label
-raises `UnroutableLabelError` before any model call. When you wire the router into a
-`Workflow` or `Program`, `check_types` verifies that **every** branch accepts the upstream
-output; a branch that cannot raises `WireError` at assembly. Predicate routing is pure
-(zero model calls, `spent == 0`); a Definition-backed classifier is one leaf run charged
-to the shared budget.
+The label set is closed and checked for totality when you construct the router: an uncovered
+label raises `UnroutableLabelError` before any model call. When you wire the router into a
+`Workflow` or `Program`, `check_types` verifies that every branch accepts the upstream output;
+a branch that cannot raises `WireError` at assembly. Predicate routing is pure (zero model
+calls, `spent == 0`); a Definition-backed classifier is one leaf run charged to the shared
+budget.
 
-## `Program` — a typed cyclic graph
+## Program: a typed cyclic graph
 
-A `Workflow` runs its steps once, top to bottom. A **`Program`** is a `Workflow` whose
-**edges may cycle**: you register graph nodes with `.step(...)` and wire directed edges
-with `.edge(...)`. A *back-edge* (`target` earlier than `source`) re-enters the region
-`[target .. source]` while a guard predicate holds.
+A `Workflow` runs its steps once, top to bottom. A `Program` is a `Workflow` whose edges may
+cycle. You register graph nodes with `.step(...)` and wire directed edges with `.edge(...)`. A
+*back-edge* (a target earlier than its source) re-enters the region between target and source
+while a guard predicate holds.
 
-The canonical shape is **extract → review, with a `review → extract` back-edge** that
-fires only while the reviewer reports a mismatch:
+The common shape is extract, then review, with a `review` back to `extract` edge that fires
+only while the reviewer reports a mismatch.
 
 ```python
 import crawfish as cw
@@ -71,7 +64,7 @@ review = prog.step(review_fields)          # a Router/Definition emitting a labe
 
 prog.edge(extract, review)                 # forward edge
 prog.edge(
-    review, extract,                       # BACK-edge: re-enter [extract .. review]
+    review, extract,                       # back-edge: re-enter [extract .. review]
     when=lambda label, out: label == "mismatch",   # loop while the reviewer disagrees
     max_visits=3,                          # REQUIRED on a back-edge (see below)
 )
@@ -79,46 +72,44 @@ prog.edge(
 outputs = await prog.run(seed_prompt, ctx=ctx, runtime=cw.MockRuntime())
 ```
 
-The driver walks edges **per item** rather than running `for step in steps` once. Each
-back-edge traversal mints a **new content-addressed version** (`Output.derive` — no
-in-place mutation; the frozen Output rejects edits) and records its content sha at a
-**deterministic** ledger coordinate `{region_version}#{edge_id}#{visit}`, never a volatile
-`Run.id`. One shared `CostBudget` meters every iteration, and taint carries across every
-cycle edge.
+The driver walks edges per item rather than running each step once in order. Each back-edge
+traversal mints a new content-addressed version (with `Output.derive`, no in-place mutation;
+the frozen `Output` rejects edits) and records its content hash at a deterministic ledger
+coordinate `{region_version}#{edge_id}#{visit}`, never a volatile `Run.id`. One shared
+`CostBudget` meters every iteration, and taint carries across every cycle edge.
 
-`Program.check_types` runs the linear adjacency check, then per edge verifies the
-back-edge target structurally accepts the source's output (via `crawfish.typesystem`,
-never string equality) — `WireError` otherwise.
+`Program.check_types` runs the linear adjacency check, then per edge verifies that the
+back-edge target structurally accepts the source's output (via `crawfish.typesystem`, never
+string equality), raising `WireError` otherwise.
 
-## Bounding a cycle
+## Bound a cycle
 
-A `Program` is bounded by four things and **never by wall-clock**:
+Four bounds stop a `Program`. None of them is wall-clock time.
 
 | Bound | What stops the cycle |
 | --- | --- |
-| `max_visits` | a hard ceiling on back-edge traversals — **assembly-required**: an unbounded back-edge raises `UnboundedCycleError` at construction |
-| the shared `CostBudget` | each iteration is preflighted against `remaining_usd`; the loop stops at the cap |
+| `max_visits` | a hard ceiling on back-edge traversals, required at assembly: an unbounded back-edge raises `UnboundedCycleError` when you construct it |
+| the shared `CostBudget` | each iteration is checked against `remaining_usd` before it runs; the loop stops at the cap |
 | cooperative cancel | the `CancelToken` is checked before each iteration |
 | calibrated no-progress | an `Edge.progress` ranking delta within the noise band (`rubric_std`) for `no_progress_patience` iterations counts as stuck |
 
-When a bound trips without the guard going false, the edge takes its `on_stuck` action —
-`"return_last"` (the default) or `"dead_letter"`. The result is a frozen `ProgramResult`
-carrying the final `output`, the per-edge `visits` count, and the `stopped` reason
+When a bound trips while the guard is still true, the edge takes its `on_stuck` action:
+`"return_last"` (the default) or `"dead_letter"`. The result is a frozen `ProgramResult` that
+carries the final output, the per-edge `visits` count, and the `stopped` reason
 (`"converged"`, `"max_visits"`, `"budget"`, `"no_progress"`, or `"stuck"`).
 
 !!! warning "A back-edge must declare its ceiling"
 
-    `prog.edge(review, extract, when=...)` **without** `max_visits` raises
-    `UnboundedCycleError` at assembly. A cycle that can iterate without a ceiling could
-    loop forever; the bound is the termination argument, checked before it can run.
+    `prog.edge(review, extract, when=...)` without `max_visits` raises `UnboundedCycleError`
+    at assembly. A cycle with no ceiling could loop forever, so the bound is the argument that
+    it terminates, checked before it can run.
 
-## Durable \$0 resume
+## Resume a crashed cycle for $0
 
-Thread the run through a shared `Store` and pass `resume=True` on the restart, and a
-`Program` whose cycle crashes mid-iteration **re-derives the committed iterations at \$0**
-instead of re-paying from scratch. This shares the same F-2 composite-key ledger substrate
-as `Refine` — funded once, durable `Refine`, `Program` loops, and `recurse` all fall out
-of it.
+Thread the run through a shared `Store` and pass `resume=True` on the restart. A `Program`
+whose cycle crashes mid-iteration re-derives the committed iterations at $0 instead of paying
+from scratch. This uses the same ledger substrate as `Refine`, so durable `Refine`, `Program`
+loops, and `recurse` all come from one place.
 
 ```python
 import crawfish as cw
@@ -135,26 +126,26 @@ await prog.run(seed_prompt, ctx=ctx2, runtime=runtime, resume=True)
 assert ctx2.cost_budget.spent_usd == 0.0     # replayed iterations charge nothing
 ```
 
-Why this is **sound, not trusted**:
+Resume is checked, not trusted:
 
-- The **loop id is deterministic** — `compute_loop_id(region_version, item_lineage,
-  edge_id)`, never a fresh id — so a second process re-derives the same coordinate.
-  `region_version` folds the content shas of the region's frozen Definitions.
-- On resume, completed visits are **re-run through the replay runtime**, which returns the
-  cached `RunResult` at **zero cost**.
+- The loop id is deterministic: `compute_loop_id(region_version, item_lineage, edge_id)`,
+  never a fresh id, so a second process re-derives the same coordinate. `region_version` folds
+  the content hashes of the region's frozen Definitions.
+- On resume, completed visits are re-run through the replay runtime, which returns the cached
+  `RunResult` at zero cost.
 - An iteration's `produced_by` is the deterministic `{region_version}#{edge_id}#{visit}`
-  coordinate, so the replayed Output's content sha must equal the checkpointed reference —
-  determinism is **content-hash verified**, bit-for-bit.
+  coordinate, so the replayed output's content hash must equal the checkpointed reference,
+  bit for bit.
 
-Every `ledger_loop` row carries `org_id`, so a cross-tenant resume cannot see another
-org's committed iterations.
+Every `ledger_loop` row carries `org_id`, so a resume in one tenant cannot see another
+tenant's committed iterations.
 
-## `recurse()` — bounded self-referential Definitions
+## recurse(): bounded self-referential Definitions
 
-Some work is *recursive*: a multi-part ticket splits into sub-tickets, each of which may
-split again. `recurse()` expresses that as a **depth-guarded back-edge re-entering the
-same FROZEN Definition**, pushing a frozen version onto a per-item depth stack, then
-folding the descent-order children into one Output with an existing reducer.
+Some work is recursive: a multi-part ticket splits into sub-tickets, each of which may split
+again. `recurse()` expresses that as a depth-guarded back-edge that re-enters the same frozen
+Definition, pushing a frozen version onto a per-item depth stack, then folding the
+descent-order children into one output with a reducer.
 
 ```python
 import crawfish as cw
@@ -162,58 +153,55 @@ import crawfish as cw
 rec = cw.recurse(
     body=split_ticket,                     # a FROZEN Definition (the recursive body)
     base_case=lambda out: not out.value["parts"],   # pure predicate: stop descending
-    max_depth=4,                           # REQUIRED — distinct from a loop's max_visits
+    max_depth=4,                           # REQUIRED, distinct from a loop's max_visits
     combine=cw.collect,                    # fold the children: collect / count / dedupe
 )
 result = await rec.execute(seed, ctx, runtime)        # -> RecurseResult
 print(result.depth_reached, result.stopped)
 ```
 
-Each descent level runs the frozen `body` once — the prior level feeds in as a **fluid**
-input (taint propagates, never an instruction) — then derives a fresh content-addressed
-Output with `produced_by = {body.content_sha()}#{edge_id}#d{depth}`. Descent halts on
-`base_case` / `depth >= max_depth` / budget / cancel / calibrated no-progress — **never
-wall-clock**. The frozen `RecurseResult` reports the folded `output`, the `depth_reached`,
-and why it `stopped` (`"base_case"`, `"max_depth"`, `"budget"`, `"no_progress"`, or
-`"stuck"`).
+Each descent level runs the frozen `body` once, with the prior level fed in as a fluid input
+(taint propagates, never an instruction), then derives a fresh content-addressed output with
+`produced_by = {body.content_sha()}#{edge_id}#d{depth}`. Descent halts on `base_case`, on
+`depth >= max_depth`, on budget, on cancel, or on calibrated no-progress, never on wall-clock
+time. The frozen `RecurseResult` reports the folded output, the `depth_reached`, and why it
+`stopped` (`"base_case"`, `"max_depth"`, `"budget"`, `"no_progress"`, or `"stuck"`).
 
-Two invariants make recursion safe to fund:
+Two rules make recursion safe to fund.
 
-- **`max_depth` is mandatory.** A `None` bound raises `UnboundedRecursionError` at
-  construction. Tree fan-out is `O(b^d)`; the **whole-tree shared budget** is the real
-  guard, preflighted at each descent and hard-killed on breach (`spent` reflects every
-  level), and `max_depth` + `base_case` are the termination argument.
-- **A fold never launders taint.** The reduced Output is tainted if **any** child input
-  was tainted (taint = union). A vote or summary over fluid children stays fluid.
+- `max_depth` is mandatory. A `None` bound raises `UnboundedRecursionError` when you construct
+  it. Tree fan-out is `O(b^d)`, so the whole-tree shared budget is the real guard, checked at
+  each descent and stopped on breach (`spent` reflects every level), and `max_depth` plus
+  `base_case` are the argument that it terminates.
+- A fold never launders taint. The reduced output is tainted if any child input was tainted
+  (taint is the union). A vote or summary over fluid children stays fluid.
 
-Resume is the depth-variant of the loop case: each level checkpoints into the F-2 ledger,
-so resume at depth *k* replays `1..k-1` at \$0, content-hash verified, with `org_id` on
-every row.
+Resume is the depth version of the loop case: each level checkpoints into the ledger, so
+resume at depth *k* replays `1..k-1` at $0, content-hash verified, with `org_id` on every row.
 
-## What stays static (the security spine)
+## What stays static
 
-The composition surface holds the [static-vs-fluid
-boundary](concepts.md#the-static-vs-fluid-prompt-injection-boundary) the same way the rest
-of the framework does:
+The composition operators hold the [static-versus-fluid
+boundary](concepts.md#static-versus-fluid) the same way the rest of Crawfish does. A *static*
+value is fixed in your code; a *fluid* value is untrusted session data that reaches the model
+as data, never as instructions.
 
-- **A classifier label is a control signal, not a target.** A fluid-derived label gates
-  *which* static branch fires; the branch set is closed and static at assembly, so a fluid
-  label can only select among pre-declared targets, never synthesize a new one. A tainted
-  item routed into a static-only `Sink` keeps its taint across the boundary.
-- **Bounds and coordinates are static.** `max_visits`, `max_depth`, `edge_id`,
-  `region_version`, and the back-edge `when` predicate are static by construction — never
-  derived from fluid input. The `when`/`base_case` predicates read the frozen Output as
-  data.
-- **Every cycle and descent carries taint forward.** A back-edge feeds the prior Output
-  back as fluid; a recursion feeds the prior level back as fluid. Taint propagates across
-  every edge, and a fold unions it.
+- A classifier label is a control signal, not a target. A fluid-derived label gates which
+  static branch fires; the branch set is closed and static at assembly, so a fluid label can
+  only select among pre-declared targets, never make a new one. A tainted item routed into a
+  static-only `Sink` keeps its taint across the boundary.
+- Bounds and coordinates are static. `max_visits`, `max_depth`, `edge_id`, `region_version`,
+  and the back-edge `when` predicate are all static, never derived from fluid input. The `when` and `base_case` predicates read the frozen output as data.
+- Every cycle and descent carries taint forward. A back-edge feeds the prior output back as
+  fluid; a recursion feeds the prior level back as fluid. Taint propagates across every edge,
+  and a fold unions it.
 
 ## Next steps
 
-- [Refine & verify](refine-and-verify.md) — the single-body control loop these operators
+- [Refine and verify](refine-and-verify.md): the single-body control loop these operators
   compose onto.
-- [Concepts → the composition surface](concepts.md#the-composition-surface-branch-cycle-recurse)
-  — how the typed cyclic durable graph advances the thesis.
-- [API reference](api-reference.md) — every public symbol, including `branch`, `Program`,
+- [Core concepts](concepts.md): the pipeline, the type system, and the static-versus-fluid
+  boundary these operators build on.
+- [API reference](api-reference.md): every public symbol, including `branch`, `Program`,
   `Edge`, `ProgramResult`, `recurse`, `Recurse`, `RecurseResult`, and the two unbounded
   errors.

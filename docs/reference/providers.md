@@ -1,6 +1,6 @@
 # Providers
 
-A **provider** is the backend that actually serves a model request — the thing that turns
+A *provider* is the backend that serves a model request: the thing that turns
 "run agent X on this input" into text. This page covers the provider contract, the config
 that decides *which* model id a request uses, and the three providers that ship: a
 deterministic test double and two real-backend adapters. These live in `crawfish.provider`
@@ -10,53 +10,53 @@ and `crawfish.runtime`.
 `ClientProvider` · `LocalHTTPProvider` · `OpenAIChatRequest` · `LocalTransport`
 
 When a pipeline reaches a step that calls a model, two questions must be answered:
-*which model id do we run*, and *who serves it*.
+which model id to run, and who serves it.
 
 ## Which model: `resolve_model`
 
-The **which** is `resolve_model`. An agent's `model` field may be unset, a single id, a
+`resolve_model` answers which. An agent's `model` field may be unset, a single id, a
 friendly alias like `"fast"`, or a list (a failover order). `resolve_model` collapses all of
-those to one concrete model id, using a `ModelsConfig` — a small bundle of a project default
-plus a name→id alias map. No vendor model is baked into the framework; the caller always
+those to one concrete model id, using a `ModelsConfig`: a small bundle of a project default
+plus a name-to-id alias map. No vendor model is baked into the framework. The caller always
 supplies the ultimate `default`.
 
 ## Who serves it: `Provider`
 
-The **who** is a `Provider`. A provider is any object that can list the models it serves, say
-whether it supports a given model, and run one model turn. It is a **structural protocol** —
+A `Provider` answers who. A provider is any object that can list the models it serves, say
+whether it supports a given model, and run one model turn. It is a *structural protocol*:
 Crawfish never asks "is this a subclass of Provider", only "does this object have the right
 methods". Three providers ship:
 
-- **`MockProvider`** — a deterministic, in-memory fake. No model call, no network, zero
+- `MockProvider`: a deterministic, in-memory fake. No model call, no network, zero
   cost. Its reply is a pure function of the request, so tests (and the examples in these
   docs) get the same bytes every run. This is what `craw dev` and the whole test suite
   use.
-- **`ClientProvider`** — a skeleton adapter for a hosted vendor API (Anthropic, OpenAI,
-  Gemini). It deliberately holds **no credential and makes no network call yet**:
+- `ClientProvider`: a skeleton adapter for a hosted vendor API (Anthropic, OpenAI,
+  Gemini). It holds no credential and makes no network call yet:
   credential handling is gated on later work, so calling it without an injected helper
   raises rather than reaching out.
-- **`LocalHTTPProvider`** — talks to a local inference server (llama.cpp's
-  `llama-server`, or Ollama) over the OpenAI-compatible HTTP shape. Credential-free —
-  there is no API key for a server on your own machine.
+- `LocalHTTPProvider`: talks to a local inference server (llama.cpp's
+  `llama-server`, or Ollama) over the OpenAI-compatible HTTP shape. Credential-free,
+  because there is no API key for a server on your own machine.
 
-A **`ProviderPolicy`** is the guardrail on the *who*: a list of which providers a
+A `ProviderPolicy` is the guardrail on the who: a list of which providers a
 pipeline is permitted to use. `allowed=None` means "any provider is fine" (the
-local-first default); a list restricts it — a data-residency choice, e.g. "this
-pipeline may only ever hit `local`".
+local-first default). A list restricts it, which is a data-residency choice, for example
+"this pipeline may only ever hit `local`".
 
-The two HTTP-adjacent helpers — **`OpenAIChatRequest`** (the request body a local server
-accepts) and **`LocalTransport`** (the one callable that actually sends it) — exist so
+The two HTTP-adjacent helpers, `OpenAIChatRequest` (the request body a local server
+accepts) and `LocalTransport` (the one callable that sends it), exist so
 `LocalHTTPProvider` holds no transport or network policy of its own.
 
-## One resolver, no hardcoded vendor (ADR 0005)
+## One resolver, no hardcoded vendor
 
-`resolve_model` is the **single** model resolver in the framework. Model selection once
-lived duplicated inside the command runtime and the cost estimator; both now delegate
+`resolve_model` is the single model resolver in the framework. Model selection once
+lived duplicated inside the command runtime and the cost estimator. Both now delegate
 here, so a cost *preview* can never drift from the model the runtime actually runs.
 
-Per [ADR 0005](../architecture/decisions/0005-claude-first-universal-model-type.md) (claude-first, model-agnostic *by type*), no
+Crawfish is Claude first and model-agnostic by type, so no
 vendor model id is hardcoded in this module. Every caller passes its own `default`, so
-the framework itself stays vendor-neutral — swapping the default model is config, not a
+the framework itself stays vendor-neutral: swapping the default model is config, not a
 code change. See [runtimes](runtimes.md) for who calls `resolve_model` and when.
 
 Resolution rules, in order:
@@ -68,8 +68,9 @@ None (unpinned)  → config.default if set, else the caller's `default`
 []  (empty list) → falls back exactly like None
 ```
 
-Alias expansion is a **single hop**: an alias must map to a concrete model id, never to
-another alias. The whole function is pure and deterministic — same inputs, same id.
+Alias expansion is a single hop: an alias must map to a concrete model id, never to
+another alias. The whole function is pure and deterministic, so the same inputs give the
+same id.
 
 !!! note "Good to know"
 
@@ -80,64 +81,62 @@ another alias. The whole function is pure and deterministic — same inputs, sam
 ## A `Provider` is structural, frozen-shaped behaviour
 
 `Provider` is a `runtime_checkable` `Protocol`, not a base class. Any object exposing a
-`name: str`, `models()`, `supports()`, and an async `run()` *is* a provider — the three
+`name: str`, `models()`, `supports()`, and an async `run()` is a provider. The three
 shipped providers don't inherit from it, they just match its shape. This keeps the
-provider surface frozen while new backends (Anthropic / OpenAI / Gemini / local) can be
-added without touching the protocol.
-
-The payoff: observability and cost capture are written once, against the protocol, and
-every backend inherits them.
+provider surface frozen while new backends (Anthropic, OpenAI, Gemini, local) can be
+added without touching the protocol. Observability and cost capture are written once,
+against the protocol, and every backend inherits them.
 
 ## Fluid inputs stay data, never instructions
 
 !!! warning "Fluid inputs reach the model as data"
 
-    Both serving providers treat the request's **fluid** inputs — the untrusted, per-item
-    session data (a PR body, a ticket) — as data to read, never instructions to obey. This
-    is the framework's prompt-injection boundary (see the
-    [security spine](../architecture/SECURITY.md)). `MockProvider` echoes fluid inputs back
-    as a JSON string; `LocalHTTPProvider` runs them through `compile_prompt`, which fences
+    Both serving providers treat the request's **fluid** inputs (the untrusted, per-item
+    session data such as a PR body or a ticket) as data to read, never instructions to obey.
+    This is the framework's prompt-injection boundary (see the
+    [security overview](../architecture/SECURITY.md)). `MockProvider` echoes fluid inputs back
+    as a JSON string. `LocalHTTPProvider` runs them through `compile_prompt`, which fences
     untrusted data into a delimited block. Neither ever splices fluid text into the
     instruction position.
 
 ## Why `ClientProvider` refuses to run
 
 `ClientProvider` is a skeleton on purpose. It holds no secret and reads nothing from
-`.env`. The thing that would actually reach a vendor API is an **injected `caller`**
+`.env`. The thing that would reach a vendor API is an injected `caller`
 that stays `None` until the typed secret schema and credential broker land. With no
-caller, `run` raises `NotImplementedError` rather than egressing — so it can never
-*silently* reach the network. Onboarding keys before that broker exists would widen the
+caller, `run` raises `NotImplementedError` rather than egressing, so it can never
+silently reach the network. Onboarding keys before that broker exists would widen the
 exact gap it is meant to close.
 
-Note its `supports()` quirk: an **empty** model set is read as "unconfigured stub", and
-it claims support for *any* model so the call reaches `run` (and raises loudly) instead
+Note its `supports()` quirk: an empty model set is read as "unconfigured stub", and
+it claims support for any model so the call reaches `run` (and raises loudly) instead
 of being silently skipped.
 
-## Why `LocalHTTPProvider` is the cheap leg ([ADR 0011](../architecture/decisions/0011-ruvllm-rvagent-evaluation.md))
+## Why `LocalHTTPProvider` is the cheap leg
 
-ADR 0011 settles the local-model path as a thin adapter — a seed-pinned,
-OpenAI-compatible HTTP POST to a local server — rather than a vendored inference engine.
+The local-model path is a thin adapter: a seed-pinned,
+OpenAI-compatible HTTP POST to a local server, rather than a vendored inference engine.
 Because it talks to a server on your own machine, it is credential-free and never
 touches the deferred cloud-credential path.
 
 Its single egress point is the injected `LocalTransport` callable. In production that is
-a stdlib HTTP POST to `localhost`; **in tests a fake transport returns canned JSON and
-no real HTTP happens** — the determinism rule. With no transport injected, `run` raises
+a stdlib HTTP POST to `localhost`. In tests a fake transport returns canned JSON and
+no real HTTP happens, which is the determinism rule. With no transport injected, `run` raises
 rather than guessing a network call. Every request carries a pinned `seed` and
-`temperature: 0.0` (greedy decoding), so a recorded response replays bit-for-bit. Its
-`cost_usd` defaults to `0.0` — local inference burns no metered budget, which is the
+`temperature: 0.0` (greedy decoding), so a recorded response replays bit for bit. Its
+`cost_usd` defaults to `0.0`, because local inference burns no metered budget, which is the
 whole point of routing cheap steps to it. Its `name` defaults to `"local"`, so a routing
 rule (or an agent/alias) targeting `model="local"` lands here.
 
-`_parse_chat_completion` is tolerant of shape drift across llama.cpp / Ollama: it reads
+`_parse_chat_completion` is tolerant of shape drift across llama.cpp and Ollama: it reads
 `choices[0].message.content`, falls back to the older `choices[0].text`, and returns
-`""` for a malformed/empty body rather than raising — so even a cassette of a degenerate
+`""` for a malformed or empty body rather than raising, so even a cassette of a degenerate
 response still replays.
 
 ## Example
 
 Resolving a model id through a small `ModelsConfig`, gating with a `ProviderPolicy`, and
-serving a canned response from a `MockProvider` — all deterministic, no network.
+serving a canned response from a `MockProvider`. All deterministic, no network.
 
 ```python
 import asyncio
@@ -204,7 +203,7 @@ non-empty `list` → its first entry. The chosen value is then alias-expanded on
 
 ### `ModelsConfig`
 
-`class ModelsConfig(BaseModel)` — project-level model configuration. **Frozen** (rejects
+`class ModelsConfig(BaseModel)`: project-level model configuration. **Frozen** (rejects
 mutation after construction).
 
 | Field | Type | Default | Notes |
@@ -215,7 +214,7 @@ mutation after construction).
 
 ### `ProviderPolicy`
 
-`class ProviderPolicy(BaseModel)` — which providers a pipeline may use. **Frozen.**
+`class ProviderPolicy(BaseModel)`: which providers a pipeline may use. **Frozen.**
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -227,7 +226,7 @@ mutation after construction).
 
 ### `Provider`
 
-`class Provider(Protocol)` — `@runtime_checkable`. A normalized model backend behind
+`class Provider(Protocol)`: `@runtime_checkable`. A normalized model backend behind
 [`AgentRuntime`](runtimes.md). Structural: any object with these members satisfies it.
 
 | Member | Signature | Meaning |
@@ -239,7 +238,7 @@ mutation after construction).
 
 ### `MockProvider`
 
-`class MockProvider` — a deterministic, zero-cost `Provider` for tests and docs.
+`class MockProvider`: a deterministic, zero-cost `Provider` for tests and docs.
 
 ```python
 MockProvider(
@@ -259,13 +258,13 @@ MockProvider(
 | `fail` | `bool` | `False` | When `True`, `run` raises `RuntimeError` (drives failover tests). |
 
 `run` checks the cancel token, then returns a `RunResult` whose `text` is
-`"[{name}:{role}] {fluid-inputs-as-sorted-json}"` — a pure function of the request's
-fluid inputs. `session_id` is `"{name}-{ctx.run_id}"`; `model` is the request's model or
+`"[{name}:{role}] {fluid-inputs-as-sorted-json}"`, a pure function of the request's
+fluid inputs. `session_id` is `"{name}-{ctx.run_id}"`. `model` is the request's model or
 the first served id.
 
 ### `ClientProvider`
 
-`class ClientProvider` — a hosted-API adapter skeleton; credential acquisition deferred.
+`class ClientProvider`: a hosted-API adapter skeleton. Credential acquisition is deferred.
 
 ```python
 ClientProvider(name: str, models: list[str], *, caller: Caller | None = None)
@@ -274,11 +273,11 @@ ClientProvider(name: str, models: list[str], *, caller: Caller | None = None)
 where `Caller = Callable[[RunRequest, RunContext], Awaitable[RunResult]]`. Holds no
 secret and performs no network I/O. `supports()` returns `True` for any model when its
 model set is empty (the "unconfigured stub" case). `run` raises `NotImplementedError`
-unless a `caller` is injected — it never silently egresses.
+unless a `caller` is injected. It never silently egresses.
 
 ### `LocalHTTPProvider`
 
-`class LocalHTTPProvider` — a `Provider` over a local OpenAI-compatible server.
+`class LocalHTTPProvider`: a `Provider` over a local OpenAI-compatible server.
 
 ```python
 LocalHTTPProvider(
@@ -307,8 +306,8 @@ reply. With no `transport`, it raises `NotImplementedError`.
 
 ### `OpenAIChatRequest`
 
-`class OpenAIChatRequest` — the `/v1/chat/completions` body a local server accepts. A
-plain value object (no Pydantic — it is a transport detail, not a public contract).
+`class OpenAIChatRequest`: the `/v1/chat/completions` body a local server accepts. A
+plain value object (no Pydantic, since it is a transport detail, not a public contract).
 
 ```python
 OpenAIChatRequest(*, model: str, prompt: str, seed: int, endpoint: str)
@@ -335,7 +334,7 @@ network I/O. Kept narrow so the provider holds no transport policy.
 
 ## See also
 
-- [Runtimes](runtimes.md) — `ProviderRuntime`, which fails over across these providers, and
+- [Runtimes](runtimes.md): `ProviderRuntime`, which fails over across these providers, and
   who calls `resolve_model`.
-- [Definition](definition.md) — where an agent's `model` field is authored.
-- [Core types](core-types.md) — the `Flow` boundary that fluid inputs honor.
+- [Definition](definition.md): where an agent's `model` field is authored.
+- [Core types](core-types.md): the `Flow` boundary that fluid inputs honor.

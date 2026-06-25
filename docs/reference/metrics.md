@@ -1,9 +1,9 @@
 # Metrics
 
-A **metric** scores one agent output to a `float` — the unit of agent quality you can
-compare across versions. A **rubric** bundles metrics into a score vector; a **benchmark**
-runs a rubric over a set of tasks and averages the results. You reach for these when you
-want to know whether a change made an agent better or worse, not just different.
+A *metric* scores one agent output to a `float`, the unit of agent quality you can
+compare across versions. A *rubric* bundles metrics into a score vector; a *benchmark*
+runs a rubric over a set of tasks and averages the results. Use these to know whether a
+change made an agent better or worse, not merely different.
 
 `Metric` · `Rubric` · `Benchmark` · `output_number` · `field_present` · `is_nonempty` ·
 `confidence_threshold` · `FieldExactMatch` · `SetOverlap` · `NumericTolerance` ·
@@ -11,69 +11,69 @@ want to know whether a change made an agent better or worse, not just different.
 `numeric_tolerance` · `schema_conformance` · `structural_match` · `compare` ·
 `is_regression`
 
-All three live in `crawfish.metrics` and feed the [evaluation harness](evals.md) —
+All three live in `crawfish.metrics` and feed the [evaluation harness](evals.md):
 metrics are the graders evals run.
 
 ## Outputs, metrics, and scores
 
-An **output** is what an agent produced for one task — a number, a string, or a typed
-record (a `dict`). A **metric** looks at one output and returns a single `float`: a
-**score**. The convention is *higher is better*; pass/fail metrics use `1.0` for pass
+An *output* is what an agent produced for one task: a number, a string, or a typed
+record (a `dict`). A metric looks at one output and returns a single `float`, a
+*score*. The convention is higher is better; pass/fail metrics use `1.0` for pass
 and `0.0` for fail.
 
 There are two families of metric:
 
-- **Simple checks** read the raw output and ask one yes/no-ish question — is there a
+- Simple checks read the raw output and ask one yes/no question: is there a
   number in it (`output_number`), is a field present (`field_present`), is it non-empty
   (`is_nonempty`), does a confidence field clear a bar (`confidence_threshold`).
-- **Comparators** score the output *against an expected answer* you supply — does a
+- Comparators score the output against an expected answer you supply: does a
   field equal it exactly (`field_exact_match`), how much do two lists overlap
   (`set_overlap`), is a number close enough (`numeric_tolerance`), does it match a
   declared shape (`schema_conformance`), how close is the whole record
   (`structural_match`).
 
-A **rubric** is a named collection of metrics scored together. Its `score` returns a
-**vector** — a `dict` mapping each metric's `name` to its float. A **benchmark** runs a
+A rubric is a named collection of metrics scored together. Its `score` returns a
+*vector*, a `dict` mapping each metric's `name` to its float. A benchmark runs a
 rubric over a fixed set of tasks, scores every result, and averages each metric across
 tasks into one comparable vector.
 
 That comparable vector is the point. Run an old agent version and a new one over the
 same tasks, then `compare` the two vectors to get per-metric deltas, and `is_regression`
-tells you whether the new version got worse on anything. This is the **improvement
-loop**: change the agent, re-score, ship only if nothing regressed.
+tells you whether the new version got worse on anything. This is the improvement
+loop: change the agent, re-score, ship only if nothing regressed.
 
 ## Picking a metric
 
 ### Class and factory come in pairs
 
-Each comparator is a `Metric` subclass with a matching lowercase **factory function**:
+Each comparator is a `Metric` subclass with a matching lowercase *factory function*:
 `FieldExactMatch` / `field_exact_match`, `SetOverlap` / `set_overlap`,
 `NumericTolerance` / `numeric_tolerance`, `SchemaConformance` / `schema_conformance`,
 `StructuralMatch` / `structural_match`. The simple checks follow the same pattern:
 `OutputNumber` / `output_number`, `FieldPresent` / `field_present`, `IsNonempty` /
 `is_nonempty`, `ConfidenceThreshold` / `confidence_threshold`.
 
-The factory is the ergonomic front door — it forwards to the class constructor with the
+The factory forwards to the class constructor with the
 common arguments and nothing more. The classes accept one extra keyword the factories
 don't: `name`, to override the auto-generated metric name (which is what keys the rubric
-vector). Reach for the class when you need a custom name or a metric mode the factory
+vector). Use the class when you need a custom name or a metric mode the factory
 doesn't surface; otherwise use the factory.
 
 !!! note "Good to know"
 
-    The class and factory are paired for a reason: the factory covers the common path,
+    The class and factory are paired: the factory covers the common path,
     the class adds `name`. Set `name` when two metrics of the same kind would otherwise
-    collide on the same auto-generated key in a rubric vector — distinct names keep both
+    collide on the same auto-generated key in a rubric vector. Distinct names keep both
     scores from clobbering each other.
 
 ### Reading the typed value
 
-Comparators read the **typed** output value. When an agent's `Definition` declares a
+Comparators read the *typed* output value. When an agent's `Definition` declares a
 record or list output schema, `Output.value` already holds a real `dict`/`list` and the
 comparator reads it directly. For back-compat, an output with no declared schema holds a
-plain string; a comparator decodes it **only if** the string is exactly one
+plain string; a comparator decodes it only if the string is exactly one
 self-contained JSON document. Two concatenated objects (`{"a":1}{"b":2}`) decode to
-nothing rather than silently scoring the first — the metric refuses to guess. Records
+nothing rather than silently scoring the first: the metric refuses to guess. Records
 are canonicalised (keys sorted) before comparison, so `{"a":1,"b":2}` and
 `{"b":2,"a":1}` score as equal.
 
@@ -85,19 +85,19 @@ subtree; `field=None` (the default) compares the whole value. An absent path res
 
 Every comparator returns a float in `[0, 1]`. The scoring rule differs:
 
-- **`FieldExactMatch`** — `1.0` if the (canonicalised) field equals `expected`, else
+- `FieldExactMatch`: `1.0` if the (canonicalised) field equals `expected`, else
   `0.0`. Binary.
-- **`SetOverlap`** — order-free overlap of a list/set field against expected members.
+- `SetOverlap`: order-free overlap of a list/set field against expected members.
   `mode="f1"` (default) scores the harmonic mean of precision and recall;
   `mode="jaccard"` scores intersection / union. Two empty sets score `1.0`; no overlap
   scores `0.0`.
-- **`NumericTolerance`** — `1.0` if a numeric field is within `tol` of `expected`, else
+- `NumericTolerance`: `1.0` if a numeric field is within `tol` of `expected`, else
   `0.0`. `relative=True` makes `tol` a fraction of `|expected|`. A non-numeric or absent
   value (including a `bool`, which is *not* treated as numeric) scores `0.0`.
-- **`SchemaConformance`** — `1 - errors/checks`, where `checks` is the number of declared
+- `SchemaConformance`: `1 - errors/checks`, where `checks` is the number of declared
   leaf fields. A 2-field record missing one field scores `0.5`. A clean parse with no
   errors is `1.0`; an unparseable payload is `0.0` outright (not "one error of N").
-- **`StructuralMatch`** — `1.0` when the semantic diff against `expected` is empty;
+- `StructuralMatch`: `1.0` when the semantic diff against `expected` is empty;
   otherwise `1 - changes/total_paths`, so a value differing in one of ten fields scores
   `0.9`.
 
@@ -110,21 +110,21 @@ same keys.
 
 `is_regression(baseline, candidate)` returns `True` if any metric's delta falls below
 `-tolerance`. The default `tolerance=0.0` flags any drop at all; a small tolerance
-absorbs scoring noise. Higher-is-better is assumed for every metric — a metric where
+absorbs scoring noise. Higher-is-better is assumed for every metric: a metric where
 lower is better must be inverted before it reaches these functions.
 
 !!! note "Good to know"
 
     A `Benchmark` drives each task through a real `Run`, so it needs an `AgentRuntime`.
     Pair it with `MockRuntime` (see the [evals reference](evals.md)) and the whole loop is
-    deterministic — no live model call, so iterating on metrics never burns budget and
+    deterministic: no live model call, so iterating on metrics never burns budget and
     scores never shift between runs. Every example here scores outputs directly, so scores
     never drift.
 
 ## Example
 
 Score one output with three comparators, then run `compare` + `is_regression` on a
-baseline and a candidate score vector. Pure and in-memory — no runtime needed.
+baseline and a candidate score vector. Pure and in-memory, no runtime needed.
 
 ```python
 from crawfish.metrics import (
@@ -182,7 +182,7 @@ print("regressed (tol=0.2):", is_regression(baseline, candidate, tolerance=0.2))
 
 ### `Metric`
 
-`class Metric(ABC)` — a single scalar quality signal over one output.
+`class Metric(ABC)`: a single scalar quality signal over one output.
 
 | Member | Type | Notes |
 | --- | --- | --- |
@@ -298,7 +298,7 @@ Class: `StructuralMatch(expected, *, field=None, name=None)`.
 
 ### `Rubric`
 
-`class Rubric` — a named collection of metrics scored together.
+`class Rubric`: a named collection of metrics scored together.
 
 ```python
 Rubric(metrics: Sequence[Metric], *, name: str = "rubric")
@@ -309,7 +309,7 @@ def score(self, output: Output[JSONValue]) -> dict[str, float]
 
 ### `Benchmark`
 
-`class Benchmark` — a rubric run over a fixed task set, aggregated to comparable scores.
+`class Benchmark`: a rubric run over a fixed task set, aggregated to comparable scores.
 
 ```python
 Benchmark(
@@ -326,7 +326,7 @@ async def run(
 
 `run` executes `definition` on every task (one `Run` per task, binding the task as the
 fluid `task`/`task_id` inputs unless `inputs_for` overrides), scores each Output with the
-rubric, and returns the per-metric **mean** across tasks. An empty task set returns
+rubric, and returns the per-metric mean across tasks. An empty task set returns
 `0.0` for every metric. `inputs_for` defaults to `{"task": task.description, "task_id":
 task.id}`.
 
@@ -351,11 +351,11 @@ def is_regression(
 ) -> bool
 ```
 
-`True` if `candidate` is worse than `baseline` on any metric — i.e. some delta drops
+`True` if `candidate` is worse than `baseline` on any metric, i.e. some delta drops
 below `-tolerance`. Higher-is-better is assumed for every metric.
 
 ## See also
 
-- [Evals](evals.md) — capture runs into golden sets and gate each version on these scores.
-- [Tuner & learning](tuner-and-learning.md) — search for a better Definition against a benchmark.
-- [Core types](core-types.md) — the `Parameter` and `Output` shapes these metrics read.
+- [Evals](evals.md): capture runs into golden sets and gate each version on these scores.
+- [Tuner & learning](tuner-and-learning.md): search for a better Definition against a benchmark.
+- [Core types](core-types.md): the `Parameter` and `Output` shapes these metrics read.

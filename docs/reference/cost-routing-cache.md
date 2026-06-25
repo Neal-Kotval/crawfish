@@ -1,173 +1,170 @@
-# Cost, routing & cache
+# Cost, routing and cache
 
-Three cost levers that all stay deterministic and never make a live model call:
-*preview* the dollar spend of a run before it starts, *route* each step to a cheaper
-or stronger model, and *cache* repeated calls so the second one costs nothing. They
-live in `crawfish.cost`, `crawfish.routing`, and `crawfish.cache`.
+Three cost levers stay deterministic and never make a live model call: preview the dollar
+spend of a run before it starts, route each step to a cheaper or stronger model, and cache
+repeated calls so the second one costs nothing. They live in `crawfish.cost`,
+`crawfish.routing`, and `crawfish.cache`.
 
 `estimate_cost` · `CostEstimate` · `CostShape` · `compose_cost` · `Budget` · `BudgetState` ·
 `CostMeter` · `spent_today` · `CostTier` · `RoutingRule` · `RoutingPolicy` ·
 `RoutingDecision` · `agent_tier` · `route_model` · `route_decision` · `routing_emission` ·
 `cache_key` · `CacheStats` · `CachingRuntime`
 
-A **definition** is a compiled agent team — a package of one or more agents authored as
-a directory. Each agent names (or leaves unset) the **model** it runs on. Running a
-definition over many input **items** costs money, so Crawfish gives you three tools to
-keep that spend visible and small.
+A definition is a compiled agent team: a package of one or more agents authored as a
+directory. Each agent names (or leaves unset) the model it runs on. Running a definition
+over many input items costs money, so Crawfish gives you three tools to keep that spend
+visible and small.
 
-**Preview the bill.** `estimate_cost` is a dry run: hand it a definition, an item count,
-and a price table, and it predicts dollars before a single model call. The base estimate is
-deliberately coarse — charge one "run" (one agent answering once) per agent per item,
-priced from a flat per-model table. The answer comes back as a `CostEstimate`, a frozen
-record carrying the per-item cost, the total, and a per-model breakdown so you can see
-which model dominates the bill.
+Preview the bill with `estimate_cost`, a dry run: hand it a definition, an item count, and
+a price table, and it predicts dollars before a single model call. The base estimate is
+deliberately coarse: charge one "run" (one agent answering once) per agent per item, priced
+from a flat per-model table. The answer comes back as a `CostEstimate`, a frozen record
+carrying the per-item cost, the total, and a per-model breakdown so you can see which model
+dominates the bill.
 
-The base `total_usd` is a **lower bound**: it counts one run per agent and is blind to the
+The base `total_usd` is a lower bound: it counts one run per agent and is blind to the
 re-run multipliers that escalation (the strong-model tail), repair, retry, and `Refine` add.
-A point estimate that can only *undershoot* is a dishonest preview. So `CostEstimate` also
-carries an **honest interval** — `expected_usd` (with an `expected_lo_usd`/`expected_hi_usd`
-CI band) and `worst_case_usd`, satisfying
-`total ≤ expected_lo ≤ expected ≤ expected_hi ≤ worst`. The worst case is the **advertised
-band's upper bound**: a real run never exceeds it. `CostShape` + `compose_cost` build that
-interval by folding a nesting of operators *multiplicatively* — a `Quorum(5)` over an
+A point estimate that can only undershoot is a dishonest preview, so `CostEstimate` also
+carries an honest interval: `expected_usd` (with an `expected_lo_usd`/`expected_hi_usd` CI
+band) and `worst_case_usd`, satisfying
+`total ≤ expected_lo ≤ expected ≤ expected_hi ≤ worst`. The worst case is the advertised
+band's upper bound: a real run never exceeds it. `CostShape` + `compose_cost` build that
+interval by folding a nesting of operators multiplicatively. A `Quorum(5)` over an
 `Escalating(2×)` over a leaf previews `5 × 2 = 10×`, escalation re-priced on the strong
 model. With measured re-run rates the expected band sits strictly inside `(lower, worst)`;
-with **no** rates `expected == worst_case`, so the preview never undercounts. The fold is
-pure static analysis — it walks the assembled runtime's wrapper chain
-(`CostShape.from_runtime`) and reads declared bounds; no `run()`, no model call.
+with no rates `expected == worst_case`, so the preview never undercounts. The fold is pure
+static analysis: it walks the assembled runtime's wrapper chain (`CostShape.from_runtime`)
+and reads declared bounds, with no `run()` and no model call.
 
-**Cap the spend.** A `Budget` is a warn/stop policy: a `stop_usd` hard ceiling and a
+Cap the spend with a `Budget`, a warn/stop policy: a `stop_usd` hard ceiling and a
 `warn_usd` soft line (defaulting to 80% of the stop). Ask it `check(spent)` and it
-classifies where you stand as a `BudgetState` — `OK`, `WARN`, or `STOPPED`. A `CostMeter`
-is the live accumulator: call `charge(amount)` as runs finish, and it tracks running spend
-and the headroom left against the budget. To total spend already recorded in the store for
-*today only*, `spent_today` sums today's cost-bearing events — but it returns `0.0` unless
-you tell it which runs to scan (see the
-[edge case below](#spent_today-needs-run_ids)).
+classifies where you stand as a `BudgetState`: `OK`, `WARN`, or `STOPPED`. A `CostMeter` is
+the live accumulator: call `charge(amount)` as runs finish, and it tracks running spend and
+the headroom left against the budget. To total spend already recorded in the store for today
+only, `spent_today` sums today's cost-bearing events, but it returns `0.0` unless you tell it
+which runs to scan (see the [edge case below](#spent_today-needs-run_ids)).
 
 !!! warning "`spent_today` returns $0 unless you pass `run_ids`"
 
-    `spent_today(store)` with no `run_ids` returns `0.0` *unconditionally* — it never scans
+    `spent_today(store)` with no `run_ids` returns `0.0` unconditionally: it never scans
     the store. The Store seam is per-run, so you must hand it the runs to total. A meter
     wired with a bare `spent_today(store)` reports $0 regardless of actual recorded spend.
     Always pass `run_ids=[...]`.
 
-**Pick the model per step.** Routing sends low-stakes steps to cheap or local models and
-hard steps to strong ones. A `RoutingPolicy` is an ordered list of `RoutingRule`s; the
-first rule that *matches* an agent names the model field that agent should use. A rule
-matches by exact `role`, by a coarse `CostTier` (`CHEAP` / `STANDARD` / `STRONG`), or
+Pick the model per step with routing, which sends low-stakes steps to cheap or local models
+and hard steps to strong ones. A `RoutingPolicy` is an ordered list of `RoutingRule`s; the
+first rule that matches an agent names the model field that agent should use. A rule matches
+by exact `role`, by a coarse `CostTier` (`CHEAP` / `STANDARD` / `STRONG`), or
 unconditionally. `CostTier` is advisory metadata an author pins on an agent (read back by
-`agent_tier`) — it labels the step, it does not itself pick a model.
+`agent_tier`): it labels the step, it does not itself pick a model.
 
 To resolve a model, `route_decision` runs one agent through the policy and returns a
-`RoutingDecision` — the concrete model id plus *why* it was chosen; `route_model` is the
-thin wrapper that returns just the id. `routing_emission` turns a decision into a
-telemetry record so a dashboard can show why a model was chosen.
+`RoutingDecision`: the concrete model id plus why it was chosen. `route_model` is the thin
+wrapper that returns only the id. `routing_emission` turns a decision into a telemetry record
+so a dashboard can show why a model was chosen.
 
-**Skip the call entirely.** When the same definition-version and inputs run twice, the
-second run can replay the first instead of paying again. `cache_key` hashes a request to
-the key the replay layer uses — two requests share a key exactly when they would share a
-recording. `CachingRuntime` wraps a [replay runtime](runtimes.md) and reports, per
-request, whether it **hit** (free) or **missed** (paid), tallying both the dollars saved
-and the dollars spent into a `CacheStats`.
+Skip the call entirely when the same definition-version and inputs run twice: the second run
+can replay the first instead of paying again. `cache_key` hashes a request to the key the
+replay layer uses, and two requests share a key exactly when they would share a recording.
+`CachingRuntime` wraps a [replay runtime](runtimes.md) and reports, per request, whether it
+hit (free) or missed (paid), tallying both the dollars saved and the dollars spent into a
+`CacheStats`.
 
-A disk cassette only helps the *second* run — two identical items in the *same* `Batch` both
-miss and both spend. **Single-flight** closes that window: `CachingRuntime` keeps an
-in-process per-key `asyncio.Future` map so that when N concurrent callers issue the *same*
-request, only the first (the leader) runs the real, metered `inner.run` and the rest await
-its result. Exactly **one** `inner.run` per key ⇒ exactly **one** `CostBudget.charge` — a
-strict strengthening of the gas meter; the coalesced waiters charge `$0` and tally the spend
-they avoided into `saved_usd`. The coalescing key is the replay layer's own deterministic
-cassette key salted with `org_id`, so coalescing can only change *how many times* a leaf runs,
-never *what* it returns (replay is bit-for-bit whether a call was coalesced or not), and two
-tenants issuing an identical call get **two** runs — org A's computation is never served to
-org B. On an in-flight exception the leader propagates the same exception instance to every
-awaiter, then clears the key in a `finally` so a retry recomputes (no poisoned future is ever
-cached); a cancelled caller raises before joining or starting any computation.
+A disk cassette only helps the second run: two identical items in the same `Batch` both miss
+and both spend. Single-flight closes that window. `CachingRuntime` keeps an in-process
+per-key `asyncio.Future` map, so when N concurrent callers issue the same request, only the
+first (the leader) runs the real, metered `inner.run` and the rest await its result. Exactly
+one `inner.run` per key gives exactly one `CostBudget.charge`, a strict strengthening of the
+gas meter; the coalesced waiters charge `$0` and tally the spend they avoided into
+`saved_usd`. The coalescing key is the replay layer's own deterministic cassette key salted
+with `org_id`, so coalescing can only change how many times a leaf runs, never what it
+returns (replay is bit-for-bit whether a call was coalesced or not). Two tenants issuing an
+identical call get two runs: org A's computation is never served to org B. On an in-flight
+exception the leader propagates the same exception instance to every awaiter, then clears the
+key in a `finally` so a retry recomputes (no poisoned future is ever cached). A cancelled
+caller raises before joining or starting any computation.
 
 ## The single resolution path (preview can't drift from the run)
 
-A rule's chosen `model` is never a final id on its own — it is a *field* (`"local"`, a
+A rule's chosen `model` is never a final id on its own. It is a field (`"local"`, a
 configured alias, or a concrete id) handed to one shared resolver,
 `crawfish.provider.resolve_model`. Both the runtime that actually runs an agent and
 `estimate_cost`'s dry run call `route_decision` → `resolve_model`. There is no second
-resolution path, so a routed step is previewed at exactly the model that will run. This
-is the drift guarantee verified by CRA-186.
+resolution path, so a routed step is previewed at exactly the model that will run.
 
 ## `estimate_cost` heuristics and edge cases
 
 The estimate is approximate by design and follows three rules:
 
-- **One run per agent per item.** No retries, no delegation fan-out, no tool round-trips
-  are modelled. It is a planning aid, not billing truth.
-- **Unknown models are free.** `prices.get(model, 0.0)` — a model id missing from the
-  table contributes `0.0` so a missing price never silently *inflates* the estimate. Pass
-  a fuller `model_prices` table for sharper numbers. The built-in `DEFAULT_MODEL_PRICES`
-  prices `mock` at `$0.00`, so test/replay pipelines preview at $0.
-- **Negative item counts raise.** `items < 0` raises `ValueError`; `items == 0` is valid
-  and yields a `$0.00` total.
+- One run per agent per item. No retries, no delegation fan-out, no tool round-trips are
+  modelled. It is a planning aid, not billing truth.
+- Unknown models are free. `prices.get(model, 0.0)`: a model id missing from the table
+  contributes `0.0` so a missing price never silently inflates the estimate. Pass a fuller
+  `model_prices` table for sharper numbers. The built-in `DEFAULT_MODEL_PRICES` prices
+  `mock` at `$0.00`, so test/replay pipelines preview at $0.
+- Negative item counts raise. `items < 0` raises `ValueError`; `items == 0` is valid and
+  yields a `$0.00` total.
 
 Pass the project's `config` (a `ModelsConfig`) so the preview expands aliases and the
 configured default exactly as the runtime will. Pass a `RoutingPolicy` and each agent's
-model is resolved through routing first, so the preview prices the *routed* model.
+model is resolved through routing first, so the preview prices the routed model.
 
 ## `Budget` vs the hard ceiling
 
-`Budget` is the *soft* layer — it decides ok / warn / stopped. It does not kill a run;
-the orchestrator's [`CostBudget`](context-and-budgets.md) is the *hard* ceiling that
-raises `BudgetExceeded`. `Budget.as_cost_budget()` projects the `stop_usd` onto a matching
-`CostBudget` so you configure one number and hand the hard half to the runtime. A
-`stop_usd` of `None` means unbounded — every `check` returns `OK`. `__post_init__` defaults
+`Budget` is the soft layer: it decides ok / warn / stopped. It does not kill a run. The
+orchestrator's [`CostBudget`](context-and-budgets.md) is the hard ceiling that raises
+`BudgetExceeded`. `Budget.as_cost_budget()` projects the `stop_usd` onto a matching
+`CostBudget` so you configure one number and hand the hard ceiling to the runtime. A
+`stop_usd` of `None` means unbounded: every `check` returns `OK`. `__post_init__` defaults
 `warn_usd` to 80% of `stop_usd` and raises `ValueError` if you set `warn_usd > stop_usd`.
 
 ## `spent_today` needs `run_ids`
 
-`spent_today(store)` with no `run_ids` **returns `0.0` unconditionally** — it does not
-scan the store. The Store seam is per-run (there is no cheap cross-run scan), so the
-caller must pass the `run_ids` to total; absent them the function short-circuits at
-`if run_ids is None: return 0.0` *before* reading any events. This is a real footgun: a
-meter wired with the bare `spent_today(store)` reports $0 regardless of actual recorded
-spend. Always pass `run_ids=[...]`. Within a scan, an event is kept when its `kind` is
-cost-bearing (`model`, `run_finish`, `runtime.run`, `run.finish`) and its `ts` lands on
-`today` (UTC); an event with an unparseable or zero timestamp is **counted**, never
-silently dropped. (Surfaced as a doc finding — see `docs/BUILD-LOG.md`.)
+`spent_today(store)` with no `run_ids` returns `0.0` unconditionally: it does not scan the
+store. The Store seam is per-run (there is no cheap cross-run scan), so the caller must pass
+the `run_ids` to total; absent them the function short-circuits at
+`if run_ids is None: return 0.0` before reading any events. This is a real footgun: a meter
+wired with the bare `spent_today(store)` reports $0 regardless of actual recorded spend.
+Always pass `run_ids=[...]`. Within a scan, an event is kept when its `kind` is cost-bearing
+(`model`, `run_finish`, `runtime.run`, `run.finish`) and its `ts` lands on `today` (UTC). An
+event with an unparseable or zero timestamp is counted, never silently dropped.
 
 ## `CostTier` is advisory, read from string policies
 
-A tier is declared on an agent as a string in its `policies` list (`"tier:cheap"` etc.)
-and read back by `agent_tier`, which returns the `CostTier` or `None` if none is declared.
-A `RoutingRule` with `tier=CostTier.CHEAP` matches only agents whose declared tier *is*
-`CHEAP`; a rule with `tier=None` matches any tier. The tier never picks a model by itself —
-it is a match condition the author uses to target a rule.
+A tier is declared on an agent as a string in its `policies` list (`"tier:cheap"` etc.) and
+read back by `agent_tier`, which returns the `CostTier` or `None` if none is declared. A
+`RoutingRule` with `tier=CostTier.CHEAP` matches only agents whose declared tier is `CHEAP`;
+a rule with `tier=None` matches any tier. The tier never picks a model by itself: it is a
+match condition the author uses to target a rule.
 
 ## `RoutingDecision.source` records why
 
 `route_decision` always succeeds and records its reason in `source`: `"rule"` (a policy
 rule fired), `"agent"` (no rule matched; the agent's own pinned `model` was used), or
 `"default"` (no rule and the agent was unpinned, so the supplied `default` was used).
-`routed` is `True` only in the `"rule"` case. Routing is purely additive — when no rule
-matches, the agent's own `model` field is left intact; routing never strips an explicit
+`routed` is `True` only in the `"rule"` case. Routing is purely additive: when no rule
+matches, the agent's own `model` field is left intact, and routing never strips an explicit
 pin.
 
 ## Caching: keys, hits, and the within-session price
 
 `cache_key` re-exports the replay layer's private `_key`, so a caller can compute hit/miss
 without reaching into the runtime. The key hashes the definition id + version, role, model,
-inputs, and session id. A `CachingRuntime.run` checks whether a cassette file already
-exists for the key: on a **hit** it charges nothing and adds the recorded cost to
-`saved_usd`; on a **miss** the inner replay runtime records and the model spends, and that
-cost lands in `spent_usd`. A small in-process LRU (`track_capacity`, default 1024) remembers
-each miss's cost so a repeated identical call within the same session is priced exactly,
-even before the cassette is re-read. `CacheStats.hit_rate` is `hits / total`, or `0.0`
-before anything runs. `CachingRuntime` is a [swappable `AgentRuntime`](runtimes.md) — it
-wraps a `RecordReplayRuntime` and performs no model call itself.
+inputs, and session id. A `CachingRuntime.run` checks whether a cassette file already exists
+for the key: on a hit it charges nothing and adds the recorded cost to `saved_usd`; on a
+miss the inner replay runtime records and the model spends, and that cost lands in
+`spent_usd`. A small in-process LRU (`track_capacity`, default 1024) remembers each miss's
+cost so a repeated identical call within the same session is priced exactly, even before the
+cassette is re-read. `CacheStats.hit_rate` is `hits / total`, or `0.0` before anything runs.
+`CachingRuntime` is a [swappable `AgentRuntime`](runtimes.md): it wraps a
+`RecordReplayRuntime` and performs no model call itself.
 
 !!! note "Good to know"
 
-    `Budget` is the *soft* layer — it classifies ok / warn / stopped but never kills a run.
-    The orchestrator's [`CostBudget`](context-and-budgets.md) is the *hard* ceiling that
+    `Budget` is the soft layer: it classifies ok / warn / stopped but never kills a run.
+    The orchestrator's [`CostBudget`](context-and-budgets.md) is the hard ceiling that
     raises `BudgetExceeded`. Use `Budget.as_cost_budget()` to configure one number and hand
-    the hard half to the runtime.
+    the hard ceiling to the runtime.
 
 ## API reference
 
@@ -194,7 +191,7 @@ item, priced by each agent's resolved model id from `model_prices` (defaults to
 
 ### `CostEstimate`
 
-`class CostEstimate(BaseModel)` — a dry-run cost preview. Frozen.
+`class CostEstimate(BaseModel)`: a dry-run cost preview. Frozen.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -202,15 +199,15 @@ item, priced by each agent's resolved model id from `model_prices` (defaults to
 | `items` | `int` | — (required, `ge=0`) | Item count the total scales by. |
 | `per_item_usd` | `float` | — (required, `ge=0.0`) | Predicted spend for one item across the whole team. |
 | `per_model` | `dict[str, float]` | `{}` | Total broken down by resolved model id. |
-| `total_usd` | `float` | — (required, `ge=0.0`) | `per_item_usd * items`. The interval's **lower bound** (one run per agent). |
-| `worst_case_usd` | `float` | `total_usd` | Upper bound after folding every re-run multiplier — the **advertised band's ceiling**, never exceeded. |
+| `total_usd` | `float` | — (required, `ge=0.0`) | `per_item_usd * items`. The interval's lower bound (one run per agent). |
+| `worst_case_usd` | `float` | `total_usd` | Upper bound after folding every re-run multiplier; the advertised band's ceiling, never exceeded. |
 | `expected_usd` | `float` | `total_usd` | Expected spend from measured re-run rates; `== worst_case_usd` when no rates are known. |
 | `expected_lo_usd` / `expected_hi_usd` | `float` | `expected_usd` | The expected band's CI. Invariant: `total ≤ expected_lo ≤ expected ≤ expected_hi ≤ worst`. |
 
 ### `CostShape`
 
-`@dataclass(frozen=True) class CostShape` — one cost-bearing operator's multiplier over its
-inner spend: a `worst_case` factor and an optional measured rate for the expected band. The
+`@dataclass(frozen=True) class CostShape`: one cost-bearing operator's multiplier over its
+inner spend, a `worst_case` factor and an optional measured rate for the expected band. The
 ordered list `compose_cost` folds.
 
 ```python
@@ -222,10 +219,10 @@ def from_runtime(
 ```
 
 Walk the assembled `_inner` wrapper chain and emit one shape per cost-bearing wrapper
-(`EscalatingRuntime`, `QuorumRuntime`), **outermost-first** — exactly the order `compose_cost`
+(`EscalatingRuntime`, `QuorumRuntime`), outermost-first, exactly the order `compose_cost`
 folds. Escalation is re-priced from `model_prices` (degrading to the count-based `2×` when no
 prices). Pure static analysis: no `run()`, no model call. `Refine` (a Node), `Retry` (a
-policy) and `recurse` (a control shape) are not runtime wrappers — fold those alongside the
+policy) and `recurse` (a control shape) are not runtime wrappers, so fold those alongside the
 inferred list.
 
 ```python
@@ -249,7 +246,7 @@ and pure.
 
 ### `Budget`
 
-`@dataclass class Budget` — a warn/stop spend policy.
+`@dataclass class Budget`: a warn/stop spend policy.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -265,7 +262,7 @@ def as_cost_budget(self, *, spent_usd: float = 0.0) -> CostBudget
 
 ### `BudgetState`
 
-`class BudgetState(str, Enum)` — where spend sits relative to a `Budget`.
+`class BudgetState(str, Enum)`: where spend sits relative to a `Budget`.
 
 | Member | Value | Meaning |
 | --- | --- | --- |
@@ -275,7 +272,7 @@ def as_cost_budget(self, *, spent_usd: float = 0.0) -> CostBudget
 
 ### `CostMeter`
 
-`@dataclass class CostMeter` — a live spend accumulator checked against a `Budget`.
+`@dataclass class CostMeter`: a live spend accumulator checked against a `Budget`.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -302,21 +299,21 @@ def spent_today(
 ) -> float
 ```
 
-Sum today's spend (UTC day) from cost-bearing events on the runs in `run_ids`.
-**Returns `0.0` immediately when `run_ids is None`** — it does not scan the store, so the
-caller must pass the runs to total. Cost-bearing kinds: `model`, `run_finish`,
-`runtime.run`, `run.finish`. Events with an unparseable/zero `ts` are counted; events with
-a usable `ts` on another day are excluded.
+Sum today's spend (UTC day) from cost-bearing events on the runs in `run_ids`. Returns `0.0`
+immediately when `run_ids is None`: it does not scan the store, so the caller must pass the
+runs to total. Cost-bearing kinds: `model`, `run_finish`, `runtime.run`, `run.finish`.
+Events with an unparseable/zero `ts` are counted; events with a usable `ts` on another day
+are excluded.
 
 ### `CostTier`
 
-`class CostTier(str, Enum)` — coarse, advisory stakes/complexity label for a step.
+`class CostTier(str, Enum)`: coarse, advisory stakes/complexity label for a step.
 
 | Member | Value | Meaning |
 | --- | --- | --- |
-| `CostTier.CHEAP` | `"cheap"` | Low-stakes/simple — route to a cheap or `local` model. |
+| `CostTier.CHEAP` | `"cheap"` | Low-stakes/simple; route to a cheap or `local` model. |
 | `CostTier.STANDARD` | `"standard"` | Unclassified middle. |
-| `CostTier.STRONG` | `"strong"` | High-stakes/hard — route to the strong model. |
+| `CostTier.STRONG` | `"strong"` | High-stakes/hard; route to the strong model. |
 
 ### `agent_tier`
 
@@ -329,37 +326,37 @@ entry that parses). Returns `None` when no valid tier is declared. Pure.
 
 ### `RoutingRule`
 
-`class RoutingRule(BaseModel)` — one match→model rule. Frozen.
+`class RoutingRule(BaseModel)`: one match→model rule. Frozen.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `role` | `str \| None` | `None` | Exact role to match; `None` matches any role. |
-| `tier` | `CostTier \| None` | `None` | Match agents whose *declared* tier equals this; `None` matches any tier. |
-| `model` | `str \| list[str]` | — (required) | Target model **field** (resolved via `resolve_model`). A list is a failover order; preview uses its primary. |
+| `tier` | `CostTier \| None` | `None` | Match agents whose declared tier equals this; `None` matches any tier. |
+| `model` | `str \| list[str]` | — (required) | Target model field (resolved via `resolve_model`). A list is a failover order; preview uses its primary. |
 
-`matches(agent) -> bool` — all set conditions must hold; unset conditions match anything.
+`matches(agent) -> bool`: all set conditions must hold; unset conditions match anything.
 
 ### `RoutingPolicy`
 
-`class RoutingPolicy(BaseModel)` — ordered rules, first match wins. Frozen.
+`class RoutingPolicy(BaseModel)`: ordered rules, first match wins. Frozen.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `rules` | `tuple[RoutingRule, ...]` | `()` | Evaluated in order; first match wins. |
 
-`select_field(agent) -> str | list[str] | None` — the model field the first matching rule
+`select_field(agent) -> str | list[str] | None`: the model field the first matching rule
 names, or `None` when no rule matches (the agent's own `model` is then left intact).
 
 ### `RoutingDecision`
 
-`class RoutingDecision(BaseModel)` — the deterministic outcome of routing one agent. Frozen.
+`class RoutingDecision(BaseModel)`: the deterministic outcome of routing one agent. Frozen.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `role` | `str` | — (required) | The agent's role. |
 | `resolved` | `str` | — (required) | Concrete model id, post shared-resolver. |
 | `routed` | `bool` | — (required) | `True` when a policy rule fired. |
-| `source` | `str` | — (required) | `"rule"`, `"agent"`, or `"default"` — why this id was chosen. |
+| `source` | `str` | — (required) | `"rule"`, `"agent"`, or `"default"`: why this id was chosen. |
 
 ### `route_decision`
 
@@ -390,7 +387,7 @@ def route_model(
 ) -> str
 ```
 
-Thin wrapper over `route_decision` returning just the resolved model id.
+Thin wrapper over `route_decision` returning only the resolved model id.
 
 ### `routing_emission`
 
@@ -402,7 +399,7 @@ def routing_emission(
 
 A typed `MODEL` `Emission` recording a routing decision. `cost_usd` is `0.0` (spend is
 charged later when the model answers); the metadata (`model`, `routed_by`, `routed`) lives
-under `attrs`. Not tainted — a routing choice derives from static config, never untrusted
+under `attrs`. Not tainted: a routing choice derives from static config, never untrusted
 input.
 
 ### `cache_key`
@@ -411,20 +408,20 @@ input.
 def cache_key(request: RunRequest) -> str
 ```
 
-The cassette key for `request` — a deterministic hash of definition id + version, role,
+The cassette key for `request`: a deterministic hash of definition id + version, role,
 model, inputs, and session id. Two requests share a key exactly when they would share a
 recording. Re-exports the replay layer's `_key`.
 
 ### `CacheStats`
 
-`@dataclass class CacheStats` — running hit/miss + saved-spend accounting.
+`@dataclass class CacheStats`: running hit/miss + saved-spend accounting.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `hits` | `int` | `0` | Requests served from the cassette (free). |
 | `misses` | `int` | `0` | Requests not in the cassette (paid). |
 | `coalesced` | `int` | `0` | Requests that awaited an in-flight peer rather than issuing their own `inner.run` (free). |
-| `saved_usd` | `float` | `0.0` | Spend each hit *and each coalesced waiter* avoided. |
+| `saved_usd` | `float` | `0.0` | Spend each hit and each coalesced waiter avoided. |
 | `spent_usd` | `float` | `0.0` | Spend misses actually charged. |
 
 `total` → `hits + misses + coalesced`. `hit_rate` → `(hits + coalesced) / total` (both
@@ -432,18 +429,18 @@ avoided a fresh spend), or `0.0` when nothing has run.
 
 ### `CachingRuntime`
 
-`class CachingRuntime(AgentRuntime)` — a cost-aware wrapper over `RecordReplayRuntime`.
+`class CachingRuntime(AgentRuntime)`: a cost-aware wrapper over `RecordReplayRuntime`.
 Constructor: `CachingRuntime(inner, *, cassette_dir=None, track_capacity=1024)`. Exposes a
 live `stats: CacheStats`. Each `async run(request, ctx)` checks the cassette: a hit charges
-nothing and adds to `saved_usd`; a miss records, spends, and adds to `spent_usd`. A **single-
-flight** layer in front of that coalesces concurrent identical in-flight calls onto one
+nothing and adds to `saved_usd`; a miss records, spends, and adds to `spent_usd`. A
+single-flight layer in front of that coalesces concurrent identical in-flight calls onto one
 `inner.run` (an `org_id`-salted `_inflight` Future map); coalesced waiters charge `$0`,
 increment `coalesced`, and accrue their avoided spend. Performs no model call itself.
 
 ## Example
 
-Preview a two-agent run's cost, route by tier, and check cache-key determinism — all pure,
-no runtime, no network.
+Preview a two-agent run's cost, route by tier, and check cache-key determinism, all pure,
+with no runtime and no network.
 
 ```python
 from crawfish.definition.types import Definition, TeamSpec, AgentSpec
@@ -495,6 +492,6 @@ print("keylen:", len(cache_key(req_a)))
 
 ## See also
 
-- [Context & budgets](context-and-budgets.md) — the hard `CostBudget` ceiling behind `Budget`.
-- [Runtimes](runtimes.md) — the replay runtime `CachingRuntime` wraps.
-- [Emission, inspector & visualize](emission-inspector-visualize.md) — where `routing_emission` and spend land.
+- [Context & budgets](context-and-budgets.md): the hard `CostBudget` ceiling behind `Budget`.
+- [Runtimes](runtimes.md): the replay runtime `CachingRuntime` wraps.
+- [Emission, inspector & visualize](emission-inspector-visualize.md): where `routing_emission` and spend land.

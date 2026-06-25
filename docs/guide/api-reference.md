@@ -4,9 +4,11 @@
 > Do not edit by hand — regenerate on each release:
 > `uv run python docs/guide/gen_api_reference.py > docs/guide/api-reference.md`.
 
-`crawfish` version: `0.2.0` — 458 public symbols.
+`crawfish` version: `0.2.0`, 458 public symbols.
 
-Everything documented here is importable directly from the top-level package:
+This page lists every public symbol in Crawfish: classes, functions, enums, and values. Use it to confirm a name, a kind, or a one-line summary. To learn what a symbol does and how to use it, follow the guide that teaches it.
+
+Every symbol below imports directly from the top-level package:
 
 ```python
 from crawfish import Definition, Batch, MockRuntime  # etc.
