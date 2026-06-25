@@ -88,8 +88,12 @@ Updated as waves complete. See git log on `craw-code/integration` for the author
 | --- | --- | --- | --- | --- | --- |
 | 4 | M3a per-file authoring skills + validation eval verb (CRA-258..265, UNFILED-OPT) | `craw-code/m3a` → merged | ✓ | ✓ 1592 passed | gated ✓ (all PASS) |
 | 4 | M4 dashboard — seam/XSS/cost + ADR 0011 (CRA-252/253/254, UNFILED-SEAM/XSS/COST) | `craw-code/m4` → merged | ✓ | ✓ 1592 passed | gated ✓ (all PASS; live XSS render proof) |
-| 5 | M4.5 operate — optimize/deploy/fleet/cancel/resume (UNFILED-OPTIMIZE/DEPLOY/CONTROL) | `craw-code/m45` → merged | ✓ | ✓ 1637 passed | gating |
-| 5 | M6 HITL — gate (propose/apply/reject) / review / diagnose (UNFILED-GATE/REVIEW/DIAGNOSE) | `craw-code/m6` → merged | ✓ | ✓ 1637 passed | gating |
+| 5 | M4.5 operate — optimize/deploy/fleet/cancel/resume (UNFILED-OPTIMIZE/DEPLOY/CONTROL) | `craw-code/m45` → merged | ✓ | ✓ 1637 passed | gated ✓ (all PASS) |
+| 5 | M6 HITL — gate (propose/apply/reject) / review / diagnose (UNFILED-GATE/REVIEW/DIAGNOSE) | `craw-code/m6` → merged | ✓ | ✓ 1637 passed | gated ✓ (all PASS; adversarial approval-gate audit + live sha-binding proof) |
+| 6 | M5 MCP veneer (4 meta-tools over the CLI) | `craw-code/m5` | dispatched | — | — |
+| 6 | Demo (craw-code-tour) + live transcript + final integration | (orchestrator + demo agent) | dispatched | — | — |
+
+**Wave 5 follow-up to fold into Wave 6:** sec-w5 noted the on-disk-sha-drift guard in `gate.py` (apply re-checks `content_sha()==approved sha`) has no dedicated test — add one in Wave 6.
 | docs | 9 guide+reference pages + mkdocs nav | `craw-code/docs` → merged | ✓ | ✓ (additive) | — |
 
 **Wave 5 notes:** Session was interrupted (agents stopped mid-work); re-dispatched m45/m6 to complete from their uncommitted state. Caught & fixed: (a) two real bugs in optimize.py (empty knob grid, missing max_iters) — found by m45; (b) exit codes 4/5/6 escaping the closed table → normalized (over-budget→3, no-baseline→2, raced-done→1, granular in detail.exit); (c) a **flaky M4 test** — `dashboard/optimize.py` lineage relied on `list_records`' coarse `updated_at` order with no tie-breaker → ~15% flake; fixed to order by parent-chain depth (0/30 flakes after). m6 built a durable Store-backed `ApprovalLedger` (vs in-memory `QueuedApprovalQueue`) because propose→approve→apply spans processes; fail-closed, identity-keyed (component,sha), org-scoped, with a PreToolUse hook + 3 red-team payloads. 23 verbs now registered.
