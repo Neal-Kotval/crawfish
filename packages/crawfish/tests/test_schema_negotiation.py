@@ -92,6 +92,10 @@ def test_craw_code_schema_dumps_the_full_map(capsys: pytest.CaptureFixture[str])
     assert out["schema"] == "craw.code.schema.v1"
     assert out["versions"] == {
         "code.adopt": "1.0",
+        "code.cost": "1.0",
+        "code.dashboard": "1.0",
+        "code.dashboard.optimize": "1.0",
+        "code.dashboard.runs": "1.0",
         "code.describe": "1.0",
         "code.estimate": "1.0",
         "code.explain": "1.0",

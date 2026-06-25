@@ -28,7 +28,18 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from crawfish.code import SCHEMA_VERSIONS
 from crawfish.observe import ObserverEvent, RunInfo
+
+# CRA-269: every ``--json`` verb must be negotiable. The dashboard emits one primary snapshot
+# (``code.dashboard``) and three per-view payloads (``runs`` / ``optimize`` / ``cost``); each
+# self-registers its ``(major, minor)`` here via ``setdefault`` (the pattern m2core used for
+# ``code.init`` / ``code.new``, m3a for ``code.validate``) so ``craw code schema --json`` lists
+# them and a plugin can negotiate the major. ``setdefault`` never clobbers an existing entry.
+SCHEMA_VERSIONS.setdefault("code.dashboard", (1, 0))  # type: ignore[attr-defined]
+SCHEMA_VERSIONS.setdefault("code.dashboard.runs", (1, 0))  # type: ignore[attr-defined]
+SCHEMA_VERSIONS.setdefault("code.dashboard.optimize", (1, 0))  # type: ignore[attr-defined]
+SCHEMA_VERSIONS.setdefault("code.cost", (1, 0))  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     from crawfish.config import BudgetConfig
