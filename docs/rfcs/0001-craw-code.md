@@ -1,6 +1,6 @@
 # RFC 0001 — `craw code`
 
-**Status:** Draft · **Author:** Neal · **Date:** 2026-06-24
+**Status:** Implemented (`craw-code/integration`) · **Author:** Neal · **Date:** 2026-06-24
 **Affects:** developer experience, Claude Code integration, the `craw` CLI surface, the event ledger / dashboard
 
 ---
@@ -241,18 +241,23 @@ building something unsafe or unidiomatic:
 
 ## 10. Open questions
 
-- **O-1** — `craw code` as brand-umbrella vs co-equal surface (§4.1). *Open.*
+- **O-1** — `craw code` as brand-umbrella vs co-equal surface (§4.1). **Resolved:
+  co-equal surface.** Built as a first-class `craw code <verb>` subcommand family (a new
+  `crawfish.code` subpackage with an auto-discovered verb registry), not merely a brand
+  umbrella over loose commands.
 - **O-2** — dashboard delivery: web vs TUI vs both (§7). **Resolved: web.** The M6/M4.5
   interactive controls (approval queue, cancel/resume) need affordances a TUI handles
-  poorly.
-- **O-3** — does the plugin ship the thin MCP from day one, or stay CLI-only? *Open;
-  recommendation stands: CLI-only first.*
+  poorly. (Shipped as a loopback-only, scrubbed read-model over `ObserverSurface` — ADR 0011.)
+- **O-3** — does the plugin ship the thin MCP from day one, or stay CLI-only? **Resolved:
+  CLI/plugin-first, with an opt-in thin MCP veneer (M5).** The veneer is a *fixed* set of
+  meta-tools that shell out to `craw code <verb> --json`; it adds no new authority and the
+  CLI remains the one execution path. It is not enabled by default.
 - **O-4** — relationship to the existing **Claude Code export** path. **Resolved:
-  complement, not collision.** `craw code adopt` subsumes `craw export --claude-code` as
-  its plugin-install step; the plugin owns `.claude/` *plugin* assets (under a reserved
-  `crawfish-*` prefix) while export owns *per-Definition* subagent files — disjoint
-  namespaces, preserving the `.claude`-excluded-from-`sha` invariant. To be recorded as an
-  ADR.
+  complement, not collision** (recorded as **ADR 0012**). `craw code adopt` subsumes
+  `craw export --claude-code` as its plugin-install step; the plugin owns `.claude/`
+  *plugin* assets (under a reserved `crawfish-*` prefix) while export owns *per-Definition*
+  subagent files — disjoint namespaces, preserving the `.claude`-excluded-from-`sha`
+  invariant.
 
 ## 11. Definition of done
 
