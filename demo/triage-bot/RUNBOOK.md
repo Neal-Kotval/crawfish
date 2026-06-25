@@ -43,6 +43,21 @@ uv run pytest packages/crawfish/tests/test_demo_self_improve.py -q
 Runs entirely on the **mock runtime** — no model calls, zero cost, fully
 reproducible. Prints a `PASS` summary and exits `0`. This is the path CI gates on.
 
+## Inspect this project with `craw code` ($0, read-only)
+
+This demo is also a valid `craw code` component, so you can reflect, price, and map it through
+the agent-authoring surface without running anything consequential:
+
+```bash
+craw code describe --json demo/triage-bot          # the typed IO boundary
+craw code estimate --json demo/triage-bot --items 10   # the honest cost band
+craw code map      --json --dir demo/triage-bot    # the wired components
+```
+
+Each emits a versioned `craw.code.<verb>.v1` `--json` envelope and exits `0`. To see the whole
+author → approve → operate loop (including the human-approval gate failing closed), run the
+end-to-end tour: [`demo/craw-code-tour/`](../craw-code-tour/README.md).
+
 ## Live run (real `claude -p`)
 
 ### Credentials

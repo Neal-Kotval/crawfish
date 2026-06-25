@@ -199,3 +199,43 @@ def test_propose_then_apply_cli_roundtrip(tmp_path: Path) -> None:
     code, applied = _run(_cmd_apply, _Args(component=str(comp), sha=sha))
     assert code == EXIT_OK
     assert applied["result"] == "applied"
+
+
+# -- on-disk sha drift: an approval for sha A cannot promote an on-disk sha B (sec-w5) -------
+def test_apply_after_on_disk_sha_drift_fails_closed(tmp_path: Path) -> None:
+    """An approval is bound to the exact artifact it approved, not to ``(component, sha-string)``.
+
+    The replay guard (:func:`ApprovalLedger.is_approved`) proves an approval row exists for sha
+    A. But ``apply`` re-compiles the component **at promotion time** and re-checks the on-disk
+    content sha: if the file changed since approval (A → B), the staged+approved sha A no longer
+    describes what is on disk, so promotion is refused — fail closed (``no_approval``, exit ``4``,
+    non-retryable) with ``detail.approved_sha != detail.current_sha`` — even though a valid
+    approval row for A still exists. The fix is to re-propose and re-approve the new sha, never
+    to "retry" the stale approval. Without this guard an agent could get sha A approved, then
+    swap in a malicious sha B before ``apply`` and ride the human's approval.
+    """
+    comp = _component(tmp_path)
+
+    # Propose sha A and record a real human approval for it.
+    store = store_for_dir(str(comp))
+    try:
+        proposal = stage_proposal(str(comp), store=store, org_id="local")
+        sha_a = proposal.candidate_sha
+        ApprovalLedger(store, org_id="local").record_decision(str(comp), sha_a, approve=True)
+        # The approval row for A genuinely exists — this is NOT a missing-approval case.
+        assert ApprovalLedger(store, org_id="local").is_approved(str(comp), sha_a) is True
+    finally:
+        store.close()
+
+    # The component's on-disk content now drifts (a real authoring edit shifts the content sha).
+    instructions = comp / "instructions.md"
+    instructions.write_text(instructions.read_text() + "\nsmuggled change after approval\n")
+
+    # apply of the *approved* sha A is refused: on-disk content is now sha B.
+    code, payload = _run(_cmd_apply, _Args(component=str(comp), sha=sha_a))
+    assert code == EXIT_SECURITY  # the closed CRA-243 exit is 4 (security, non-retryable)
+    assert payload["code"] == "no_approval"
+    assert payload["retryable"] is False  # an injected agent cannot retry past it
+    # The drift is named in the envelope: the approved sha is not the current on-disk sha.
+    assert payload["detail"]["approved_sha"] == sha_a
+    assert payload["detail"]["current_sha"] != sha_a
