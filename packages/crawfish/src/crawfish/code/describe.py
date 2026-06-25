@@ -288,10 +288,25 @@ def _cmd_describe(args: argparse.Namespace) -> int:
     ``budget_exceeded`` (exit 4, fail-closed). The remediation is static — no fluid/tainted
     input is ever echoed back into the envelope (CRA-271).
     """
-    from crawfish.store import SqliteStore
+    from crawfish.manage import store_for_dir
 
     org = getattr(args, "org", "local")
-    store = SqliteStore()
+    # NOT_FOUND is resolved before opening any Store so a bad path never materializes a
+    # ``.crawfish/`` ledger dir under a non-component path.
+    if not Path(args.component).is_dir():
+        return emit_error(
+            ErrorCode.NOT_FOUND,
+            remediation=(
+                f"Component {args.component!r} was not found; pass a component directory path."
+            ),
+            detail={"component": args.component},
+            as_json=getattr(args, "as_json", False),
+        )
+    # The per-project Store (CRA-275 org-scoped), opened through the protocol-returning
+    # factory — the product model never names a concrete backend. Ensure the generated-state
+    # ``.crawfish/`` dir exists first (gitignored; the ledger + describe cache live under it).
+    (Path(args.component) / ".crawfish").mkdir(parents=True, exist_ok=True)
+    store = store_for_dir(args.component)
     try:
         try:
             body = describe_component(args.component, store=store, org_id=org)
