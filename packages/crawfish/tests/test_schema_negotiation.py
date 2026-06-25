@@ -108,6 +108,7 @@ def test_craw_code_schema_dumps_the_full_map(capsys: pytest.CaptureFixture[str])
         "code.init": "1.0",
         "code.lint": "1.0",
         "code.map": "1.0",
+        "code.mcp": "1.0",
         "code.new": "1.0",
         "code.optimize": "1.0",
         "code.propose": "1.0",
