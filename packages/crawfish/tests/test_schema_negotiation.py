@@ -104,5 +104,6 @@ def test_craw_code_schema_dumps_the_full_map(capsys: pytest.CaptureFixture[str])
         "code.run": "1.0",
         "code.schema": "1.0",
         "code.sync": "1.0",
+        "code.validate": "1.0",
         "error": "1.0",
     }
