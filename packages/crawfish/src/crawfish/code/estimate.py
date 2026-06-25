@@ -94,14 +94,20 @@ def estimate_component(
     from crawfish.cost import estimate_cost
     from crawfish.definition.jailed import load_definition_jailed
     from crawfish.jail import SandboxPolicy
-    from crawfish.store import SqliteStore
+    from crawfish.manage import store_for_dir
 
     project_dir = Path(component)
     if not project_dir.is_dir():
         raise FileNotFoundError(component)
 
+    # Open the per-project Store (CRA-275 org-scoped) through the protocol-returning factory —
+    # the product model never names a concrete backend. A caller may inject its own Store.
     owns_store = store is None
-    backing = store if store is not None else SqliteStore()
+    if owns_store:
+        # The factory writes the per-project ledger under ``.crawfish/``; ensure the generated
+        # state dir exists first (it is gitignored — never the authored tree).
+        (project_dir / ".crawfish").mkdir(parents=True, exist_ok=True)
+    backing = store if store is not None else store_for_dir(component)
     try:
         compiled = load_definition_jailed(
             project_dir, store=backing, org_id=org_id, policy=SandboxPolicy(kind="fake")
