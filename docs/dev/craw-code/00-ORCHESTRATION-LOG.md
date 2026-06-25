@@ -86,4 +86,6 @@ Updated as waves complete. See git log on `craw-code/integration` for the author
 
 | Wave | Milestone | Branch | Built | Integration suite | Gate (sec/arch/qa) |
 | --- | --- | --- | --- | --- | --- |
-| 1 | foundation | `craw-code/foundation` | in progress | — | — |
+| 1 | foundation (CRA-266/267/268/269/270/243, ADR 0010) | `craw-code/foundation` → merged `e2a37c5` | ✓ | ✓ 1325 passed | gated ✓ (all PASS) |
+| 2 | M1 describe/estimate/contracts | `craw-code/m1` | dispatched | — | — |
+| 2 | M2-core init/new/sync | `craw-code/m2` | dispatched | — | — |
