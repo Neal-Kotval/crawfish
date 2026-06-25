@@ -89,8 +89,12 @@ Updated as waves complete. See git log on `craw-code/integration` for the author
 | 1 | foundation (CRA-266/267/268/269/270/243, ADR 0010) | `craw-code/foundation` → merged `e2a37c5` | ✓ | ✓ 1325 passed | gated ✓ (all PASS) |
 | 2 | M1 describe/estimate/contracts (CRA-244/271/272/273/274/275) | `craw-code/m1` → merged `1e101f1` (+seam fix) | ✓ | ✓ 1382 passed | gated ✓ (all PASS) |
 | 2 | M2-core init/new/sync (CRA-245/246/247) | `craw-code/m2` → merged | ✓ | ✓ 1382 passed | gated ✓ (all PASS) |
-| 3 | M2-rest (templates/lint/consent/treelock/idempotent/map/adopt + ADR 0012) | `craw-code/m2` (resume) | dispatched | — | — |
-| 3 | M3 plugin + skills + commands + pin | `craw-code/m3` | dispatched | — | — |
-| 3 | M3a authoring spec + golden | `craw-code/m3a` | dispatched | — | — |
+| 3 | M2-rest (CRA-276/277/278/279, UNFILED-MAP/ADOPT, ADR 0012) | `craw-code/m2` → merged `ddbf146` | ✓ | ✓ 1526 passed | arch+qa PASS; **sec BLOCK** → fix `craw-code/m2fix` |
+| 3 | M3 plugin + skills + commands + pin (CRA-248/249/250/251, UNFILED-PIN) | `craw-code/m3` → merged `eecca73` | ✓ | ✓ 1526 passed | arch+qa PASS |
+| 3 | M3a authoring spec + golden (CRA-256/257) | `craw-code/m3a` → merged | ✓ | ✓ 1526 passed | arch+qa PASS |
+
+**Wave 3 fixes (in flight):** Two latent defects caught at integration — (a) `code/new.py` policy template emitted invalid `Policy(description=)` (caught by m3a) → fixed; (b) tree_busy/not_a_project returned literal process exit 8/9 escaping the closed 0-4 table → normalized to exit 1/2 with granular codes in `detail.exit`. **Security gate BLOCK (load-bearing):** `adopt`/`map`/`consent grant` called the UNJAILED `load_definition`, executing untrusted authored code in-process — the exact trust-collapse hole. Fix agent `m2fix` routes them through `load_definition_jailed` + adds a red-team exfil test; also fixes consent_required `detail.exit` 3→4 collision. Re-gated by sec-w3 before sealing Wave 3.
+
+**Deferred follow-ups (qa-w3 non-blocking, no spine impact):** `new mcp --dir <project-root>` writes an inert top-level MCP that escapes the consent scan (require a Definition target); missing-assertion coverage gaps — CRA-256 skill↔source no-drift test (fold into M3a Wave 4), CRA-278 `craw doctor` torn-tree check, UNFILED-MAP edge-structure assertion, CRA-276 JWT class, CRA-279 `--upgrade` re-pin field.
 
 **Integration fixes (orchestrator-reconciled):** m1's `describe.py`/`estimate.py` instantiated `SqliteStore()` directly — caught only at integration by m2's `test_init_no_concrete_store_import_in_code_pkg` grep guard (cross-milestone breakage neither isolated suite could see). Delegated to m1; fixed to use `manage.store_for_dir` factory (`a4172e3`). Non-blocking nits noted for final docs pass: describe.py:288 docstring "exit 4"→"exit 3".
