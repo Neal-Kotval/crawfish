@@ -82,6 +82,23 @@ def _lineage_for(
 
     base = next((r for r in rows if r.role == "base"), rows[0])
     promoted = [r for r in rows if r.role == "promoted"]
+    # Deterministic "record appearance" order independent of the Store's row order:
+    # ``list_records`` orders by a coarse ``updated_at`` with no tie-breaker, and an upsert
+    # (e.g. flipping ``active``) bumps it — so relying on row order makes the rollback
+    # detection below flake when rapid inserts straddle a clock tick. Order promotions by
+    # their depth in the parent chain (hops back to base), tie-broken by sha, which is the
+    # true lineage order regardless of backend or write timing.
+    _by_sha = {r.sha: r for r in rows}
+
+    def _chain_depth(rec: VersionRecord) -> int:
+        depth, cur, seen = 0, rec.parent_sha, {rec.sha}
+        while cur is not None and cur in _by_sha and cur not in seen:
+            seen.add(cur)
+            depth += 1
+            cur = _by_sha[cur].parent_sha
+        return depth
+
+    promoted.sort(key=lambda r: (_chain_depth(r), r.sha))
     winner = next((r for r in rows if r.active), promoted[-1] if promoted else base)
 
     lineage: list[LineageEvent] = []
