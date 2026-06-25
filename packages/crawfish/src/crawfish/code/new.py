@@ -125,10 +125,14 @@ def _tool_template(name: str) -> str:
 def _policy_template(name: str) -> str:
     """A ``policy`` template — a module-level ``Policy`` instance."""
     return (
-        f'"""The {name!r} policy — a reusable behavioural guard."""\n'
+        f'"""The {name!r} policy — a reusable behavioural guard (a GUARDRAIL Policy)."""\n'
         "from __future__ import annotations\n\n"
-        "from crawfish.core import Policy\n\n"
-        f'{name} = Policy(name="{name}", description="TODO: describe what this guards.")\n'
+        "from crawfish.core import Policy, PolicyKind\n\n"
+        f"{name} = Policy(\n"
+        f'    name="{name}",\n'
+        "    kind=PolicyKind.GUARDRAIL,\n"
+        '    rules={"max_usd": 1.0},   # TODO: what this guards (spend caps, allowed tools)\n'
+        ")\n"
     )
 
 
@@ -215,61 +219,9 @@ def _dest_folder(kind: str, root: Path) -> Path:
     return root / subdir
 
 
-# -- the minimal secret-shaped lint (CRA-276, in-verb form) -------------------
-# Detector parity with crawfish.secrets._PATTERNS (the ScrubbingStore redaction set) so a
-# template that passes lint can never trip scrub at run time. Extended with the credential
-# *shapes* the spec enumerates (AWS access key, generic high-entropy assigned to a
-# secret-named var). The full standalone `craw code lint` verb is CRA-276 (a later wave);
-# this is the post-write gate `new` runs.
-_AWS_KEY = re.compile(r"AKIA[0-9A-Z]{16}")
-_SECRET_ASSIGN = re.compile(
-    r"""(?ix)            # case-insensitive, verbose
-    \b(token|secret|password|passwd|api[_-]?key|auth)\b   # a credential-shaped name
-    \s*[:=]\s*                                            # = or :
-    ['"]([A-Za-z0-9+/_\-]{20,})['"]                       # a long literal value
-    """
-)
-
-
-def _secret_shaped_findings(text: str) -> list[dict[str, object]]:
-    """Pure scan for inline-credential shapes; returns findings with the value REDACTED.
-
-    Shares ``crawfish.secrets._PATTERNS`` (the ScrubbingStore detector) plus the AWS-key
-    and secret-named-assignment shapes. The matched value is never echoed raw — a finding
-    that printed the literal would itself be a leak (CRA-276 security note).
-    """
-    from crawfish.secrets import _PATTERNS
-
-    findings: list[dict[str, object]] = []
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        # A `Flow.STATIC` / env-var *name* reference (auth="GITHUB_TOKEN") is a NAME, not a
-        # value; the assignment shape requires a 20+ char value, so an UPPER_SNAKE env name
-        # under ~20 chars is clean by construction. Still, skip obvious reference lines.
-        for pat in (*_PATTERNS, _AWS_KEY):
-            if pat.search(line):
-                findings.append(
-                    {
-                        "line": lineno,
-                        "kind": "inline_secret",
-                        "match_redacted": "***REDACTED***",
-                        "remediation": 'reference by env-var name, e.g. auth="GITHUB_TOKEN"',
-                    }
-                )
-                break
-        else:
-            m = _SECRET_ASSIGN.search(line)
-            # An UPPER_SNAKE_CASE all-caps value is treated as an env-var *name* reference,
-            # not a secret value (auth="GITHUB_TOKEN" is correct, not a finding).
-            if m is not None and not re.fullmatch(r"[A-Z][A-Z0-9_]*", m.group(2)):
-                findings.append(
-                    {
-                        "line": lineno,
-                        "kind": "inline_secret",
-                        "match_redacted": "***REDACTED***",
-                        "remediation": 'reference by env-var name, e.g. auth="GITHUB_TOKEN"',
-                    }
-                )
-    return findings
+# The secret-shaped detector lives in ``crawfish.code.lint`` (CRA-276) — the standalone
+# ``craw code lint`` verb and this post-write gate share one detector so teaching and
+# enforcement never drift. ``new`` calls it on every emitted file (fail closed, exit 6).
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
@@ -322,21 +274,15 @@ def _cmd_new(args: argparse.Namespace) -> int:
             as_json=as_json,
         )
 
-    # Write the files.
-    written: list[str] = []
-    for rel, content in sorted(rendered.items()):
-        dest = folder / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(content)
-        written.append(str(dest.relative_to(root)))
+    # Secret-shaped lint (CRA-276) BEFORE any write — fail closed if a template ever
+    # modelled an inline credential, so a bad template never lands on disk. Shares the
+    # standalone `craw code lint` detector. Pure; no network, no model.
+    from crawfish.code.lint import secret_shaped_findings
 
-    # Post-write secret-shaped lint (CRA-276) — fail closed if a template ever modelled an
-    # inline credential. Pure; no network, no model.
     lint_findings: list[dict[str, object]] = []
     for rel, content in rendered.items():
-        for f in _secret_shaped_findings(content):
-            f["path"] = str((folder / rel).relative_to(root))
-            lint_findings.append(f)
+        path = str((folder / rel).relative_to(root))
+        lint_findings.extend(secret_shaped_findings(content, path=path))
     if lint_findings:
         return emit_error(
             ErrorCode.USAGE,
@@ -346,22 +292,38 @@ def _cmd_new(args: argparse.Namespace) -> int:
             as_json=as_json,
         )
 
-    # Provenance-stamp each authored file (CRA-266). Authored by the agent loop, from no
-    # fluid input (a template is a fixed string) -> source_tainted=False.
-    store = _open_store(root)
-    try:
-        for rel, content in rendered.items():
-            sha = hashlib.sha256(content.encode()).hexdigest()[:12]
-            from crawfish.provenance import record_file_provenance
+    # Open the project Store (factory only). Take an exclusive WRITE lease (CRA-278) around
+    # the write+stamp so a concurrent compile (sync/describe/map) sees tree_busy rather than
+    # a half-written, wrong-sha file. Provenance-stamp each authored file (CRA-266) under the
+    # same lease (authored by the agent loop, from no fluid input -> source_tainted=False).
+    from crawfish.code.treelock import TreeBusy, TreeLock
+    from crawfish.provenance import record_file_provenance
 
-            record_file_provenance(
-                str((folder / rel).relative_to(root)),
-                sha,
-                store=store,
-                authored_by="craw-code-new",
-                source_tainted=False,
-                org_id=org,
-            )
+    store = _open_store(root)
+    lock = TreeLock(store, root, org_id=org)
+    written: list[str] = []
+    try:
+        try:
+            token = lock.acquire_write()
+        except TreeBusy:
+            return _tree_busy(as_json)
+        try:
+            for rel, content in sorted(rendered.items()):
+                dest = folder / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(content)
+                written.append(str(dest.relative_to(root)))
+                sha = hashlib.sha256(content.encode()).hexdigest()[:12]
+                record_file_provenance(
+                    str(dest.relative_to(root)),
+                    sha,
+                    store=store,
+                    authored_by="craw-code-new",
+                    source_tainted=False,
+                    org_id=org,
+                )
+        finally:
+            lock.release_write(token)
     finally:
         _close_store(store)
 
@@ -378,6 +340,22 @@ def _cmd_new(args: argparse.Namespace) -> int:
     else:
         print(f"created {kind} {name!r}: {', '.join(sorted(written))}")
     return EXIT_OK
+
+
+def _tree_busy(as_json: bool) -> int:
+    """Emit the tree_busy envelope (retryable) and return the CRA-243 process exit (CRA-278).
+
+    The granular code 8 stays in ``detail.exit``; the PROCESS exit is the CRA-243
+    expected-failure family (1, transient contention — retryable), keeping the process-exit
+    table closed at 0-4 (mirrors the approved 5/6 pattern).
+    """
+    return emit_error(
+        ErrorCode.TREE_BUSY,
+        retryable=True,
+        remediation="the authoring tree is being written; retry shortly",
+        detail={"exit": 8, "reason": "tree_busy"},
+        as_json=as_json,
+    )
 
 
 def _open_store(root: Path) -> Store:

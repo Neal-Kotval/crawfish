@@ -88,6 +88,46 @@ def test_new_definition_passes_sync(app: Path, capsys: pytest.CaptureFixture[str
     assert run_code(["sync", "--dir", str(app)]) == 0
 
 
+def test_new_policy_compiles_via_load_definition(
+    app: Path, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """A freshly new-ed POLICY actually compiles (regression: CRA-246 / Policy shape).
+
+    The compiler imports ``<def>/policies/*.py`` and collects module-level ``Policy``
+    instances. The template must therefore emit a valid ``Policy`` — ``Policy`` has no
+    ``description`` field and *requires* ``kind: PolicyKind`` — so a new-ed policy placed in
+    a Definition's policies/ dir must ``load_definition`` clean and bind to an agent.
+    """
+    from crawfish.core import Policy, PolicyKind
+    from crawfish.definition import load_definition
+
+    # 1) the project-level policy the verb authors compiles when imported the loader's way.
+    _new_json(capsys, app, "policy", "guard")
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_t_policy", app / "policies" / "guard.py")
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    pol = mod.guard
+    assert isinstance(pol, Policy)
+    assert pol.kind is PolicyKind.GUARDRAIL  # the required field is present + valid
+
+    # 2) the same template, placed inside a Definition's policies/ dir and bound to the lead,
+    #    load_definitions clean (the exact compiler import path, end to end).
+    d = tmp_path / "withpolicy"
+    (d / "policies").mkdir(parents=True)
+    (app / "policies" / "guard.py").rename(d / "policies" / "guard.py")
+    (d / "definition.py").write_text(
+        "from crawfish.core import Flow, Parameter\n"
+        'inputs = [Parameter(name="p", type="str", flow=Flow.STATIC)]\n'
+        'outputs = [Parameter(name="o", type="str", flow=Flow.STATIC)]\nlead = "lead"\n'
+    )
+    (d / "instructions.md").write_text("---\nrole: lead\npolicies: [guard]\n---\nlead\n")
+    defn = load_definition(d)  # raises DefinitionLoadError if the policy is malformed
+    assert any("guard" in a.policies for a in defn.team.agents)
+
+
 def test_overwrite_refused_then_forced(app: Path, capsys: pytest.CaptureFixture[str]) -> None:
     _new_json(capsys, app, "mcp", "github")
     dup = _new_json(capsys, app, "mcp", "github")

@@ -339,9 +339,11 @@ exit: 0 granted · 3 declined (ConsentRequired) · 4 usage
 half-written `definition.py` compiles to the wrong content sha → corrupt run identity
 (§12.3). The fix is an advisory lock so a torn tree is refused, not compiled.
 **Design** — An advisory **read/write lock over the authored tree**, keyed on
-`(org_id, project_dir)`, backed by the Store's borrow/lease primitive (the same exclusive
-borrow `DefinitionStore` train-mode uses — **verify name**; it is tenancy-scoped and
-Store-enforced per SECURITY.md "Mutable borrows"). A writer (`craw code new`, an Edit) takes
+`(org_id, project_dir)`. (Spec correction, 2026-06-25: the "verify name" borrow primitive
+does not exist on the `Store` *protocol* — only `kv_get`/`kv_set` + the transactional
+`claim_idempotency` do; the lock rides `kv_get`/`kv_set` under a dedicated namespace, which
+is equally tenancy-scoped + Store-enforced per SECURITY.md "Mutable borrows", so the product
+model still imports no concrete backend.) A writer (`craw code new`, an Edit) takes
 a short exclusive lease around the write+fsync; a reader (`sync`/`run`/`describe`/`map`)
 takes a shared lease around `load_definition`. If a compile cannot acquire the shared lease
 (a write in flight), it returns `tree_busy` (exit 8) rather than compiling a torn file.
