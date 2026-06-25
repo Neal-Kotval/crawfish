@@ -87,5 +87,10 @@ Updated as waves complete. See git log on `craw-code/integration` for the author
 | Wave | Milestone | Branch | Built | Integration suite | Gate (sec/arch/qa) |
 | --- | --- | --- | --- | --- | --- |
 | 1 | foundation (CRA-266/267/268/269/270/243, ADR 0010) | `craw-code/foundation` → merged `e2a37c5` | ✓ | ✓ 1325 passed | gated ✓ (all PASS) |
-| 2 | M1 describe/estimate/contracts | `craw-code/m1` | dispatched | — | — |
-| 2 | M2-core init/new/sync | `craw-code/m2` | dispatched | — | — |
+| 2 | M1 describe/estimate/contracts (CRA-244/271/272/273/274/275) | `craw-code/m1` → merged `1e101f1` (+seam fix) | ✓ | ✓ 1382 passed | gated ✓ (all PASS) |
+| 2 | M2-core init/new/sync (CRA-245/246/247) | `craw-code/m2` → merged | ✓ | ✓ 1382 passed | gated ✓ (all PASS) |
+| 3 | M2-rest (templates/lint/consent/treelock/idempotent/map/adopt + ADR 0012) | `craw-code/m2` (resume) | dispatched | — | — |
+| 3 | M3 plugin + skills + commands + pin | `craw-code/m3` | dispatched | — | — |
+| 3 | M3a authoring spec + golden | `craw-code/m3a` | dispatched | — | — |
+
+**Integration fixes (orchestrator-reconciled):** m1's `describe.py`/`estimate.py` instantiated `SqliteStore()` directly — caught only at integration by m2's `test_init_no_concrete_store_import_in_code_pkg` grep guard (cross-milestone breakage neither isolated suite could see). Delegated to m1; fixed to use `manage.store_for_dir` factory (`a4172e3`). Non-blocking nits noted for final docs pass: describe.py:288 docstring "exit 4"→"exit 3".
