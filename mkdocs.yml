@@ -3,6 +3,13 @@ site_description: A programming language for agents. Write them as typed code, r
 site_url: https://neal-kotval.github.io/crawfish/
 docs_dir: docs
 
+# Internal, non-published trees: implementation specs (link to source files outside
+# docs_dir) and dev orchestration notes. Excluded from the built site so `mkdocs build
+# --strict` does not abort on their intentional source-code links.
+exclude_docs: |
+  specs/
+  dev/
+
 # Internal authoring notes, ADRs, roadmap, and product material live in /dev_docs
 # at the repo root. That folder is outside docs_dir, so it is never published.
 repo_url: https://github.com/Neal-Kotval/crawfish
@@ -77,6 +84,15 @@ nav:
       - Visualize: guide/visualize.md
       - Project structure: guide/project-structure.md
       - Export to Claude Code: guide/claude-code-export.md
+  - craw code:
+      - Overview & quickstart: guide/craw-code/index.md
+      - Author a project with craw code: guide/craw-code/authoring.md
+      - The craw code CLI: guide/craw-code/cli.md
+      - The dashboard: guide/craw-code/dashboard.md
+      - Operate & optimize: guide/craw-code/operate.md
+      - Review & approve (HITL): guide/craw-code/review-and-approve.md
+      - Security model: guide/craw-code/security.md
+      - Writing craw code docs: guide/craw-code/writing-docs.md
   - Extend:
       - Contribute a connector: guide/contributing-a-connector.md
       - Connector ideas: guide/connector-ideas.md
@@ -118,11 +134,13 @@ nav:
           - Secrets & consent: reference/secrets-and-consent.md
           - Secret broker: reference/secret-broker.md
           - Sandbox & jail: reference/sandbox-and-jail.md
+          - craw code provenance: reference/craw-code-provenance.md
       - Operations & tooling:
           - Deploy, manage & triggers: reference/operate.md
           - Authoring & config: reference/authoring.md
           - Testing: reference/testing.md
           - Claude Code export: reference/claude-code-export.md
+          - craw code JSON contracts: reference/craw-code-json-contracts.md
       - Release notes: guide/release-notes.md
   - Architecture:
       - Overview: architecture/ARCHITECTURE.md

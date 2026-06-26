@@ -20,11 +20,22 @@ __all__ = [
     "ProfileConfig",
     "ProjectPaths",
     "ProjectManifest",
+    "BudgetConfig",
     "load_manifest",
     "load_models_config",
+    "load_budget",
     "ModelsConfigError",
+    "BudgetConfigError",
     "DEFAULT_PROFILES",
 ]
+
+
+class BudgetConfigError(ValueError):
+    """A malformed ``[budget]`` section in ``crawfish.toml``.
+
+    Raised at config-load time so a project fails fast with a clear message rather than
+    threading an invalid ceiling into the run path (CRA-273).
+    """
 
 
 class ModelsConfigError(ValueError):
@@ -77,6 +88,19 @@ class ProjectPaths(BaseModel):
         }
 
 
+class BudgetConfig(BaseModel):
+    """The project-wide cost ceiling (CRA-273) — the ``[budget]`` section of ``crawfish.toml``.
+
+    Today the runtime only has a per-run ``--budget`` flag projecting onto a
+    :class:`~crawfish.core.context.CostBudget`; ``[budget] ceiling_usd`` adds a **project-wide**
+    ceiling that halts an agent ``--live`` call whose ``worst_case_usd`` exceeds the remaining
+    headroom (``craw code estimate`` / ``craw code run``). ``None`` means unbounded — the
+    no-config back-compat path (every run is within budget).
+    """
+
+    ceiling_usd: float | None = None
+
+
 class ProjectManifest(BaseModel):
     """Parsed ``crawfish.toml``."""
 
@@ -86,6 +110,7 @@ class ProjectManifest(BaseModel):
     paths: ProjectPaths = Field(default_factory=ProjectPaths)
     profiles: dict[str, ProfileConfig] = Field(default_factory=dict)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
+    budget: BudgetConfig = Field(default_factory=BudgetConfig)
 
     def resolve_profile(self, name: str | None = None) -> ProfileConfig:
         """Resolve a profile by name, falling back to the manifest default and
@@ -161,6 +186,40 @@ def load_models_config(project_dir: str | Path = ".") -> ModelsConfig:
     return _models_config_from_raw(raw.get("models", {}))
 
 
+def _budget_config_from_raw(raw_budget: dict[str, object]) -> BudgetConfig:
+    """Build a :class:`BudgetConfig` from a ``[budget]`` table (CRA-273).
+
+    Schema (all optional)::
+
+        [budget]
+        ceiling_usd = 5.00     # halts agent --live calls whose worst_case exceeds remaining
+
+    An absent section is an unbounded budget (``ceiling_usd = None``). A present but malformed
+    value (non-numeric / negative) is a :class:`BudgetConfigError` so the project fails fast.
+    """
+    raw_ceiling = raw_budget.get("ceiling_usd")
+    if raw_ceiling is None:
+        return BudgetConfig()
+    if isinstance(raw_ceiling, bool) or not isinstance(raw_ceiling, (int, float)):
+        raise BudgetConfigError("[budget].ceiling_usd must be a number (USD)")
+    if raw_ceiling < 0:
+        raise BudgetConfigError("[budget].ceiling_usd must be >= 0")
+    return BudgetConfig(ceiling_usd=float(raw_ceiling))
+
+
+def load_budget(project_dir: str | Path = ".") -> BudgetConfig:
+    """Load just the ``[budget]`` section as a :class:`BudgetConfig` (CRA-273).
+
+    Returns an unbounded budget (``ceiling_usd = None``) when the file or section is absent —
+    the no-config back-compat path where only the per-run ``--budget`` flag applies.
+    """
+    path = Path(project_dir) / "crawfish.toml"
+    if not path.exists():
+        return BudgetConfig()
+    raw = tomllib.loads(path.read_text())
+    return _budget_config_from_raw(raw.get("budget", {}))
+
+
 def load_manifest(project_dir: str | Path = ".") -> ProjectManifest:
     """Load ``crawfish.toml`` from ``project_dir``; return defaults if absent."""
     path = Path(project_dir) / "crawfish.toml"
@@ -178,4 +237,5 @@ def load_manifest(project_dir: str | Path = ".") -> ProjectManifest:
         paths=ProjectPaths.model_validate(project.get("paths", {})),
         profiles=profiles,
         models=_models_config_from_raw(raw.get("models", {})),
+        budget=_budget_config_from_raw(raw.get("budget", {})),
     )

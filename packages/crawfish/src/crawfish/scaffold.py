@@ -74,7 +74,10 @@ inputs = [
     Parameter(name="project", type="str", flow=Flow.STATIC),
     Parameter(name="ticket_body", type="str"),
 ]
-outputs = [Parameter(name="triage", type="str")]
+# STATIC output: the triage decision is author-shaped config the team writes into a
+# static slot, so ALG-3 (assert_no_fluid_to_static_sink) can discharge it as provably
+# non-consequential — the hero example must be build-gate-clean (CRA-247 sync gate).
+outputs = [Parameter(name="triage", type="str", flow=Flow.STATIC)]
 
 lead = "lead"
 """,
