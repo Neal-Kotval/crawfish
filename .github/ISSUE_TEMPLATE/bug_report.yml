@@ -10,7 +10,7 @@ body:
         a minimal reproduction is the single most useful thing you can give us.
 
         For questions and "how do I…" support, use
-        [Discussions](https://github.com/Neal-Kotval/crawfish/discussions) instead.
+        [Discussions](https://github.com/crawfishai/crawfish/discussions) instead.
   - type: textarea
     id: summary
     attributes:

@@ -8,17 +8,17 @@ Issues you can pick up today.
 ## How to claim an issue
 
 1. Find an open issue — start with the
-   [`good first issue`](https://github.com/Neal-Kotval/crawfish/labels/good%20first%20issue)
-   and [`connector`](https://github.com/Neal-Kotval/crawfish/labels/connector)
+   [`good first issue`](https://github.com/crawfishai/crawfish/labels/good%20first%20issue)
+   and [`connector`](https://github.com/crawfishai/crawfish/labels/connector)
    labels.
 2. **Comment on it to claim it** — a maintainer will assign it to you. This keeps
    two people from doing the same work.
 3. Open a PR that closes the issue. See the
-   [PR template](https://github.com/Neal-Kotval/crawfish/blob/main/.github/PULL_REQUEST_TEMPLATE.md): tests, docs, `just check`
+   [PR template](https://github.com/crawfishai/crawfish/blob/main/.github/PULL_REQUEST_TEMPLATE.md): tests, docs, `just check`
    green, and a **DCO `Signed-off-by`** on every commit (`git commit -s`).
 
 Questions? Use
-[Discussions](https://github.com/Neal-Kotval/crawfish/discussions) — not a new
+[Discussions](https://github.com/crawfishai/crawfish/discussions) — not a new
 issue.
 
 ## The canonical first contribution: a connector
@@ -35,7 +35,7 @@ entry point, and it's discovered automatically — no core changes. See the
 The public backlog mirrors the parts of the roadmap that are safe to open up —
 small hardening tasks, new connectors, and documentation. Items are described by
 their public title only. Seed issues (created by
-[`scripts/seed-github-backlog.sh`](https://github.com/Neal-Kotval/crawfish/blob/main/scripts/seed-github-backlog.sh)) include:
+[`scripts/seed-github-backlog.sh`](https://github.com/crawfishai/crawfish/blob/main/scripts/seed-github-backlog.sh)) include:
 
 ### Good first issues (small, well-scoped)
 
@@ -65,5 +65,5 @@ GitHub is the public source of truth for contributor-facing work. Maintainers
 keep the internal roadmap and the GitHub backlog in rough sync by hand; there is
 no automated mirror, and **no internal tracker IDs appear in public issues**. To
 (re)seed labels and starter issues, run
-[`scripts/seed-github-backlog.sh`](https://github.com/Neal-Kotval/crawfish/blob/main/scripts/seed-github-backlog.sh) — it is
+[`scripts/seed-github-backlog.sh`](https://github.com/crawfishai/crawfish/blob/main/scripts/seed-github-backlog.sh) — it is
 idempotent.

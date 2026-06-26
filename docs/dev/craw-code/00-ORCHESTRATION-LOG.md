@@ -96,7 +96,7 @@ Updated as waves complete. See git log on `craw-code/integration` for the author
 ## BUILD COMPLETE
 
 All 6 waves merged to `craw-code/integration` and gated. **Final PR → `main`:
-https://github.com/Neal-Kotval/crawfish/pull/18** (56 commits, 0 behind main).
+https://github.com/crawfishai/crawfish/pull/18** (56 commits, 0 behind main).
 
 - Full DoD green: **1668 passed, 1 skipped**, `ruff` + `ruff format` + `mypy --strict` clean, deterministic.
 - Live `claude -p` smoke test PASS — `demo/craw-code-tour/TRANSCRIPT.md` (agent-authored definition compiles jailed + passes the assembly gate).

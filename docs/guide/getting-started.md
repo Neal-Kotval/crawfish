@@ -27,7 +27,7 @@ To keep the CLI isolated from your project's environment, use `uv tool install c
 [`uv`](https://docs.astral.sh/uv/) if needed, then the CLI:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/crawfishai/crawfish/main/install.sh | sh
 ```
 
 The fastest path to a running team is `craw init`, which scaffolds a project with a working
@@ -39,7 +39,7 @@ the same example ships at `demo/triage-bot`.
 Working on Crawfish itself? It is a [`uv`](https://docs.astral.sh/uv/) workspace:
 
 ```bash
-git clone https://github.com/Neal-Kotval/crawfish && cd crawfish
+git clone https://github.com/crawfishai/crawfish && cd crawfish
 uv sync                  # installs the workspace, including the craw CLI
 uv run craw --version
 ```

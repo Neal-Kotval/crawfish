@@ -6,7 +6,7 @@ contribute. This page builds one end to end. It is a Slack sink, about 30 lines,
 posts a message to a channel, holds its token securely, and ships with a real test.
 
 The complete working code lives in
-[`packages/crawfish-slack/`](https://github.com/Neal-Kotval/crawfish/tree/main/packages/crawfish-slack).
+[`packages/crawfish-slack/`](https://github.com/crawfishai/crawfish/tree/main/packages/crawfish-slack).
 Every snippet below comes from it, so you can run it as you read.
 
 ## What you'll build
@@ -120,7 +120,7 @@ telemetry event.
 
 Add one entry-point stanza so the connector ships as its own pip-installable package.
 Users get it with `pip install crawfish-slack` and no wiring. Module discovery
-([`crawfish.discovery`](https://github.com/Neal-Kotval/crawfish/blob/main/packages/crawfish/src/crawfish/discovery.py))
+([`crawfish.discovery`](https://github.com/crawfishai/crawfish/blob/main/packages/crawfish/src/crawfish/discovery.py))
 reads the `crawfish.sinks` entry-point group and registers your sink as
 `("sink", "slack")`.
 

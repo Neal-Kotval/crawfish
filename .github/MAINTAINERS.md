@@ -15,8 +15,8 @@ _None yet._
 
 ## Contact
 
-- General questions: open a [GitHub Discussion](https://github.com/Neal-Kotval/crawfish/discussions).
-- Bugs / features: open an [issue](https://github.com/Neal-Kotval/crawfish/issues).
+- General questions: open a [GitHub Discussion](https://github.com/crawfishai/crawfish/discussions).
+- Bugs / features: open an [issue](https://github.com/crawfishai/crawfish/issues).
 - Security: follow the [Security Policy](SECURITY.md) — do **not** use a public
   channel for vulnerabilities.
 

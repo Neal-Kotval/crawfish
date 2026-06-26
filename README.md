@@ -1,15 +1,15 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/docs/assets/logo-dark.svg">
-    <img src="https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/docs/assets/logo.svg" alt="Crawfish" width="420">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/crawfishai/crawfish/main/docs/assets/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/crawfishai/crawfish/main/docs/assets/logo.svg" alt="Crawfish" width="420">
   </picture>
 </p>
 
-[![CI](https://github.com/Neal-Kotval/crawfish/actions/workflows/ci.yml/badge.svg)](https://github.com/Neal-Kotval/crawfish/actions/workflows/ci.yml)
+[![CI](https://github.com/crawfishai/crawfish/actions/workflows/ci.yml/badge.svg)](https://github.com/crawfishai/crawfish/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/crawfish.svg)](https://pypi.org/project/crawfish/)
 [![Python](https://img.shields.io/pypi/pyversions/crawfish.svg)](https://pypi.org/project/crawfish/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://neal-kotval.github.io/crawfish/)
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://crawfishai.github.io/crawfish/)
 
 **Build agents like software.** Crawfish is a framework for defining an agent — or a whole
 team of them — as typed, versioned components in a directory, running it locally against
@@ -45,7 +45,7 @@ Pick the line that matches what you're doing:
 | --- | --- | --- |
 | **Build *with* the framework** (`import crawfish`) | `pip install crawfish` &nbsp;·&nbsp; `uv add crawfish` | Lands in your project env so it resolves against your deps |
 | **Just run the `craw` CLI** | `uv tool install crawfish` &nbsp;·&nbsp; `pipx install crawfish` | Isolated CLI, no env to pollute |
-| **Try it with zero Python setup** | `curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh \| sh` | Bootstraps `uv` if needed, then installs the CLI |
+| **Try it with zero Python setup** | `curl -LsSf https://raw.githubusercontent.com/crawfishai/crawfish/main/install.sh \| sh` | Bootstraps `uv` if needed, then installs the CLI |
 
 The `curl` line is a thin wrapper over the same PyPI package — see [`install.sh`](install.sh).
 
@@ -76,10 +76,10 @@ welcome first contribution is a connector.
 
 ## Docs
 
-📖 **Full documentation: [neal-kotval.github.io/crawfish](https://neal-kotval.github.io/crawfish/)**
+📖 **Full documentation: [crawfishai.github.io/crawfish](https://crawfishai.github.io/crawfish/)**
 
-- [Getting started](https://neal-kotval.github.io/crawfish/guide/getting-started/) — install and run your first agent in minutes
-- [Reference](https://neal-kotval.github.io/crawfish/reference/) — every public symbol, explained, with runnable examples
+- [Getting started](https://crawfishai.github.io/crawfish/guide/getting-started/) — install and run your first agent in minutes
+- [Reference](https://crawfishai.github.io/crawfish/reference/) — every public symbol, explained, with runnable examples
 - [Architecture](docs/architecture/ARCHITECTURE.md) — the three swappable seams · [ADRs](docs/architecture/decisions)
 - [Security](docs/architecture/SECURITY.md) — the prompt-injection boundary, secrets, and taint
 - [Roadmap](ROADMAP.md) — what shipped and what's next
@@ -90,14 +90,14 @@ Browse the docs locally with `just docs` (serves at http://127.0.0.1:8000).
 
 Thanks to everyone who has helped build Crawfish. 🦞
 
-[![Contributors](https://contrib.rocks/image?repo=Neal-Kotval/crawfish)](https://github.com/Neal-Kotval/crawfish/graphs/contributors)
+[![Contributors](https://contrib.rocks/image?repo=crawfishai/crawfish)](https://github.com/crawfishai/crawfish/graphs/contributors)
 
 Get started as a contributor!
 [`CONTRIBUTING.md`](.github/CONTRIBUTING.md).
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Neal-Kotval/crawfish&type=Date)](https://star-history.com/#Neal-Kotval/crawfish&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=crawfishai/crawfish&type=Date)](https://star-history.com/#crawfishai/crawfish&Date)
 
 ## License
 

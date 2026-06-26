@@ -10,7 +10,7 @@ body:
         is discovered automatically via entry points (`crawfish.sources` /
         `crawfish.sinks` / `crawfish.definitions`). New connectors are the best
         first contribution — read the
-        [connector guide](https://github.com/Neal-Kotval/crawfish/blob/main/docs/guide/contributing-a-connector.md)
+        [connector guide](https://github.com/crawfishai/crawfish/blob/main/docs/guide/contributing-a-connector.md)
         before you start.
 
         Reference implementations to model yours on:

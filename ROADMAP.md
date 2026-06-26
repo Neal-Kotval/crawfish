@@ -5,7 +5,7 @@ describes capabilities, not internal tracker IDs. For claimable work and discuss
 see the project's GitHub **Issues** and **Discussions**.
 
 <!-- TODO(maintainer): link the real Issues/Discussions URLs once the repo slug is set
-     (e.g. https://github.com/Neal-Kotval/crawfish/issues). -->
+     (e.g. https://github.com/crawfishai/crawfish/issues). -->
 
 ## Phase 1 — the local trust loop (shipped)
 

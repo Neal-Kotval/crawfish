@@ -2,8 +2,8 @@
 
 [![PyPI](https://img.shields.io/pypi/v/crawfish.svg)](https://pypi.org/project/crawfish/)
 [![Python](https://img.shields.io/pypi/pyversions/crawfish.svg)](https://pypi.org/project/crawfish/)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/Neal-Kotval/crawfish/blob/main/LICENSE)
-[![Docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://neal-kotval.github.io/crawfish/)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/crawfishai/crawfish/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://crawfishai.github.io/crawfish/)
 
 **Agents for bulk work over your data.** Author a pipeline as a directory —
 `Source → Batch (fan-out) → Aggregator (reduce) → Router (branch) → Sink` — and run it
@@ -33,19 +33,19 @@ typed.
 
 ## Documentation
 
-📖 **[neal-kotval.github.io/crawfish](https://neal-kotval.github.io/crawfish/)**
+📖 **[crawfishai.github.io/crawfish](https://crawfishai.github.io/crawfish/)**
 
-- [Getting started](https://neal-kotval.github.io/crawfish/guide/getting-started/)
-- [Tutorial](https://neal-kotval.github.io/crawfish/guide/tutorial/) — build the triage bot end to end
-- [Concepts](https://neal-kotval.github.io/crawfish/guide/concepts/) — the directory model, runtimes, the security boundary
-- [API reference](https://neal-kotval.github.io/crawfish/guide/api-reference/)
+- [Getting started](https://crawfishai.github.io/crawfish/guide/getting-started/)
+- [Tutorial](https://crawfishai.github.io/crawfish/guide/tutorial/) — build the triage bot end to end
+- [Concepts](https://crawfishai.github.io/crawfish/guide/concepts/) — the directory model, runtimes, the security boundary
+- [API reference](https://crawfishai.github.io/crawfish/guide/api-reference/)
 
 ## Links
 
-- Source: [github.com/Neal-Kotval/crawfish](https://github.com/Neal-Kotval/crawfish)
-- Issues: [github.com/Neal-Kotval/crawfish/issues](https://github.com/Neal-Kotval/crawfish/issues)
-- Changelog: [CHANGELOG.md](https://github.com/Neal-Kotval/crawfish/blob/main/CHANGELOG.md)
+- Source: [github.com/crawfishai/crawfish](https://github.com/crawfishai/crawfish)
+- Issues: [github.com/crawfishai/crawfish/issues](https://github.com/crawfishai/crawfish/issues)
+- Changelog: [CHANGELOG.md](https://github.com/crawfishai/crawfish/blob/main/CHANGELOG.md)
 
 ## License
 
-[Apache-2.0](https://github.com/Neal-Kotval/crawfish/blob/main/LICENSE).
+[Apache-2.0](https://github.com/crawfishai/crawfish/blob/main/LICENSE).

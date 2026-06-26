@@ -1,6 +1,6 @@
 site_name: Crawfish
 site_description: A programming language for agents. Write them as typed code, run them locally, test and improve them like software.
-site_url: https://neal-kotval.github.io/crawfish/
+site_url: https://crawfishai.github.io/crawfish/
 docs_dir: docs
 
 # Internal, non-published trees: implementation specs (link to source files outside
@@ -12,7 +12,7 @@ exclude_docs: |
 
 # Internal authoring notes, ADRs, roadmap, and product material live in /dev_docs
 # at the repo root. That folder is outside docs_dir, so it is never published.
-repo_url: https://github.com/Neal-Kotval/crawfish
+repo_url: https://github.com/crawfishai/crawfish
 
 theme:
   name: material

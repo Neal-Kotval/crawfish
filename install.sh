@@ -1,7 +1,7 @@
 #!/bin/sh
 # Crawfish installer — bootstraps the `craw` CLI with no Python setup required.
 #
-#   curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh | sh
+#   curl -LsSf https://raw.githubusercontent.com/crawfishai/crawfish/main/install.sh | sh
 #
 # This is a thin wrapper over standard Python tooling: it installs Crawfish as an
 # isolated CLI, preferring uv, then pipx, then pip --user. It is NOT a separate

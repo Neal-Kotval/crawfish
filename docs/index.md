@@ -44,7 +44,7 @@ Pick the install that fits what you are doing:
 | --- | --- |
 | Build with the framework (`import crawfish`) | `pip install crawfish` or `uv add crawfish` |
 | Run the `craw` CLI, isolated | `uv tool install crawfish` or `pipx install crawfish` |
-| Try it with no Python setup | `curl -LsSf https://raw.githubusercontent.com/Neal-Kotval/crawfish/main/install.sh \| sh` |
+| Try it with no Python setup | `curl -LsSf https://raw.githubusercontent.com/crawfishai/crawfish/main/install.sh \| sh` |
 
 The `curl` line installs [`uv`](https://docs.astral.sh/uv/) if you do not have it, then the CLI.
 The package always comes from PyPI. Working on Crawfish itself? See

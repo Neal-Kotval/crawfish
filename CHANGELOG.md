@@ -15,7 +15,7 @@ _Nothing yet._
 
 Documentation and packaging polish (no code changes):
 
-- Published the docs site at <https://neal-kotval.github.io/crawfish/> and pointed the
+- Published the docs site at <https://crawfishai.github.io/crawfish/> and pointed the
   PyPI `Homepage`/`Documentation` URLs at it.
 - Rewrote the PyPI landing page (package README) with install, quickstart, and absolute
   documentation links.
@@ -72,5 +72,5 @@ benchmarked, with retries, dead-letter, and crash-resume. Runs end to end locall
 <!-- TODO(maintainer): set the published dist name (assumed `crawfish`; confirm
      availability on PyPI) and the org/repo slug in the comparison links below. -->
 
-[Unreleased]: https://github.com/Neal-Kotval/crawfish/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Neal-Kotval/crawfish/releases/tag/v0.1.0
+[Unreleased]: https://github.com/crawfishai/crawfish/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/crawfishai/crawfish/releases/tag/v0.1.0
